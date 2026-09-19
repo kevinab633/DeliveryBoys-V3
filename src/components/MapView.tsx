@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { Map as MLMap, Marker as MLMarker } from 'maplibre-gl';
 import type * as LeafletType from 'leaflet';
-import 'maplibre-gl/dist/maplibre-gl.css';
+// Leaflet's stylesheet is REQUIRED: it gives .leaflet-pane its absolute
+// positioning. Without it tiles scatter/fail to place and the SVG overlay
+// pane (routes) collapses — which looks like "tiles don't load and the
+// route won't form".
 import 'leaflet/dist/leaflet.css';
 import { useThemeStore } from '../stores/themeStore';
 import { cn } from '../lib/utils';
@@ -37,9 +40,7 @@ const MAPBOX_TOKEN =
 const STYLE_URL =
   `https://api.mapbox.com/styles/v1/kelk7/cmtavxnok004e01qq7f9vczox?access_token=${MAPBOX_TOKEN}`;
 
-let tileReqCounter = 0;
-
-function transformRequest(url: string, resourceType?: string) {
+function transformRequest(url: string) {
   let u = url;
   if (u.startsWith('mapbox://')) {
     const rest = u.slice('mapbox://'.length);
@@ -60,21 +61,6 @@ function transformRequest(url: string, resourceType?: string) {
   if (u.includes('api.mapbox.com') && !u.includes('access_token')) {
     u += (u.includes('?') ? '&' : '?') + `access_token=${MAPBOX_TOKEN}`;
   }
-
-  // Diagnostic logging for tile and source network requests
-  if (resourceType === 'Tile') {
-    tileReqCounter++;
-    console.log(`[MapLibre:TileRequest #${tileReqCounter}]`, {
-      originalUrl: url,
-      resolvedUrl: u,
-    });
-  } else if (resourceType === 'Source' || resourceType === 'Style') {
-    console.log(`[MapLibre:${resourceType}Request]`, {
-      originalUrl: url,
-      resolvedUrl: u,
-    });
-  }
-
   return { url: u };
 }
 
@@ -206,45 +192,16 @@ function sanitizeStyle(raw: unknown): unknown {
 
 // ── WebGL2 Check ───────────────────────────────────────────────────────
 // MapLibre v5+ strictly requires WebGL2. If unavailable, we fall back to Leaflet.
-let cachedWebGL2: boolean | null = null;
-
 function isWebGL2Supported(): boolean {
-  if (cachedWebGL2 !== null) return cachedWebGL2;
   try {
     if (typeof window === 'undefined') return false;
     const canvas = document.createElement('canvas');
-    // Mobile browsers often require default power preference and explicit non-fatal caveats
-    const gl =
-      canvas.getContext('webgl2', {
-        failIfMajorPerformanceCaveat: false,
-        powerPreference: 'default',
-      }) ||
-      canvas.getContext('webgl2', {
-        failIfMajorPerformanceCaveat: false,
-      }) ||
-      canvas.getContext('webgl2');
-
-    if (!gl || typeof gl.getParameter !== 'function') {
-      cachedWebGL2 = false;
-      return false;
-    }
-    if (gl.isContextLost && gl.isContextLost()) {
-      cachedWebGL2 = false;
-      return false;
-    }
+    const gl = canvas.getContext('webgl2', { failIfMajorPerformanceCaveat: false });
+    if (!gl || typeof gl.getParameter !== 'function') return false;
+    if (gl.isContextLost && gl.isContextLost()) return false;
     const maxTex = gl.getParameter(gl.MAX_TEXTURE_SIZE);
-    const supported = typeof maxTex === 'number' && maxTex > 0;
-
-    // Immediately release the probing context so mobile WebGL context slots are not exhausted
-    const ext = gl.getExtension('WEBGL_lose_context');
-    if (ext) {
-      try { ext.loseContext(); } catch { void 0; }
-    }
-
-    cachedWebGL2 = supported;
-    return supported;
+    return typeof maxTex === 'number' && maxTex > 0;
   } catch {
-    cachedWebGL2 = false;
     return false;
   }
 }
@@ -583,198 +540,41 @@ export default function MapView({
     if (engine !== 'maplibre' || !ml || !preparedStyle || !containerRef.current || mapRef.current) return;
     let disposed = false;
 
-    // Clean container before mounting MapLibre
-    if (containerRef.current) {
-      delete (containerRef.current as any)._leaflet_id;
-      containerRef.current.innerHTML = '';
-    }
-
     let map: MLMap | null = null;
     try {
       map = new ml.Map({
         container: containerRef.current,
-        style: preparedStyle as any,
         center: [safeCenterLng, safeCenterLat],
         zoom,
         interactive,
         attributionControl: false,
         transformRequest,
-        trackResize: true,
-        // Clamp pixelRatio to max 2 on mobile to avoid GPU memory overflow on 3x/4x retina screens
-        pixelRatio: Math.min(typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1, 2),
-        canvasContextAttributes: {
-          antialias: false,
-          powerPreference: 'default',
-          failIfMajorPerformanceCaveat: false,
-          preserveDrawingBuffer: false,
-        },
       });
     } catch (err) {
       console.warn('[MapView] MapLibre creation threw, switching to Leaflet:', err);
-      if (containerRef.current) containerRef.current.innerHTML = '';
       setEngine('leaflet');
       return;
     }
 
     mapRef.current = map;
 
-    // ── Diagnostic tile & map event logging ───────────────────────────
-    let tileLoadsStarted = 0;
-    let tileLoadsFinished = 0;
-
-    map.on('dataloading', (e: any) => {
-      const tileCoord = e.tile?.tileID?.canonical
-        ? `${e.tile.tileID.canonical.z}/${e.tile.tileID.canonical.x}/${e.tile.tileID.canonical.y}`
-        : null;
-      if (tileCoord) tileLoadsStarted++;
-      console.log(
-        `[MapLibre:dataloading] dataType="${e.dataType}", sourceId="${e.sourceId || ''}"${
-          e.sourceDataType ? `, sourceDataType="${e.sourceDataType}"` : ''
-        }${tileCoord ? `, tile=${tileCoord} (#${tileLoadsStarted})` : ''}`,
-      );
-    });
-
-    map.on('sourcedataloading', (e: any) => {
-      const tileCoord = e.tile?.tileID?.canonical
-        ? `${e.tile.tileID.canonical.z}/${e.tile.tileID.canonical.x}/${e.tile.tileID.canonical.y}`
-        : null;
-      console.log(
-        `[MapLibre:sourcedataloading] sourceId="${e.sourceId || ''}"${
-          e.sourceDataType ? `, sourceDataType="${e.sourceDataType}"` : ''
-        }${tileCoord ? `, tile=${tileCoord}` : ''}`,
-      );
-    });
-
-    map.on('sourcedata', (e: any) => {
-      const tileCoord = e.tile?.tileID?.canonical
-        ? `${e.tile.tileID.canonical.z}/${e.tile.tileID.canonical.x}/${e.tile.tileID.canonical.y}`
-        : null;
-      const tileState = e.tile?.state;
-      if (tileCoord) tileLoadsFinished++;
-      console.log(
-        `[MapLibre:sourcedata] sourceId="${e.sourceId || ''}", sourceDataType="${
-          e.sourceDataType || ''
-        }", isSourceLoaded=${Boolean(e.isSourceLoaded)}${
-          tileCoord ? `, tile=${tileCoord} [state=${tileState || 'unknown'}] (#${tileLoadsFinished})` : ''
-        }`,
-      );
-    });
-
-    map.on('sourcedataabort', (e: any) => {
-      const tileCoord = e.tile?.tileID?.canonical
-        ? `${e.tile.tileID.canonical.z}/${e.tile.tileID.canonical.x}/${e.tile.tileID.canonical.y}`
-        : null;
-      console.warn(
-        `[MapLibre:sourcedataabort] Aborted tile/source request: sourceId="${e.sourceId || ''}"${
-          tileCoord ? `, tile=${tileCoord}` : ''
-        }`,
-      );
-    });
-
-    map.on('load', (e: any) => {
-      console.log('[MapLibre:load] Initial map "load" event fired (all initial visible tiles loaded)!', {
-        zoom: map?.getZoom(),
-        center: map?.getCenter(),
-        areTilesLoaded: map?.areTilesLoaded?.(),
-        totalTileRequests: tileReqCounter,
-        totalTilesStarted: tileLoadsStarted,
-        totalTilesSourcedata: tileLoadsFinished,
-      });
-    });
-
-    map.on('style.load', () => {
-      const sources = map?.getStyle()?.sources ? Object.keys(map.getStyle()!.sources) : [];
-      const layerCount = map?.getStyle()?.layers?.length || 0;
-      console.log('[MapLibre:style.load] Style loaded successfully!', {
-        registeredSources: sources,
-        totalLayers: layerCount,
-      });
-    });
-
-    map.on('idle', () => {
-      console.log(
-        `[MapLibre:idle] Map idle. areTilesLoaded=${map?.areTilesLoaded?.()}, tileRequests=${tileReqCounter}, tilesStarted=${tileLoadsStarted}, tilesFinished=${tileLoadsFinished}`,
-      );
-    });
-
-    map.on('webglcontextlost', (e: any) => {
-      console.error('[MapLibre:webglcontextlost] WebGL Context Lost on mobile canvas! Fallback triggered.', e);
-      if (!disposed) {
-        if (containerRef.current) containerRef.current.innerHTML = '';
-        setEngine('leaflet');
-      }
-    });
-
-    map.on('webglcontextrestored', () => {
-      console.log('[MapLibre:webglcontextrestored] WebGL Context Restored!');
-    });
-
     map.on('error', (e: any) => {
-      const err = e?.error || e;
-      const msg = String(err?.message || err || 'Unknown map error');
-      const status = err?.status;
-      const sourceId = e?.sourceId;
-      const tileCoord = e?.tile?.tileID?.canonical
-        ? `${e.tile.tileID.canonical.z}/${e.tile.tileID.canonical.x}/${e.tile.tileID.canonical.y}`
-        : e?.tile ? String(e.tile) : null;
-      const url = (err as any)?.url || (e as any)?.url;
-
-      console.error(
-        `[MapLibre:error] Error on ${sourceId ? `source "${sourceId}"` : 'map'}${
-          tileCoord ? ` (tile ${tileCoord})` : ''
-        }${status ? ` [HTTP ${status}]` : ''}:`,
-        {
-          message: msg,
-          status,
-          sourceId,
-          tile: tileCoord,
-          url,
-          rawError: e,
-        },
-      );
-
+      const msg = String(e?.error?.message || '');
       if (msg.includes('WebGL') || msg.includes('GPU') || msg.includes('context')) {
         console.warn('[MapView] WebGL runtime error, switching to Leaflet:', msg);
-        if (!disposed) {
-          if (containerRef.current) containerRef.current.innerHTML = '';
-          setEngine('leaflet');
-        }
+        if (!disposed) setEngine('leaflet');
       } else {
         if (!disposed) setStyleReady(true);
       }
     });
 
-    const onReady = () => {
-      if (!disposed) {
-        setStyleReady(true);
-        try { map?.resize(); } catch { void 0; }
-        redrawRef.current();
-      }
-    };
-
-    map.once('style.load', onReady);
-    map.once('load', onReady);
-    map.once('idle', onReady);
-
-    // Timeout safety for mobile: ensure map is visible even if distant background tiles take time
-    const safetyTimer = setTimeout(onReady, 1200);
-
-    // Prompt mobile resize to match container geometry after DOM layout finishes
-    requestAnimationFrame(() => {
-      if (!disposed && map) {
-        try { map.resize(); } catch { void 0; }
-      }
-    });
-    const t1 = setTimeout(() => {
-      if (!disposed && map) {
-        try { map.resize(); } catch { void 0; }
-      }
-    }, 150);
-    const t2 = setTimeout(() => {
-      if (!disposed && map) {
-        try { map.resize(); } catch { void 0; }
-      }
-    }, 450);
+    try {
+      map.setStyle(preparedStyle as any, { validate: false });
+    } catch (err) {
+      console.warn('[MapView] setStyle error, switching to Leaflet:', err);
+      setEngine('leaflet');
+      return;
+    }
 
     const ro = new ResizeObserver(() => {
       if (!disposed && map) {
@@ -782,14 +582,6 @@ export default function MapView({
       }
     });
     ro.observe(containerRef.current);
-
-    const handleWindowResize = () => {
-      if (!disposed && map) {
-        try { map.resize(); } catch { void 0; }
-      }
-    };
-    window.addEventListener('resize', handleWindowResize);
-    window.addEventListener('orientationchange', handleWindowResize);
 
     const onMoveEnd = () => {
       if (pinDropActiveRef.current && onClickRef.current && map) {
@@ -805,14 +597,10 @@ export default function MapView({
 
     map.on('moveend', onMoveEnd);
     map.on('move', onMove);
+    map.on('load', () => { if (!disposed) setStyleReady(true); });
 
     return () => {
       disposed = true;
-      clearTimeout(safetyTimer);
-      clearTimeout(t1);
-      clearTimeout(t2);
-      window.removeEventListener('resize', handleWindowResize);
-      window.removeEventListener('orientationchange', handleWindowResize);
       cancelAnimationFrame(animRef.current);
       ro.disconnect();
       if (map) {
@@ -977,8 +765,8 @@ export default function MapView({
       if (disposed || !containerRef.current) return;
       const L = mod.default || mod;
 
-      // Clean existing container if it has leaflet bindings or leftover elements
-      if (containerRef.current) {
+      // Clean existing container if it has leaflet bindings
+      if ((containerRef.current as any)._leaflet_id) {
         delete (containerRef.current as any)._leaflet_id;
         containerRef.current.innerHTML = '';
       }
@@ -996,12 +784,6 @@ export default function MapView({
         });
         leafletMapRef.current = mapInstance;
         setStyleReady(true);
-
-        requestAnimationFrame(() => {
-          if (!disposed && mapInstance) {
-            try { mapInstance.invalidateSize(); } catch { void 0; }
-          }
-        });
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           maxZoom: 19,
