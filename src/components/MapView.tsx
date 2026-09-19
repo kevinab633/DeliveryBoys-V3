@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { Map as MLMap, Marker as MLMarker } from 'maplibre-gl';
 import type * as LeafletType from 'leaflet';
+import { useThemeStore } from '../stores/themeStore';
+import { cn } from '../lib/utils';
+
 // Leaflet's stylesheet is REQUIRED: it gives .leaflet-pane its absolute
 // positioning. Without it tiles scatter/fail to place and the SVG overlay
 // pane (routes) collapses — which looks like "tiles don't load and the
 // route won't form".
 import 'leaflet/dist/leaflet.css';
-import { useThemeStore } from '../stores/themeStore';
-import { cn } from '../lib/utils';
 
 // ── Types (public interface unchanged — callers need no edits) ─────────
 export interface MarkerData {
@@ -206,25 +207,16 @@ function isWebGL2Supported(): boolean {
   }
 }
 
-// ── GPU / WebGL failure classifier ─────────────────────────────────────
-// Used by the top-level error boundary (DebugBanner) so a WebGL2-related
-// crash shows the friendly "map unavailable" message instead of the
-// generic "Something went wrong" screen. Covers MapLibre's own
-// GPUInitializationError plus the TypeError cascade it triggers when the
-// painter/context was never created (reading 'resize' / 'destroy' / etc).
+// Keep WebGL initialization failures from taking down the whole React tree.
+// MapLibre can throw these asynchronously on browsers whose WebGL2 probe
+// succeeds but whose real rendering context cannot be initialized.
 export function isGpuInitFailure(err: unknown): boolean {
   if (!err || typeof err !== 'object') return false;
   const e = err as { name?: unknown; message?: unknown };
   if (e.name === 'GPUInitializationError') return true;
   if (typeof e.message === 'string' && /webgl|gpu|graphics context/i.test(e.message)) return true;
-  if (
-    e.name === 'TypeError' &&
-    typeof e.message === 'string' &&
-    /reading '(resize|destroy|render|context)'/i.test(e.message)
-  ) {
-    return true;
-  }
-  return false;
+  return e.name === 'TypeError' && typeof e.message === 'string' &&
+    /reading '(resize|destroy|render|context)'/i.test(e.message);
 }
 
 // ── Directions API fetcher ─────────────────────────────────────────────
@@ -473,6 +465,12 @@ export default function MapView({
     loadMapLibre()
       .then((mod) => {
         if (cancelled) return;
+        // MapLibre 6 resolves its module worker relative to the package URL.
+        // That works in dev but can point at a missing/chunked asset after a
+        // Vercel production build. The worker is deployed with its sibling
+        // shared module in public/assets, so vector tiles can be parsed on
+        // production browsers as well as locally.
+        mod.setWorkerUrl('/assets/maplibre-gl-worker.mjs');
         setMl(mod);
       })
       .catch((err) => {
