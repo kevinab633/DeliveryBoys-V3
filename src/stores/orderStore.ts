@@ -205,6 +205,13 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
     // Optimistic local update first (instant UX, works offline)…
     set(s => ({ orders: [order, ...s.orders] }));
 
+    // Push each dispatched rider — this is what makes a new order ring
+    // their phone even if the tab isn't open/focused (the in-app "Incoming
+    // Order!" alert already covers the tab-open case).
+    dispatchedTo.forEach((riderId) => {
+      pushNotify(riderId, 'New Order Available!', `A new delivery near you is ready to accept — ${order.pickup.address} → ${order.dropoff.address}.`);
+    });
+
     // …then fan out: broadcast to every other device/tab instantly AND
     // persist to Supabase in the background.
     try {
@@ -469,6 +476,14 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
         return fresh.length > 0 ? { ...o, dispatchedTo: [...existing, ...fresh] } : o;
       }),
     }));
+    // Push the newly-added riders too, same as the initial dispatch —
+    // otherwise only the first rider ever gets a push, and everyone the
+    // window later widens to only sees the in-app alert if their tab happens
+    // to be open.
+    candidates.forEach((riderId) => {
+      pushNotify(riderId, 'New Order Available!', `A new delivery near you is ready to accept — ${order.pickup.address} → ${order.dropoff.address}.`);
+    });
+
     // Tell the other devices about the widened window so the newly-included
     // riders start ringing too.
     const updated = get().orders.find(o => o.id === orderId);
