@@ -1,0 +1,6 @@
+{
+  "name": "Delivery Boys",
+  "description": "Delivery Boys - Ghana's most trusted delivery service. Fast & reliable parcel, food, grocery, and document delivery.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
