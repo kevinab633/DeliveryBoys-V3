@@ -50,11 +50,14 @@ export default async function handler(req, res) {
     // (browser data cleared, permission revoked, etc.) — clean it up so
     // future sends don't keep failing against it.
     const deadIds = [];
+    const failures = [];
     results.forEach((r, i) => {
       if (r.status === 'rejected') {
         const statusCode = r.reason?.statusCode;
+        const detail = r.reason?.body || r.reason?.message || String(r.reason);
         if (statusCode === 404 || statusCode === 410) deadIds.push(subs[i].id);
-        else console.error('[send-push] send failed:', r.reason?.body || r.reason?.message || r.reason);
+        console.error('[send-push] send failed:', statusCode, detail);
+        failures.push({ statusCode: statusCode || null, detail });
       }
     });
     if (deadIds.length > 0) {
@@ -62,7 +65,11 @@ export default async function handler(req, res) {
     }
 
     const sent = results.filter((r) => r.status === 'fulfilled').length;
-    return res.status(200).json({ sent, total: subs.length, pruned: deadIds.length });
+    // Failures are surfaced in the response body itself (not just server
+    // logs) so a quick look at the Vercel request log — even collapsed —
+    // shows exactly why a send didn't land, instead of a bare 200 that
+    // looks identical whether 0 or all subscriptions were actually reached.
+    return res.status(200).json({ sent, total: subs.length, pruned: deadIds.length, failures });
   } catch (err) {
     console.error('[send-push] error:', err);
     return res.status(500).json({ error: err.message });
