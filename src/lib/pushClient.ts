@@ -50,6 +50,28 @@ export async function subscribeToPush(userId: string): Promise<void> {
     if (!registration) return;
 
     let subscription = await registration.pushManager.getSubscription();
+
+    // A subscription created under an OLD VAPID key (e.g. before keys were
+    // regenerated) looks valid locally — it has an endpoint and keys — but
+    // the push service will silently fail to deliver to it, or the app
+    // server's private key won't match, since VAPID key PAIRS must match on
+    // both ends. web-push may still report success (the push service
+    // *accepted* the message), while the browser never receives it. So if
+    // the current subscription's public key doesn't match the one we'd
+    // subscribe with now, it's stale — drop it and re-subscribe fresh.
+    if (subscription) {
+      const existingKey = subscription.options?.applicationServerKey
+        ? btoa(String.fromCharCode(...new Uint8Array(subscription.options.applicationServerKey as ArrayBuffer)))
+            .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+        : null;
+      const currentKey = VAPID_PUBLIC_KEY.replace(/=+$/, '');
+      if (existingKey && existingKey !== currentKey) {
+        console.warn('[push] stale subscription (VAPID key changed) — re-subscribing');
+        await subscription.unsubscribe();
+        subscription = null;
+      }
+    }
+
     if (!subscription) {
       subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
