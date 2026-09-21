@@ -53,6 +53,24 @@ function AppContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
+  // ── Re-sync on resume: Android suspends/kills the Realtime WebSocket
+  //    whenever the tab/PWA is backgrounded or the phone sleeps, so a
+  //    broadcast sent while closed (e.g. a cancellation) is simply missed
+  //    — there's no queue or replay. Re-fetching orders from the DB every
+  //    time the tab becomes visible again means the UI is always correct
+  //    within a moment of reopening, regardless of what the socket missed
+  //    while backgrounded. mergeRemoteOrders only moves a status forward
+  //    (cancelled always wins), so this can't undo a newer local change. ──
+  useEffect(() => {
+    function handleVisibility() {
+      if (document.visibilityState !== 'visible') return;
+      void useOrderStore.getState().fetchOrders();
+      syncService.reconnectIfNeeded();
+    }
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, []);
+
   // ── Periodic sweep: auto-cancel expired instant orders, start dispatch
   //    for scheduled orders coming due (~30 min before), and auto-cancel
   //    scheduled orders that missed their window. Runs app-wide so it

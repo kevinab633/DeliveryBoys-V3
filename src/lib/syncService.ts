@@ -514,4 +514,18 @@ export const syncService = {
       syncService.broadcastRiderPresence(currentUser as RiderProfile);
     }
   },
+
+  /** Force the Realtime WebSocket to reconnect immediately instead of
+   *  waiting on its internal backoff timer. Call this on tab resume —
+   *  Android suspends/kills the socket while backgrounded, and it doesn't
+   *  always reconnect promptly on its own once the tab is visible again. */
+  reconnectIfNeeded() {
+    if (!isConnected) {
+      try {
+        realtimeChannel?.subscribe();
+      } catch {
+        void 0;
+      }
+    }
+  },
 };
