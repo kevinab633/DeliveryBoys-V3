@@ -42,6 +42,17 @@ export default async function handler(req, res) {
         webpush.sendNotification(
           { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
           payload,
+          {
+            // Tells the browser's push service (FCM on Android/Chrome) to
+            // wake the device and deliver immediately instead of batching
+            // it with other low-priority traffic — this is what was
+            // causing the multi-minute delay while the app was closed.
+            // TTL is also kept short: an order dispatch is time-sensitive,
+            // so there's no value in a push service holding it for hours
+            // if the device is briefly unreachable.
+            urgency: 'high',
+            TTL: 60,
+          },
         ),
       ),
     );
