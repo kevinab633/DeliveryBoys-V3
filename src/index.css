@@ -25,8 +25,15 @@
   --font-mono: 'JetBrains Mono', monospace;
 }
 
-html { scroll-behavior: smooth; }
-body { font-family: var(--font-sans); transition: background-color 0.3s, color 0.3s; }
+html { scroll-behavior: smooth; overflow-x: hidden; }
+body { font-family: var(--font-sans); transition: background-color 0.3s, color 0.3s; overflow-x: hidden; }
+/* Belt-and-suspenders for the homepage's decorative glow/blob elements
+   (absolute + negative inset + blur), which can bleed past their section
+   and widen the page's scrollable area on some viewport widths, showing
+   as stray white space on the right. Clipping at the document root fixes
+   it regardless of which element is the culprit, without touching the
+   section-by-section layout logic. */
+#root { overflow-x: clip; }
 
 .theme-dark { background-color: var(--color-surface-dark); color: var(--color-text-dark); }
 .theme-light { background-color: var(--color-surface-light); color: var(--color-text-light); }

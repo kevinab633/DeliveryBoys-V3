@@ -36,7 +36,7 @@ export default function NotificationPanel() {
               initial={{ opacity: 0, y: 8, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 8, scale: 0.95 }}
-              className={cn('absolute right-0 top-full mt-2 w-80 sm:w-96 rounded-2xl shadow-2xl border z-50 overflow-hidden',
+              className={cn('fixed sm:absolute left-2 right-2 sm:left-auto sm:right-0 top-16 sm:top-full mt-0 sm:mt-2 sm:w-96 max-w-[calc(100vw-1rem)] rounded-2xl shadow-2xl border z-50 overflow-hidden',
                 dk ? 'bg-surface-dark-2 border-white/10' : 'bg-white border-gray-200')}
             >
               <div className={cn('px-4 py-3 flex items-center justify-between border-b', dk ? 'border-white/5' : 'border-gray-100')}>

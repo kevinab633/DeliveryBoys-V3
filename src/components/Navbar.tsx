@@ -16,6 +16,11 @@ const publicLinks = [
   { name: 'Contact', path: '/contact' },
 ];
 
+// Customer-only actions inside publicLinks — hidden from the mobile
+// hamburger menu for logged-in riders/managers, who have their own
+// role-specific destinations (Rider Dashboard / Manager Panel) instead.
+const customerOnlyPaths = ['/book', '/track'];
+
 export default function Navbar() {
   const [open, setOpen] = useState(false);
   const [userMenu, setUserMenu] = useState(false);
@@ -140,13 +145,29 @@ export default function Navbar() {
           <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }}
             className={cn('lg:hidden overflow-hidden border-t', dk ? 'bg-surface-dark-2 border-white/5' : 'bg-white border-gray-100')}>
             <div className="px-4 py-3 space-y-1">
-              {publicLinks.map(l => (
+              {publicLinks
+                .filter(l => user && user.role !== 'customer' ? !customerOnlyPaths.includes(l.path) : true)
+                .map(l => (
                 <Link key={l.path} to={l.path} onClick={() => setOpen(false)}
                   className={cn('block px-3 py-2.5 rounded-xl text-sm font-semibold transition',
                     location.pathname === l.path ? 'text-brand bg-brand/8' : dk ? 'text-white/55 hover:bg-white/5' : 'text-gray-500 hover:bg-gray-50')}>
                   {l.name}
                 </Link>
               ))}
+              {user && user.role === 'rider' && (
+                <Link to="/rider/dashboard" onClick={() => setOpen(false)}
+                  className={cn('block px-3 py-2.5 rounded-xl text-sm font-semibold transition',
+                    location.pathname === '/rider/dashboard' ? 'text-brand bg-brand/8' : dk ? 'text-white/55 hover:bg-white/5' : 'text-gray-500 hover:bg-gray-50')}>
+                  Rider Dashboard
+                </Link>
+              )}
+              {user && user.role === 'manager' && (
+                <Link to="/manager" onClick={() => setOpen(false)}
+                  className={cn('block px-3 py-2.5 rounded-xl text-sm font-semibold transition',
+                    location.pathname === '/manager' ? 'text-brand bg-brand/8' : dk ? 'text-white/55 hover:bg-white/5' : 'text-gray-500 hover:bg-gray-50')}>
+                  Manager Panel
+                </Link>
+              )}
               {!user && (
                 <div className="flex gap-2 pt-2">
                   <Link to="/auth/login" onClick={() => setOpen(false)} className={cn('flex-1 text-center px-4 py-2.5 rounded-xl text-sm font-semibold border',

@@ -136,7 +136,7 @@ function RiderHomePage() {
               </div>
               <div className={card}>
                 <Star size={18} className="text-yellow-400 mb-2" />
-                <p className={cn('text-2xl font-extrabold', dk ? 'text-white' : 'text-gray-900')}>{rider.rating > 0 ? rider.rating.toFixed(1) : 'N/A'}</p>
+                <p className={cn('text-2xl font-extrabold', dk ? 'text-white' : 'text-gray-900')}>{rider.rating > 0 ? rider.rating.toFixed(1) : 'No ratings'}</p>
                 <p className={cn('text-xs', dk ? 'text-white/40' : 'text-gray-500')}>Current rating</p>
               </div>
             </div>

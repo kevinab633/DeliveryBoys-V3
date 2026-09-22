@@ -7,6 +7,7 @@ export function generateOTP(): string {
 }
 
 export function formatCurrency(amount: number): string {
+  if (amount == null || Number.isNaN(amount)) return 'GH₵ 0.00';
   return `GH₵ ${amount.toFixed(2)}`;
 }
 

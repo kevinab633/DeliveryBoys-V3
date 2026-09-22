@@ -502,7 +502,7 @@ export default function RiderDashboard() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
             {[
               { icon: Package, label: 'Deliveries', value: rider.totalDeliveries + myOrders.filter(o => o.status === 'delivered').length },
-              { icon: Star, label: 'Rating', value: rider.rating > 0 ? rider.rating.toFixed(1) : 'N/A' },
+              { icon: Star, label: 'Rating', value: rider.rating > 0 ? rider.rating.toFixed(1) : 'No ratings' },
               { icon: DollarSign, label: 'Earnings', value: formatCurrency(rider.earnings + myOrders.filter(o => o.status === 'delivered').reduce((s, o) => s + o.price * 0.75, 0)) },
               { icon: Clock, label: 'Active', value: activeOrder ? 'Yes' : 'No' },
             ].map(s => (
