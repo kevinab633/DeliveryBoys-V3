@@ -87,17 +87,17 @@ export function SignupPage() {
 
   // NOTE: OTP verification removed for now — will be re-added later.
   // Account is created and signed in immediately on submit.
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name) {
       setError('Please enter your full name.');
       return;
     }
     if (role === 'rider') {
-      signupRiderDirect({ name: form.name, email: form.email || undefined, phone: form.phone || undefined, vehicleType: form.vehicleType, vehiclePlate: form.vehiclePlate, nationalIdUrl: form.nationalId || '/images/logo.jpeg', photoUrl: form.photo || '/images/logo.jpeg' });
+      await signupRiderDirect({ name: form.name, email: form.email || undefined, phone: form.phone || undefined, vehicleType: form.vehicleType, vehiclePlate: form.vehiclePlate, nationalIdUrl: form.nationalId || '/images/logo.jpeg', photoUrl: form.photo || '/images/logo.jpeg' });
       navigate('/rider/dashboard');
     } else {
-      signupDirect({ name: form.name, email: form.email || undefined, phone: form.phone || undefined, role: 'customer' });
+      await signupDirect({ name: form.name, email: form.email || undefined, phone: form.phone || undefined, role: 'customer' });
       navigate('/book');
     }
   };

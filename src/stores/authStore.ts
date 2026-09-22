@@ -19,8 +19,8 @@ interface AuthStore {
   // ── Direct auth (OTP removed for now — will be re-added later) ──────
   // These sign the user in immediately with no verification step.
   loginDirect: (emailOrPhone: string, role: UserRole) => Promise<void>;
-  signupDirect: (data: { name: string; email?: string; phone?: string; role: UserRole }) => void;
-  signupRiderDirect: (data: { name: string; email?: string; phone?: string; vehicleType: VehicleType; vehiclePlate: string; nationalIdUrl: string; photoUrl: string }) => void;
+  signupDirect: (data: { name: string; email?: string; phone?: string; role: UserRole }) => Promise<void>;
+  signupRiderDirect: (data: { name: string; email?: string; phone?: string; vehicleType: VehicleType; vehiclePlate: string; nationalIdUrl: string; photoUrl: string }) => Promise<void>;
   logout: () => void;
   updateProfile: (data: Partial<User>) => void;
   addContact: (type: 'email' | 'phone', value: string) => void;
@@ -127,12 +127,17 @@ export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
   // has it — same shape as before, just DB-backed now.
   loginDirect: async (emailOrPhone, role) => {
     const method = emailOrPhone.includes('@') ? 'email' : 'phone';
-    let user = get().allUsers.find(u => {
-      if (method === 'email') return u.email === emailOrPhone && u.role === role;
-      return u.phone === emailOrPhone && u.role === role;
-    });
+    // Check Supabase FIRST, not local allUsers — local state may still be
+    // the hardcoded demo seed if loadUsers() hasn't finished yet (it's
+    // async and runs on a timer, not guaranteed to complete before a
+    // fast login attempt), which was causing a real account on another
+    // device to look "not found" and get duplicated.
+    let user = await usersApi.findByContact(emailOrPhone, method, role) || undefined;
     if (!user) {
-      user = (await usersApi.findByContact(emailOrPhone, method, role)) || undefined;
+      user = get().allUsers.find(u => {
+        if (method === 'email') return u.email === emailOrPhone && u.role === role;
+        return u.phone === emailOrPhone && u.role === role;
+      });
     }
     if (!user) {
       user = {
@@ -144,15 +149,15 @@ export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
         verified: true,
       } as User;
       set(s => ({ allUsers: [...s.allUsers, user!] }));
-      void usersApi.upsert(user);
+      await usersApi.upsert(user);
     } else {
-      // Found remotely but not yet in local allUsers — merge it in.
+      // Found (remotely or locally) but not yet merged into local allUsers.
       set(s => (s.allUsers.some(u => u.id === user!.id) ? s : { allUsers: [...s.allUsers, user!] }));
     }
     set({ user, otpPending: null });
   },
 
-  signupDirect: (data) => {
+  signupDirect: async (data) => {
     const newUser: User = {
       id: generateId(),
       name: data.name,
@@ -163,10 +168,10 @@ export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
       verified: true,
     };
     set(s => ({ allUsers: [...s.allUsers, newUser], user: newUser, otpPending: null }));
-    void usersApi.upsert(newUser);
+    await usersApi.upsert(newUser);
   },
 
-  signupRiderDirect: (data) => {
+  signupRiderDirect: async (data) => {
     const newRider: RiderProfile = {
       id: generateId(),
       name: data.name,
@@ -186,7 +191,11 @@ export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
       photoUrl: data.photoUrl,
     };
     set(s => ({ allUsers: [...s.allUsers, newRider], user: newRider, otpPending: null }));
-    void usersApi.upsert(newRider);
+    // Awaited (not fire-and-forget) — a rider signing up needs their
+    // account to actually exist in Supabase before they might log in
+    // again from a different phone; a silent background failure here
+    // was creating duplicate accounts per-device instead of one shared one.
+    await usersApi.upsert(newRider);
   },
 
   signup: (data) => {

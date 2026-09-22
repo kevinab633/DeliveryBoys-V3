@@ -4,6 +4,7 @@ import { Package, MapPin, DollarSign, Star, Clock, Calendar, PhoneCall, MessageS
 import { useThemeStore } from '../stores/themeStore';
 import { useAuthStore } from '../stores/authStore';
 import { useOrderStore } from '../stores/orderStore';
+import { syncService } from '../lib/syncService';
 import { cn, formatCurrency, formatDistance, formatDate, timeAgo } from '../lib/utils';
 import { RiderProfile, Order } from '../lib/types';
 import MapView from '../components/MapView';
@@ -370,17 +371,57 @@ export default function RiderDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rider?.id]);
 
-  // Simulate location updates
+  // ── Real GPS tracking, replacing the old fake jittered-position
+  //    simulation. Watches the device's actual location continuously
+  //    while online, and broadcasts it (throttled) so customers see the
+  //    rider's true position rather than a random wander. Stops watching
+  //    the moment the rider goes offline, so it never runs in the
+  //    background unnecessarily or drains battery for no reason. ──────
   useEffect(() => {
     if (!rider || rider.role !== 'rider' || rider.availability !== 'online') return;
-    const interval = setInterval(() => {
-      const lat = (rider.location?.lat || 5.6037) + (Math.random() - 0.5) * 0.002;
-      const lng = (rider.location?.lng || -0.1870) + (Math.random() - 0.5) * 0.002;
-      updateRiderLocation(lat, lng);
-    }, 5000);
-    return () => clearInterval(interval);
+    if (!('geolocation' in navigator)) {
+      console.warn('[RiderDashboard] Geolocation not supported on this device/browser.');
+      return;
+    }
+
+    let lastSentAt = 0;
+    let lastSentLat: number | null = null;
+    let lastSentLng: number | null = null;
+
+    // Haversine distance in meters — used to throttle by real movement,
+    // not just by a timer, so a stationary rider doesn't spam updates.
+    function metersBetween(lat1: number, lng1: number, lat2: number, lng2: number) {
+      const R = 6371000;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLng = (lng2 - lng1) * Math.PI / 180;
+      const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        const { latitude: lat, longitude: lng } = pos.coords;
+        const now = Date.now();
+        const movedEnough = lastSentLat === null || metersBetween(lastSentLat, lastSentLng!, lat, lng) >= 10;
+        const timeEnough = now - lastSentAt >= 4000;
+        if (!movedEnough && !timeEnough) return;
+        lastSentAt = now;
+        lastSentLat = lat;
+        lastSentLng = lng;
+        updateRiderLocation(lat, lng);
+        if (activeOrder) {
+          syncService.broadcastRiderLocation(activeOrder.id, lat, lng, rider.id);
+        }
+      },
+      (err) => {
+        console.warn('[RiderDashboard] Geolocation error:', err.message);
+      },
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 },
+    );
+
+    return () => navigator.geolocation.clearWatch(watchId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rider?.availability]);
+  }, [rider?.availability, activeOrder?.id]);
 
   // ── Ringing trigger: online rider + INSTANT pending order that has
   //    this rider inside its active dispatch window (dispatchedTo).
