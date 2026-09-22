@@ -501,9 +501,9 @@ export default function RiderDashboard() {
           {/* Stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
             {[
-              { icon: Package, label: 'Deliveries', value: rider.totalDeliveries + myOrders.filter(o => o.status === 'delivered').length },
+              { icon: Package, label: 'Deliveries', value: rider.totalDeliveries || 0 },
               { icon: Star, label: 'Rating', value: rider.rating > 0 ? rider.rating.toFixed(1) : 'No ratings' },
-              { icon: DollarSign, label: 'Earnings', value: formatCurrency(rider.earnings + myOrders.filter(o => o.status === 'delivered').reduce((s, o) => s + o.price * 0.75, 0)) },
+              { icon: DollarSign, label: 'Earnings', value: formatCurrency(rider.earnings) },
               { icon: Clock, label: 'Active', value: activeOrder ? 'Yes' : 'No' },
             ].map(s => (
               <div key={s.label} className={cn('p-4 rounded-xl border', dk ? 'bg-surface-dark-2 border-white/5' : 'bg-gray-50 border-gray-200')}>

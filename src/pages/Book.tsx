@@ -509,7 +509,7 @@ export default function Book() {
             <Star size={12} className="text-yellow-400 fill-yellow-400" />
             {assignedRider.rating > 0 ? assignedRider.rating.toFixed(1) : 'New'}
           </span>
-          <span>{assignedRider.totalDeliveries} deliveries</span>
+          <span>{assignedRider.totalDeliveries || 0} deliveries</span>
           <span className="uppercase">{assignedRider.vehiclePlate}</span>
         </div>
       )}

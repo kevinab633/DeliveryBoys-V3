@@ -326,7 +326,14 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
       fireBrowserNotification('In Transit', `Order ${orderId} is on its way.`);
     } else if (status === 'delivered') {
       pushNotify(order.customerId, 'Delivered 🎉', `Your order ${orderId} has been delivered. Thank you for using Delivery Boys!`);
-      if (order.riderId) pushNotify(order.riderId, 'Delivered', `Order ${orderId} delivered. Great job!`);
+      if (order.riderId) {
+        pushNotify(order.riderId, 'Delivered', `Order ${orderId} delivered. Great job!`);
+        // Persist the completed delivery against the rider's own record —
+        // without this, the dashboard's delivery/earnings counters only
+        // ever reflected orders still held in local session state, so
+        // they reset on reload and never actually accumulated.
+        useAuthStore.getState().recordDelivery(order.riderId, order.price * 0.75);
+      }
       fireBrowserNotification('Delivered 🎉', `Order ${orderId} has been delivered.`);
     } else if (status === 'cancelled') {
       pushNotify(order.customerId, 'Order Cancelled', `Your order ${orderId} was cancelled.`);

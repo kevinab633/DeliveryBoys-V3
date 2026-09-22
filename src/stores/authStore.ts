@@ -27,6 +27,7 @@ interface AuthStore {
   getCustomers: () => User[];
   updateRiderLocation: (lat: number, lng: number) => void;
   setRiderAvailability: (status: 'online' | 'offline' | 'busy') => void;
+  recordDelivery: (riderId: string, earnedAmount: number) => void;
   // ── Remote sync handlers (called by syncService on incoming events) ──
   /** A rider on another device announced they are online. */
   applyRemoteRiderPresence: (rider: RiderProfile) => void;
@@ -271,6 +272,25 @@ export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
     return {
       user: updated,
       allUsers: s.allUsers.map(u => u.id === updated.id ? updated : u),
+    };
+  }),
+
+  // Records a completed delivery against a rider BY ID rather than the
+  // currently logged-in user — the status change that completes an order
+  // can be triggered from the rider's own session, but should still work
+  // correctly if triggered elsewhere (e.g. a manager action) later on.
+  recordDelivery: (riderId, earnedAmount) => set(s => {
+    const rider = s.allUsers.find(u => u.id === riderId && u.role === 'rider') as RiderProfile | undefined;
+    if (!rider) return s;
+    const updated: RiderProfile = {
+      ...rider,
+      totalDeliveries: (rider.totalDeliveries || 0) + 1,
+      earnings: (rider.earnings || 0) + earnedAmount,
+    };
+    return {
+      allUsers: s.allUsers.map(u => u.id === riderId ? updated : u),
+      // Keep the logged-in session's own copy in sync too, if it's this rider.
+      user: s.user && s.user.id === riderId ? updated : s.user,
     };
   }),
 }), { name: 'db-auth' }));
