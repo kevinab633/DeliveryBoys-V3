@@ -128,38 +128,17 @@ export default function Track() {
     setSheetOpen(true);
   };
 
-  // ── Simulate rider movement (raw target position) ────────────────
-  const [rawRiderPos, setRawRiderPos] = useState<{ lat: number; lng: number } | undefined>(undefined);
-
-  useEffect(() => {
-    if (!order || !['accepted', 'picked_up', 'in_transit'].includes(order.status)) {
-      setRawRiderPos(undefined);
-      return;
-    }
-
-    // Seed with order's riderLocation or pickup (guarded: malformed
-    // riderLocation jsonb must never seed a NaN position)
-    const seed = order.riderLocation && Number.isFinite(order.riderLocation.lat) && Number.isFinite(order.riderLocation.lng)
-      ? order.riderLocation
-      : { lat: order.pickup.lat, lng: order.pickup.lng };
-    setRawRiderPos(seed);
-
-    const interval = setInterval(() => {
-      setRawRiderPos(prev => {
-        if (!prev) return prev;
-        const target =
-          order.status === 'picked_up' || order.status === 'in_transit'
-            ? order.dropoff
-            : order.pickup;
-        return {
-          lat: prev.lat + (target.lat - prev.lat) * 0.06 + (Math.random() - 0.5) * 0.0008,
-          lng: prev.lng + (target.lng - prev.lng) * 0.06 + (Math.random() - 0.5) * 0.0008,
-        };
-      });
-    }, 2500);
-
-    return () => clearInterval(interval);
-  }, [order?.id, order?.status]);
+  // ── Real rider position, fed straight from order.riderLocation ───
+  // This is the live GPS position broadcast from the rider's device
+  // (see RiderDashboard.tsx's watchPosition + broadcastRiderLocation).
+  // useSmoothLatLng below handles the animated glide between updates —
+  // there's no need to simulate movement here, since real updates now
+  // arrive every ~4s/10m of actual rider movement.
+  const rawRiderPos = order && ['accepted', 'picked_up', 'in_transit'].includes(order.status)
+    ? (order.riderLocation && Number.isFinite(order.riderLocation.lat) && Number.isFinite(order.riderLocation.lng)
+        ? order.riderLocation
+        : { lat: order.pickup.lat, lng: order.pickup.lng })
+    : undefined;
 
   // ── Smooth the raw position for the marker ───────────────────────
   const smoothRider = useSmoothLatLng(rawRiderPos, 2200);
