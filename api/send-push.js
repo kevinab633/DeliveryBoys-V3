@@ -65,6 +65,23 @@ export default async function handler(req, res) {
     }
 
     const sent = results.filter((r) => r.status === 'fulfilled').length;
+
+    // Also log this attempt into a plain table so it can be checked from
+    // Supabase's Table Editor on a phone — no dev tools or scrolling
+    // through Vercel's log UI required, just open the table and read it.
+    try {
+      await supabase.from('push_send_log').insert({
+        user_id: userId,
+        sent,
+        total: subs.length,
+        pruned: deadIds.length,
+        failures: failures.length > 0 ? JSON.stringify(failures) : null,
+      });
+    } catch (logErr) {
+      // Don't let logging itself break the actual send response.
+      console.error('[send-push] failed to write push_send_log:', logErr.message);
+    }
+
     // Failures are surfaced in the response body itself (not just server
     // logs) so a quick look at the Vercel request log — even collapsed —
     // shows exactly why a send didn't land, instead of a bare 200 that
