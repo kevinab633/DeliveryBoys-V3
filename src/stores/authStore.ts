@@ -2,18 +2,23 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { User, RiderProfile, UserRole, RiderStatus, VehicleType } from '../lib/types';
 import { generateId, generateOTP } from '../lib/utils';
+import { usersApi } from '../lib/usersApi';
 
 interface AuthStore {
   user: User | RiderProfile | null;
   allUsers: (User | RiderProfile)[];
+  usersLoaded: boolean;
   otpPending: { contact: string; otp: string; role: UserRole; method: 'email' | 'phone' } | null;
+  /** Fetches every account from Supabase and merges it into allUsers —
+   *  call this once on app startup, same pattern as orderStore's init(). */
+  loadUsers: () => Promise<void>;
   login: (emailOrPhone: string, role: UserRole) => string; // returns OTP
   verifyOTP: (code: string) => boolean;
   signup: (data: { name: string; email?: string; phone?: string; role: UserRole }) => string;
   signupRider: (data: { name: string; email?: string; phone?: string; vehicleType: VehicleType; vehiclePlate: string; nationalIdUrl: string; photoUrl: string }) => string;
   // ── Direct auth (OTP removed for now — will be re-added later) ──────
   // These sign the user in immediately with no verification step.
-  loginDirect: (emailOrPhone: string, role: UserRole) => void;
+  loginDirect: (emailOrPhone: string, role: UserRole) => Promise<void>;
   signupDirect: (data: { name: string; email?: string; phone?: string; role: UserRole }) => void;
   signupRiderDirect: (data: { name: string; email?: string; phone?: string; vehicleType: VehicleType; vehiclePlate: string; nationalIdUrl: string; photoUrl: string }) => void;
   logout: () => void;
@@ -55,7 +60,33 @@ const DEMO_RIDERS: RiderProfile[] = [
 export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
   user: null,
   allUsers: [DEFAULT_MANAGER, ...DEMO_RIDERS],
+  usersLoaded: false,
   otpPending: null,
+
+  // Merges real Supabase accounts into local state on startup. The demo
+  // riders/manager seeded above stay as an offline fallback — merged, not
+  // replaced, so the app still has riders to show if the DB is briefly
+  // unreachable. Real DB rows win over demo data for the same id.
+  loadUsers: async () => {
+    const remoteUsers = await usersApi.fetchAll();
+    if (remoteUsers.length === 0) {
+      set({ usersLoaded: true });
+      return;
+    }
+    set(s => {
+      const remoteIds = new Set(remoteUsers.map(u => u.id));
+      const keptLocal = s.allUsers.filter(u => !remoteIds.has(u.id));
+      const mergedUsers = [...keptLocal, ...remoteUsers];
+      // If the logged-in user's own record came back from the DB, refresh
+      // it too, so a rider's stats/status reflect what's actually stored.
+      const refreshedSelf = s.user ? remoteUsers.find(u => u.id === s.user!.id) : undefined;
+      return {
+        allUsers: mergedUsers,
+        user: refreshedSelf || s.user,
+        usersLoaded: true,
+      };
+    });
+  },
 
   login: (emailOrPhone, role) => {
     const otp = generateOTP();
@@ -91,13 +122,18 @@ export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
 
   // ── Direct auth (OTP removed for now — will be re-added later) ──────
   // Find-or-create by contact and sign in immediately, no code step.
-  loginDirect: (emailOrPhone, role) => {
+  // Checks Supabase first (so an account created on another device is
+  // found), falling back to local allUsers, then creates fresh if neither
+  // has it — same shape as before, just DB-backed now.
+  loginDirect: async (emailOrPhone, role) => {
     const method = emailOrPhone.includes('@') ? 'email' : 'phone';
-    const { allUsers } = get();
-    let user = allUsers.find(u => {
+    let user = get().allUsers.find(u => {
       if (method === 'email') return u.email === emailOrPhone && u.role === role;
       return u.phone === emailOrPhone && u.role === role;
     });
+    if (!user) {
+      user = (await usersApi.findByContact(emailOrPhone, method, role)) || undefined;
+    }
     if (!user) {
       user = {
         id: generateId(),
@@ -107,7 +143,11 @@ export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
         createdAt: Date.now(),
         verified: true,
       } as User;
-      set({ allUsers: [...allUsers, user] });
+      set(s => ({ allUsers: [...s.allUsers, user!] }));
+      void usersApi.upsert(user);
+    } else {
+      // Found remotely but not yet in local allUsers — merge it in.
+      set(s => (s.allUsers.some(u => u.id === user!.id) ? s : { allUsers: [...s.allUsers, user!] }));
     }
     set({ user, otpPending: null });
   },
@@ -123,6 +163,7 @@ export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
       verified: true,
     };
     set(s => ({ allUsers: [...s.allUsers, newUser], user: newUser, otpPending: null }));
+    void usersApi.upsert(newUser);
   },
 
   signupRiderDirect: (data) => {
@@ -145,6 +186,7 @@ export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
       photoUrl: data.photoUrl,
     };
     set(s => ({ allUsers: [...s.allUsers, newRider], user: newRider, otpPending: null }));
+    void usersApi.upsert(newRider);
   },
 
   signup: (data) => {
@@ -203,6 +245,7 @@ export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
   updateProfile: (data) => set(s => {
     if (!s.user) return s;
     const updated = { ...s.user, ...data };
+    void usersApi.upsert(updated);
     return {
       user: updated,
       allUsers: s.allUsers.map(u => u.id === updated.id ? updated : u),
@@ -212,23 +255,33 @@ export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
   addContact: (type, value) => set(s => {
     if (!s.user) return s;
     const updated = { ...s.user, [type]: value };
+    void usersApi.upsert(updated);
     return {
       user: updated,
       allUsers: s.allUsers.map(u => u.id === updated.id ? updated : u),
     };
   }),
 
-  approveRider: (riderId) => set(s => ({
-    allUsers: s.allUsers.map(u => u.id === riderId && u.role === 'rider' ? { ...u, status: 'approved' as RiderStatus } : u),
-  })),
+  approveRider: (riderId) => {
+    void usersApi.update(riderId, { status: 'approved' });
+    set(s => ({
+      allUsers: s.allUsers.map(u => u.id === riderId && u.role === 'rider' ? { ...u, status: 'approved' as RiderStatus } : u),
+    }));
+  },
 
-  rejectRider: (riderId) => set(s => ({
-    allUsers: s.allUsers.map(u => u.id === riderId && u.role === 'rider' ? { ...u, status: 'rejected' as RiderStatus } : u),
-  })),
+  rejectRider: (riderId) => {
+    void usersApi.update(riderId, { status: 'rejected' });
+    set(s => ({
+      allUsers: s.allUsers.map(u => u.id === riderId && u.role === 'rider' ? { ...u, status: 'rejected' as RiderStatus } : u),
+    }));
+  },
 
-  suspendRider: (riderId) => set(s => ({
-    allUsers: s.allUsers.map(u => u.id === riderId && u.role === 'rider' ? { ...u, status: 'suspended' as RiderStatus } : u),
-  })),
+  suspendRider: (riderId) => {
+    void usersApi.update(riderId, { status: 'suspended' });
+    set(s => ({
+      allUsers: s.allUsers.map(u => u.id === riderId && u.role === 'rider' ? { ...u, status: 'suspended' as RiderStatus } : u),
+    }));
+  },
 
   // ── Remote sync handlers (invoked by syncService) ──────────────────
   applyRemoteRiderPresence: (remoteRider) => {
@@ -257,40 +310,54 @@ export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
 
   getCustomers: () => get().allUsers.filter(u => u.role === 'customer'),
 
-  updateRiderLocation: (lat, lng) => set(s => {
-    if (!s.user || s.user.role !== 'rider') return s;
-    const updated = { ...s.user, location: { lat, lng } } as RiderProfile;
-    return {
-      user: updated,
-      allUsers: s.allUsers.map(u => u.id === updated.id ? updated : u),
-    };
-  }),
+  updateRiderLocation: (lat, lng) => {
+    const s = get();
+    if (!s.user || s.user.role !== 'rider') return;
+    void usersApi.update(s.user.id, { location: { lat, lng } });
+    set(s2 => {
+      if (!s2.user || s2.user.role !== 'rider') return s2;
+      const updated = { ...s2.user, location: { lat, lng } } as RiderProfile;
+      return {
+        user: updated,
+        allUsers: s2.allUsers.map(u => u.id === updated.id ? updated : u),
+      };
+    });
+  },
 
-  setRiderAvailability: (status) => set(s => {
-    if (!s.user || s.user.role !== 'rider') return s;
-    const updated = { ...s.user, availability: status } as RiderProfile;
-    return {
-      user: updated,
-      allUsers: s.allUsers.map(u => u.id === updated.id ? updated : u),
-    };
-  }),
+  setRiderAvailability: (status) => {
+    const s = get();
+    if (!s.user || s.user.role !== 'rider') return;
+    void usersApi.update(s.user.id, { availability: status });
+    set(s2 => {
+      if (!s2.user || s2.user.role !== 'rider') return s2;
+      const updated = { ...s2.user, availability: status } as RiderProfile;
+      return {
+        user: updated,
+        allUsers: s2.allUsers.map(u => u.id === updated.id ? updated : u),
+      };
+    });
+  },
 
   // Records a completed delivery against a rider BY ID rather than the
   // currently logged-in user — the status change that completes an order
   // can be triggered from the rider's own session, but should still work
   // correctly if triggered elsewhere (e.g. a manager action) later on.
-  recordDelivery: (riderId, earnedAmount) => set(s => {
-    const rider = s.allUsers.find(u => u.id === riderId && u.role === 'rider') as RiderProfile | undefined;
-    if (!rider) return s;
-    const updated: RiderProfile = {
-      ...rider,
-      totalDeliveries: (rider.totalDeliveries || 0) + 1,
-      earnings: (rider.earnings || 0) + earnedAmount,
-    };
-    return {
-      allUsers: s.allUsers.map(u => u.id === riderId ? updated : u),
-      // Keep the logged-in session's own copy in sync too, if it's this rider.
-      user: s.user && s.user.id === riderId ? updated : s.user,
-    };
-  }),
+  // Now writes through to Supabase so the count/earnings persist across
+  // devices, not just the browser that completed the delivery.
+  recordDelivery: (riderId, earnedAmount) => {
+    const rider = get().allUsers.find(u => u.id === riderId && u.role === 'rider') as RiderProfile | undefined;
+    if (!rider) return;
+    const newTotalDeliveries = (rider.totalDeliveries || 0) + 1;
+    const newEarnings = (rider.earnings || 0) + earnedAmount;
+    void usersApi.update(riderId, { total_deliveries: newTotalDeliveries, earnings: newEarnings });
+    set(s => {
+      const current = s.allUsers.find(u => u.id === riderId && u.role === 'rider') as RiderProfile | undefined;
+      if (!current) return s;
+      const updated: RiderProfile = { ...current, totalDeliveries: newTotalDeliveries, earnings: newEarnings };
+      return {
+        allUsers: s.allUsers.map(u => u.id === riderId ? updated : u),
+        user: s.user && s.user.id === riderId ? updated : s.user,
+      };
+    });
+  },
 }), { name: 'db-auth' }));

@@ -53,18 +53,28 @@ function AppContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
+  // ── Load real accounts from Supabase on startup, merging over the local
+  //    demo/cached data — this is what makes rider signups, availability,
+  //    and delivery stats visible across devices instead of being stuck
+  //    in whichever browser created them. ─────────────────────────────
+  useEffect(() => {
+    void useAuthStore.getState().loadUsers();
+  }, []);
+
   // ── Re-sync on resume: Android suspends/kills the Realtime WebSocket
   //    whenever the tab/PWA is backgrounded or the phone sleeps, so a
-  //    broadcast sent while closed (e.g. a cancellation) is simply missed
-  //    — there's no queue or replay. Re-fetching orders from the DB every
-  //    time the tab becomes visible again means the UI is always correct
-  //    within a moment of reopening, regardless of what the socket missed
-  //    while backgrounded. mergeRemoteOrders only moves a status forward
-  //    (cancelled always wins), so this can't undo a newer local change. ──
+  //    broadcast sent while closed (e.g. a cancellation, or a rider going
+  //    online) is simply missed — there's no queue or replay. Re-fetching
+  //    from the DB every time the tab becomes visible again means the UI
+  //    is always correct within a moment of reopening, regardless of what
+  //    the socket missed while backgrounded. mergeRemoteOrders only moves
+  //    a status forward (cancelled always wins), so this can't undo a
+  //    newer local change. ─────────────────────────────────────────────
   useEffect(() => {
     function handleVisibility() {
       if (document.visibilityState !== 'visible') return;
       void useOrderStore.getState().fetchOrders();
+      void useAuthStore.getState().loadUsers();
       syncService.reconnectIfNeeded();
     }
     document.addEventListener('visibilitychange', handleVisibility);
@@ -78,6 +88,17 @@ function AppContent() {
   useEffect(() => {
     useOrderStore.getState().sweepExpiredOrders();
     const iv = setInterval(() => useOrderStore.getState().sweepExpiredOrders(), 15000);
+    return () => clearInterval(iv);
+  }, []);
+
+  // ── Periodic rider refresh: the RIDER_PRESENCE broadcast covers instant
+  //    updates while both devices are actively connected, but the socket
+  //    dies in the background (see resume-sync above). Polling every 20s
+  //    on top of that closes the gap while a device is foregrounded but
+  //    the broadcast happened to be missed, without waiting for a full
+  //    background/foreground cycle. ────────────────────────────────
+  useEffect(() => {
+    const iv = setInterval(() => void useAuthStore.getState().loadUsers(), 20000);
     return () => clearInterval(iv);
   }, []);
 

@@ -19,13 +19,13 @@ export function LoginPage() {
 
   // NOTE: OTP verification removed for now — will be re-added later.
   // Sign-in is direct: enter email/phone and continue.
-  const handleSignIn = (e: React.FormEvent) => {
+  const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!contact) {
       setError('Please enter your email or phone number.');
       return;
     }
-    loginDirect(contact, role);
+    await loginDirect(contact, role);
     navigate(role === 'rider' ? '/rider/dashboard' : '/book');
   };
 
@@ -164,13 +164,13 @@ export function ManagerLoginPage() {
   const [error, setError] = useState('');
 
   // NOTE: OTP verification removed for now — will be re-added later.
-  const handleSignIn = (e: React.FormEvent) => {
+  const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!contact) {
       setError('Please enter your manager email or phone.');
       return;
     }
-    loginDirect(contact, 'manager');
+    await loginDirect(contact, 'manager');
     navigate('/manager');
   };
 
