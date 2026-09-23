@@ -505,6 +505,7 @@ export const syncService = {
         'ORDER_CANCELLED',
         'ORDER_DISPATCH_EXPANDED',
         'RIDER_PRESENCE',
+        'RIDER_RESPONDING',
       ];
 
       eventTypes.forEach((eventType) => {

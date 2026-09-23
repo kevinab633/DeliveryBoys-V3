@@ -900,7 +900,10 @@ export default function MapView({
         if (secStart && secEnd) {
           const secRoadPts = await fetchDirectionsRoute(secStart, secEnd);
           const secPts: [number, number][] = secRoadPts ?? [secStart, secEnd];
-          L.polyline(secPts, { color: '#64748B', weight: 4.5, dashArray: '8, 10', opacity: 0.9, lineCap: 'round', lineJoin: 'round' }).addTo(group);
+          // Rider → pickup leg: solid, theme-aware (white on dark map,
+          // deep grey on light map) rather than the old dashed grey —
+          // distinct from the main red trip line without competing with it.
+          L.polyline(secPts, { color: dk ? '#FFFFFF' : '#374151', weight: 4.5, opacity: 0.95, lineCap: 'round', lineJoin: 'round' }).addTo(group);
         }
       }
 
@@ -1029,7 +1032,10 @@ export default function MapView({
       {engine === 'maplibre' && (
         <svg className="absolute inset-0 z-[2] pointer-events-none" width="100%" height="100%">
           <path ref={pathCasingRef} fill="none" stroke="#ffffff" strokeWidth={9} strokeOpacity={0.7} strokeLinecap="round" strokeLinejoin="round" />
-          <path ref={pathSecondaryRef} fill="none" stroke="#64748B" strokeWidth={4.5} strokeOpacity={0.9} strokeDasharray="10 14" strokeLinecap="round" strokeLinejoin="round" />
+          {/* Rider → pickup leg: solid, theme-aware — white on a dark
+              map, deep grey on a light map — distinct from the main red
+              trip route without a dashed pattern competing for attention. */}
+          <path ref={pathSecondaryRef} fill="none" stroke={dk ? '#FFFFFF' : '#374151'} strokeWidth={4.5} strokeOpacity={0.95} strokeLinecap="round" strokeLinejoin="round" />
           <path ref={pathMainRef} fill="none" stroke="#C41E1E" strokeWidth={5} strokeOpacity={0.95} strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       )}

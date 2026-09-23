@@ -155,21 +155,16 @@ export default function Track() {
       ]
     : [];
 
-  // Rider's live leg (rider → pickup, or pickup → dropoff once picked up)
-  // is the one the customer is actually watching move, so it gets the
-  // prominent solid animated line — swapped from the old setup where the
-  // static full-trip line was the prominent one and the rider's actual
-  // path was the duller dashed line.
+  // Rider → pickup leg only — a distinct "en route to pickup" indicator,
+  // separate from the main trip line. Disappears once picked up, since
+  // from that point the rider IS on the main red route.
   const riderRoute = order && order.status === 'accepted' && smoothRider
     && Number.isFinite(smoothRider.lat) && Number.isFinite(smoothRider.lng)
     ? ([[smoothRider.lat, smoothRider.lng], [order.pickup.lat, order.pickup.lng]] as [number, number][])
-    : order && (order.status === 'picked_up' || order.status === 'in_transit') && smoothRider
-      && Number.isFinite(smoothRider.lat) && Number.isFinite(smoothRider.lng)
-      ? ([[smoothRider.lat, smoothRider.lng], [order.dropoff.lat, order.dropoff.lng]] as [number, number][])
-      : undefined;
+    : undefined;
 
-  // Full pickup → dropoff trip shown as a lighter reference line
-  // underneath, so the customer still sees the whole journey at a glance.
+  // Main trip route, pickup → dropoff — stays the primary solid red line
+  // for the whole journey, exactly as before.
   const route = order
     ? ([[order.pickup.lat, order.pickup.lng], [order.dropoff.lat, order.dropoff.lng]] as [number, number][])
     : undefined;
@@ -325,8 +320,8 @@ export default function Track() {
       {/* ── Full-screen map ─────────────────────────────────────── */}
       <MapView
         markers={markers}
-        route={riderRoute}
-        secondaryRoute={route}
+        route={route}
+        secondaryRoute={riderRoute}
         className="absolute inset-0 top-16 z-0"
         interactive={true}
       />

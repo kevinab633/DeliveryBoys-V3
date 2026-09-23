@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import { User, RiderProfile, UserRole, RiderStatus, VehicleType } from '../lib/types';
 import { generateId, generateOTP } from '../lib/utils';
 import { usersApi } from '../lib/usersApi';
+import { useThemeStore } from './themeStore';
 
 interface AuthStore {
   user: User | RiderProfile | null;
@@ -191,6 +192,12 @@ export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
       photoUrl: data.photoUrl,
     };
     set(s => ({ allUsers: [...s.allUsers, newRider], user: newRider, otpPending: null }));
+    // Riders are typically outdoors in daylight, where light mode is far
+    // easier to read than dark — so default new rider accounts to light
+    // the moment they sign up. This only happens once, here, at account
+    // creation; it doesn't override a rider's own later choice to switch
+    // to dark, and it never touches customer/manager accounts.
+    useThemeStore.getState().setTheme('light');
     // Awaited (not fire-and-forget) — a rider signing up needs their
     // account to actually exist in Supabase before they might log in
     // again from a different phone; a silent background failure here

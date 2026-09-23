@@ -102,10 +102,14 @@ export default function Book() {
       if (o.status === 'accepted') {
         setPhase('just_assigned');
         setSheetOpen(true);
-        // Brief confirmation moment, then settle into the tracking view —
-        // matches the short "Driver assigned" flash Yango/Bolt show
-        // before dropping into live tracking.
-        setTimeout(() => setPhase('assigned'), 3000);
+        // Brief confirmation moment, then actually move into the
+        // full tracking view automatically — matches the short
+        // "Driver assigned" flash Yango/Bolt show before dropping into
+        // live tracking. (Previously this only flipped an internal
+        // phase flag with no visible change — the assigned screen looks
+        // identical either way, so nothing appeared to happen. Navigating
+        // is the actual "settle into tracking" behavior.)
+        setTimeout(() => navigate('/track?id=' + orderId), 3000);
       } else if (o.status === 'cancelled') {
         // Auto-cancelled with no riders? Show the right message per
         // reason. User-cancelled orders just go back to the form.
