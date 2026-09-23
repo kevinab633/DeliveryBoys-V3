@@ -63,6 +63,11 @@ export interface Order {
   dispatchedTo?: string[];
   /** Why an order was cancelled (e.g. 'no_riders_available', 'user_cancelled'). */
   cancelReason?: string;
+  /** Rider ID currently reviewing this order in their ringing/detail
+   *  view — broadcast-only (not persisted to Supabase), so the customer
+   *  can see "rider is responding" the moment a rider opens the order,
+   *  even before they accept. Cleared on accept, decline, or dismiss. */
+  respondingRiderId?: string;
 }
 
 export interface PriceRule {

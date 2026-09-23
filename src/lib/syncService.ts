@@ -54,6 +54,17 @@ export type SyncEvent =
       type: 'RIDER_PRESENCE';
       senderId: string;
       rider: RiderProfile;
+    }
+  | {
+      // Broadcast-only — never persisted to the orders table. Fires the
+      // moment a rider opens/is viewing an order's ringing or detail
+      // view, and again with riderId undefined when they close out
+      // without accepting, so the customer's "rider is responding" state
+      // reverts back to "searching".
+      type: 'RIDER_RESPONDING';
+      senderId: string;
+      orderId: string;
+      riderId?: string;
     };
 
 // Listeners for UI connection status
@@ -259,6 +270,11 @@ export function handleIncomingSyncEvent(event: SyncEvent) {
       }
       break;
     }
+
+    case 'RIDER_RESPONDING': {
+      orderStore.applyRemoteRiderResponding(event.orderId, event.riderId);
+      break;
+    }
   }
 }
 
@@ -337,6 +353,22 @@ export const syncService = {
     // Throttle database update to prevent excessive writes while keeping WebSockets 60fps
     void syncService.updateOrderInDatabase(orderId, {
       riderLocation: { lat, lng },
+    });
+  },
+
+  /**
+   * Broadcast that a rider has opened/is reviewing an order (or has
+   * closed out without accepting, when riderId is omitted). Broadcast
+   * only — deliberately never written to the orders table, since this
+   * is a fast, transient signal with no lasting value once the rider
+   * accepts, declines, or the order moves on.
+   */
+  broadcastRiderResponding(orderId: string, riderId?: string) {
+    emitSyncEvent({
+      type: 'RIDER_RESPONDING',
+      senderId: CLIENT_ID,
+      orderId,
+      riderId,
     });
   },
 

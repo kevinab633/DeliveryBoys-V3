@@ -181,6 +181,7 @@ function IncomingOrderModal({ order, taken, dk, riderLocation, onAccept, onDecli
                   : undefined}
                 className="h-44"
                 interactive={false}
+                forceLightMode
               />
             </div>
 
@@ -279,6 +280,7 @@ function OrderDetailOverlay({ order, dk, onClose, onAccept, onDecline }: {
         ]}
         route={[[order.pickup.lat, order.pickup.lng], [order.dropoff.lat, order.dropoff.lng]]}
         className="absolute inset-0 top-16 z-0"
+        forceLightMode
       />
 
       {/* ══ DESKTOP: floating panel ══ */}
@@ -440,6 +442,9 @@ export default function RiderDashboard() {
       seenIds.current.add(candidate.id);
       setRingingOrder(candidate);
       playChime();
+      // Let the customer's screen know a rider is now reviewing this
+      // order the moment it starts ringing — not only once accepted.
+      syncService.broadcastRiderResponding(candidate.id, rider.id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orders, pending.length, rider?.availability, ringingOrder, declinedIds]);
@@ -469,9 +474,25 @@ export default function RiderDashboard() {
     return () => clearInterval(iv);
   }, [ringingOrder?.id, ringingTaken]);
 
+  // Broadcast "responding" whenever the rider opens the full order detail
+  // view directly (tapping an available order card) — covers reviewing
+  // an order outside the ringing popup, e.g. browsing the Available tab.
+  useEffect(() => {
+    if (!rider) return;
+    if (detailOrder) {
+      syncService.broadcastRiderResponding(detailOrder.id, rider.id);
+      return () => syncService.broadcastRiderResponding(detailOrder.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detailOrder?.id]);
+
   // Going offline dismisses any ringing modal
   useEffect(() => {
-    if (rider?.availability !== 'online') setRingingOrder(null);
+    if (rider?.availability !== 'online') {
+      if (ringingOrder) syncService.broadcastRiderResponding(ringingOrder.id);
+      setRingingOrder(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rider?.availability]);
 
   // Toast for new SCHEDULED orders (instant ones ring instead)
@@ -496,11 +517,13 @@ export default function RiderDashboard() {
     if (!ok) {
       // Another rider already accepted it (or it was cancelled)
       showToast({ title: 'Already taken', message: 'Another rider accepted this order first.', type: 'error' });
+      syncService.broadcastRiderResponding(order.id);
       setRingingOrder(null);
       setDetailOrder(null);
       return;
     }
     showToast({ title: 'Order Accepted!', message: `You accepted ${order.id}. Head to pickup.`, type: 'success' });
+    syncService.broadcastRiderResponding(order.id);
     setRingingOrder(null);
     setDetailOrder(null);
     setTab('my');
@@ -509,6 +532,7 @@ export default function RiderDashboard() {
   // ── Decline: dismiss for THIS rider only; order stays available ──
   const handleDecline = (order: Order) => {
     setDeclinedIds(prev => prev.includes(order.id) ? prev : [...prev, order.id]);
+    syncService.broadcastRiderResponding(order.id);
     setRingingOrder(null);
   };
 
@@ -640,7 +664,7 @@ export default function RiderDashboard() {
           riderLocation={rider.location}
           onAccept={() => handleAccept(liveRinging)}
           onDecline={() => handleDecline(liveRinging)}
-          onDismiss={() => setRingingOrder(null)}
+          onDismiss={() => { syncService.broadcastRiderResponding(liveRinging.id); setRingingOrder(null); }}
         />
       )}
 

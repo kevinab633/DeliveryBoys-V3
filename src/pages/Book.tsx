@@ -26,9 +26,12 @@ const SHEET_COLLAPSED = 160;
 const NAV_HEIGHT_REM = 4.5;
 
 // In-page booking phases — the customer never leaves this screen:
-// form → searching → assigned  (instant orders)
+// form → searching → rider_responding → just_assigned → assigned  (instant orders)
+// (rider_responding is a sub-state of searching; reverts back to searching
+// if that rider backs out without accepting. just_assigned is a brief,
+// few-second confirmation before settling into the tracking-style assigned view.)
 // form → scheduled             (scheduled orders)
-type BookPhase = 'form' | 'searching' | 'assigned' | 'scheduled' | 'no_riders' | 'no_riders_scheduled';
+type BookPhase = 'form' | 'searching' | 'rider_responding' | 'just_assigned' | 'assigned' | 'scheduled' | 'no_riders' | 'no_riders_scheduled';
 
 export default function Book() {
   const dk = useThemeStore(s => s.theme === 'dark');
@@ -87,15 +90,22 @@ export default function Book() {
     : undefined;
 
   // ── Poll the order status while searching (every 2 s). As soon as
-  //    a rider accepts, transition to the "assigned" panel. ─────────
+  //    a rider accepts, transition to the "assigned" panel. Also tracks
+  //    respondingRiderId so the customer sees "rider is responding" the
+  //    moment a rider opens the order, reverting back to plain
+  //    "searching" if that rider backs out without accepting. ────────
   useEffect(() => {
-    if (phase !== 'searching' || !orderId) return;
+    if ((phase !== 'searching' && phase !== 'rider_responding') || !orderId) return;
     const check = () => {
       const o = useOrderStore.getState().orders.find(x => x.id === orderId);
       if (!o) return;
       if (o.status === 'accepted') {
-        setPhase('assigned');
+        setPhase('just_assigned');
         setSheetOpen(true);
+        // Brief confirmation moment, then settle into the tracking view —
+        // matches the short "Driver assigned" flash Yango/Bolt show
+        // before dropping into live tracking.
+        setTimeout(() => setPhase('assigned'), 3000);
       } else if (o.status === 'cancelled') {
         // Auto-cancelled with no riders? Show the right message per
         // reason. User-cancelled orders just go back to the form.
@@ -108,6 +118,12 @@ export default function Book() {
         } else {
           resetForm();
         }
+      } else if (o.respondingRiderId) {
+        if (phase !== 'rider_responding') setPhase('rider_responding');
+      } else if (phase === 'rider_responding') {
+        // The reviewing rider backed out without accepting or declining —
+        // fall back to plain "searching" rather than staying stuck.
+        setPhase('searching');
       }
     };
     const iv = setInterval(check, 2000);
@@ -118,7 +134,7 @@ export default function Book() {
   // ── Staged dispatch: while nobody accepts, widen the ringing window
   //    to the next-closest riders every ~15 seconds ──────────────────
   useEffect(() => {
-    if (phase !== 'searching' || !orderId) return;
+    if ((phase !== 'searching' && phase !== 'rider_responding') || !orderId) return;
     const iv = setInterval(() => {
       useOrderStore.getState().expandOrderDispatch(orderId);
     }, 15000);
@@ -456,25 +472,36 @@ export default function Book() {
   );
 
   // ── Searching-for-riders panel (in-page, no navigation) ──────────
+  // Doubles as the "rider is responding" sub-state: same shell, swapped
+  // copy/animation so the transition feels continuous rather than
+  // jumping to a different screen when a rider opens the order.
+  const isResponding = phase === 'rider_responding';
   const searchingContent = (
     <div className="flex flex-col items-center text-center py-8 space-y-5">
       <div className="relative w-28 h-28">
-        <div className="absolute inset-0 rounded-full bg-brand/20 animate-ping" />
-        <div className="absolute inset-2.5 rounded-full bg-brand/25 animate-pulse" />
-        <div className="absolute inset-5 rounded-full bg-brand flex items-center justify-center shadow-lg shadow-brand/30">
+        <div className={cn('absolute inset-0 rounded-full animate-ping', isResponding ? 'bg-success/20' : 'bg-brand/20')} />
+        <div className={cn('absolute inset-2.5 rounded-full animate-pulse', isResponding ? 'bg-success/25' : 'bg-brand/25')} />
+        <div className={cn('absolute inset-5 rounded-full flex items-center justify-center shadow-lg',
+          isResponding ? 'bg-success shadow-success/30' : 'bg-brand shadow-brand/30')}>
           <Bike size={30} className="text-white" />
         </div>
       </div>
       <div>
-        <h2 className={cn('text-xl font-extrabold', dk ? 'text-white' : 'text-gray-900')}>Searching for riders…</h2>
+        <h2 className={cn('text-xl font-extrabold', dk ? 'text-white' : 'text-gray-900')}>
+          {isResponding ? 'A rider is responding…' : 'Searching for riders…'}
+        </h2>
         <p className={cn('text-sm mt-1', dk ? 'text-white/50' : 'text-gray-500')}>
-          Order <span className="font-bold text-brand">{orderId}</span> · notifying nearby riders
+          {isResponding
+            ? 'Reviewing your order now — hang tight'
+            : <>Order <span className="font-bold text-brand">{orderId}</span> · notifying nearby riders</>}
         </p>
       </div>
-      <p className={cn('text-xs flex items-center gap-1.5', dk ? 'text-white/40' : 'text-gray-400')}>
-        <span className="w-1.5 h-1.5 rounded-full bg-brand animate-pulse" />
-        {onlineRiders.length} rider{onlineRiders.length === 1 ? '' : 's'} online right now
-      </p>
+      {!isResponding && (
+        <p className={cn('text-xs flex items-center gap-1.5', dk ? 'text-white/40' : 'text-gray-400')}>
+          <span className="w-1.5 h-1.5 rounded-full bg-brand animate-pulse" />
+          {onlineRiders.length} rider{onlineRiders.length === 1 ? '' : 's'} online right now
+        </p>
+      )}
       <button onClick={handleCancelSearch}
         className={cn('flex items-center gap-1.5 px-6 py-2.5 rounded-xl text-sm font-bold border transition',
           dk ? 'border-white/10 text-white/60 hover:bg-white/5 hover:text-white' : 'border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-800')}>
@@ -596,6 +623,8 @@ export default function Book() {
   const panelContent =
     phase === 'form' ? formContent
     : phase === 'searching' ? searchingContent
+    : phase === 'rider_responding' ? searchingContent
+    : phase === 'just_assigned' ? assignedContent
     : phase === 'assigned' ? assignedContent
     : phase === 'no_riders' ? noRidersContent
     : phase === 'no_riders_scheduled' ? noRidersScheduledContent
@@ -604,6 +633,8 @@ export default function Book() {
   const panelTitle =
     phase === 'form' ? 'Book a Delivery'
     : phase === 'searching' ? 'Finding Your Rider'
+    : phase === 'rider_responding' ? 'Rider Responding'
+    : phase === 'just_assigned' ? 'Rider Assigned'
     : phase === 'assigned' ? 'Rider Assigned'
     : phase === 'scheduled' ? 'Delivery Scheduled'
     : phase === 'no_riders_scheduled' ? 'Scheduled Delivery Unfilled'
@@ -612,6 +643,8 @@ export default function Book() {
   const panelSubtitle =
     phase === 'form' ? 'Search locations or drag the map to drop a pin'
     : phase === 'searching' ? 'Stay on this screen — we\'ll update you live'
+    : phase === 'rider_responding' ? 'A rider is reviewing your order'
+    : phase === 'just_assigned' ? 'Heading to your pickup point'
     : phase === 'assigned' ? 'Your rider is heading to pickup'
     : phase === 'scheduled' ? 'Your delivery is booked for later'
     : phase === 'no_riders_scheduled' ? 'Your scheduled delivery was cancelled'
@@ -640,7 +673,8 @@ export default function Book() {
       className={cn('w-full px-4 pb-3 flex items-center justify-center gap-2 py-2 text-sm font-bold',
         dk ? 'text-white/70' : 'text-gray-700')}>
       {phase === 'searching' && (<><span className="w-2 h-2 rounded-full bg-brand animate-pulse" /> Searching for riders… <ChevronUp size={14} /></>)}
-      {phase === 'assigned' && (<><CheckCircle2 size={15} className="text-success" /> {activeOrder?.riderName} assigned <ChevronUp size={14} /></>)}
+      {phase === 'rider_responding' && (<><span className="w-2 h-2 rounded-full bg-success animate-pulse" /> A rider is responding… <ChevronUp size={14} /></>)}
+      {(phase === 'just_assigned' || phase === 'assigned') && (<><CheckCircle2 size={15} className="text-success" /> {activeOrder?.riderName} assigned <ChevronUp size={14} /></>)}
       {phase === 'scheduled' && (<><Calendar size={15} className="text-brand" /> Scheduled <ChevronUp size={14} /></>)}
       {phase === 'no_riders' && (<><AlertTriangle size={15} className="text-danger" /> No riders available <ChevronUp size={14} /></>)}
       {phase === 'no_riders_scheduled' && (<><AlertTriangle size={15} className="text-danger" /> Scheduled delivery unfilled <ChevronUp size={14} /></>)}

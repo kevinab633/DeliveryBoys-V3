@@ -31,6 +31,12 @@ export interface MapViewProps {
   className?: string;
   interactive?: boolean;
   pinDropActive?: boolean;
+  /** Overrides the app-wide dark/light theme for just this map instance.
+   *  Used on the rider dashboard, which always shows the light map style
+   *  regardless of the rider's own app theme — riders are typically
+   *  outdoors in daylight, where a light map is far easier to read than
+   *  a dark one, independent of whether they prefer a dark app UI. */
+  forceLightMode?: boolean;
 }
 
 // ── Mapbox style + token ───────────────────────────────────────────────
@@ -352,6 +358,7 @@ export default function MapView({
   className = 'h-[400px]',
   interactive = true,
   pinDropActive = false,
+  forceLightMode = false,
 }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [engine, setEngine] = useState<'maplibre' | 'leaflet'>(() =>
@@ -388,7 +395,8 @@ export default function MapView({
   const pinDropActiveRef = useRef(pinDropActive);
   pinDropActiveRef.current = pinDropActive;
 
-  const dk = useThemeStore((s) => s.theme === 'dark');
+  const appIsDark = useThemeStore((s) => s.theme === 'dark');
+  const dk = forceLightMode ? false : appIsDark;
 
   // Defensive center coordinate extraction
   const safeCenterLat =

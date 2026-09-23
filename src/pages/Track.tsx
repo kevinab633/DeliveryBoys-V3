@@ -155,16 +155,23 @@ export default function Track() {
       ]
     : [];
 
-  // Solid brand-red pickup → dropoff route
-  const route = order
-    ? ([[order.pickup.lat, order.pickup.lng], [order.dropoff.lat, order.dropoff.lng]] as [number, number][])
-    : undefined;
-
-  // Dashed rider → pickup route: only while 'accepted' (rider assigned
-  // but hasn't picked up yet). Hidden from 'picked_up' onwards.
+  // Rider's live leg (rider → pickup, or pickup → dropoff once picked up)
+  // is the one the customer is actually watching move, so it gets the
+  // prominent solid animated line — swapped from the old setup where the
+  // static full-trip line was the prominent one and the rider's actual
+  // path was the duller dashed line.
   const riderRoute = order && order.status === 'accepted' && smoothRider
     && Number.isFinite(smoothRider.lat) && Number.isFinite(smoothRider.lng)
     ? ([[smoothRider.lat, smoothRider.lng], [order.pickup.lat, order.pickup.lng]] as [number, number][])
+    : order && (order.status === 'picked_up' || order.status === 'in_transit') && smoothRider
+      && Number.isFinite(smoothRider.lat) && Number.isFinite(smoothRider.lng)
+      ? ([[smoothRider.lat, smoothRider.lng], [order.dropoff.lat, order.dropoff.lng]] as [number, number][])
+      : undefined;
+
+  // Full pickup → dropoff trip shown as a lighter reference line
+  // underneath, so the customer still sees the whole journey at a glance.
+  const route = order
+    ? ([[order.pickup.lat, order.pickup.lng], [order.dropoff.lat, order.dropoff.lng]] as [number, number][])
     : undefined;
 
   // ── Sheet handle swipe detection (same pattern as /book) ────────
@@ -318,8 +325,8 @@ export default function Track() {
       {/* ── Full-screen map ─────────────────────────────────────── */}
       <MapView
         markers={markers}
-        route={route}
-        secondaryRoute={riderRoute}
+        route={riderRoute}
+        secondaryRoute={route}
         className="absolute inset-0 top-16 z-0"
         interactive={true}
       />

@@ -113,6 +113,9 @@ interface OrderStore {
   applyRemoteStatus: (orderId: string, status: OrderStatus, timestamp?: number) => void;
   /** A rider's live GPS position arrived from their device. */
   applyRemoteRiderLocation: (orderId: string, lat: number, lng: number) => void;
+  /** A rider opened (or closed out of) an order's ringing/detail view on
+   *  another device — riderId undefined means they backed out. */
+  applyRemoteRiderResponding: (orderId: string, riderId?: string) => void;
   /** An order was cancelled on another device. */
   applyRemoteCancel: (orderId: string, cancelReason?: string) => void;
   /** The dispatch window was widened on another device. */
@@ -438,6 +441,10 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
 
   applyRemoteRiderLocation: (orderId, lat, lng) => set(s => ({
     orders: s.orders.map(o => o.id === orderId ? { ...o, riderLocation: { lat, lng } } : o),
+  })),
+
+  applyRemoteRiderResponding: (orderId, riderId) => set(s => ({
+    orders: s.orders.map(o => o.id === orderId ? { ...o, respondingRiderId: riderId } : o),
   })),
 
   applyRemoteCancel: (orderId, cancelReason) => set(s => ({
