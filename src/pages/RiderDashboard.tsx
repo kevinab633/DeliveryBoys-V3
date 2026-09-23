@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Package, MapPin, DollarSign, Star, Clock, Calendar, PhoneCall, MessageSquare, Power, PowerOff, Eye, X, ChevronUp, ChevronDown, CheckCircle2 } from 'lucide-react';
+import { Package, MapPin, DollarSign, Star, Clock, Calendar, PhoneCall, MessageSquare, Power, PowerOff, Eye, X, ChevronUp, ChevronDown, CheckCircle2, Navigation2 } from 'lucide-react';
 import { useThemeStore } from '../stores/themeStore';
 import { useAuthStore } from '../stores/authStore';
 import { useOrderStore } from '../stores/orderStore';
 import { syncService } from '../lib/syncService';
 import { cn, formatCurrency, formatDistance, formatDate, timeAgo } from '../lib/utils';
+import { calculateDistance } from '../lib/pricing';
 import { RiderProfile, Order } from '../lib/types';
 import MapView from '../components/MapView';
 import { showToast } from '../components/Toast';
@@ -205,6 +206,114 @@ function IncomingOrderModal({ order, taken, dk, riderLocation, onAccept, onDecli
 }
 
 // ── Full-screen order detail overlay (same layout as /book & /track) ─
+// ── Active Delivery: full-screen live navigation view ────────────────
+// Opens automatically the moment a rider has an accepted/picked-up/
+// in-transit order — this is the missing "how do I actually get there"
+// screen: live position, route to the current destination, customer
+// contact, and the next status-advance action, all in one place instead
+// of a plain card in a list.
+function ActiveDeliveryView({
+  order, riderLocation, dk, onStatusUpdate, onMinimize,
+}: {
+  order: Order;
+  riderLocation?: { lat: number; lng: number };
+  dk: boolean;
+  onStatusUpdate: (orderId: string, status: 'picked_up' | 'in_transit' | 'delivered') => void;
+  onMinimize: () => void;
+}) {
+  const leg = order.status === 'accepted'
+    ? { label: 'Heading to pickup', address: order.pickup.address, coords: order.pickup }
+    : { label: 'Heading to dropoff', address: order.dropoff.address, coords: order.dropoff };
+
+  const distanceKm = riderLocation && Number.isFinite(riderLocation.lat) && Number.isFinite(riderLocation.lng)
+    ? calculateDistance(riderLocation.lat, riderLocation.lng, leg.coords.lat, leg.coords.lng)
+    : null;
+
+  // Rider → current-destination leg only (matches Track.tsx's own
+  // pre-pickup styling: solid white/grey, no dash). Pickup → dropoff
+  // stays the normal brand-red main route throughout, same convention
+  // as the customer's tracking screen.
+  const legRoute: [number, number][] | undefined = riderLocation
+    && Number.isFinite(riderLocation.lat) && Number.isFinite(riderLocation.lng)
+    ? [[riderLocation.lat, riderLocation.lng], [leg.coords.lat, leg.coords.lng]]
+    : undefined;
+
+  const nextAction =
+    order.status === 'accepted' ? { label: 'Mark Picked Up', next: 'picked_up' as const }
+    : order.status === 'picked_up' ? { label: 'Start Delivery', next: 'in_transit' as const }
+    : { label: 'Mark Delivered', next: 'delivered' as const };
+
+  return (
+    <div className="fixed inset-0 z-40 flex flex-col">
+      {/* Map fills the whole screen — forceLightMode, same as the rest
+          of the rider's map views, for sunlight readability. */}
+      <MapView
+        markers={[
+          { lat: order.pickup.lat, lng: order.pickup.lng, icon: 'pickup', label: 'Pickup' },
+          { lat: order.dropoff.lat, lng: order.dropoff.lng, icon: 'dropoff', label: 'Dropoff' },
+          ...(riderLocation && Number.isFinite(riderLocation.lat) && Number.isFinite(riderLocation.lng)
+            ? [{ lat: riderLocation.lat, lng: riderLocation.lng, icon: 'rider' as const, label: 'You' }]
+            : []),
+        ]}
+        route={[[order.pickup.lat, order.pickup.lng], [order.dropoff.lat, order.dropoff.lng]]}
+        secondaryRoute={legRoute}
+        className="absolute inset-0"
+        interactive={true}
+        forceLightMode
+      />
+
+      {/* Top bar: minimize + current-leg banner, like a turn-by-turn app's
+          destination strip. */}
+      <div className="relative z-10 px-4 pt-4 flex items-start gap-3">
+        <button onClick={onMinimize}
+          className="w-11 h-11 rounded-full bg-white shadow-lg flex items-center justify-center text-gray-700 shrink-0">
+          <ChevronDown size={22} />
+        </button>
+        <div className="flex-1 bg-white rounded-2xl shadow-lg px-4 py-3 flex items-center gap-3">
+          <div className="w-9 h-9 rounded-full bg-brand/10 flex items-center justify-center shrink-0">
+            <Navigation2 size={18} className="text-brand" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs font-bold text-brand uppercase tracking-wide">{leg.label}</p>
+            <p className="text-sm font-semibold text-gray-900 truncate">{leg.address}</p>
+          </div>
+          {distanceKm !== null && (
+            <span className="ml-auto text-sm font-bold text-gray-700 shrink-0">{formatDistance(distanceKm)}</span>
+          )}
+        </div>
+      </div>
+
+      {/* Bottom sheet: order id/price, customer contact, next action —
+          the equivalent of a driver app's persistent trip control panel. */}
+      <div className="relative z-10 mt-auto bg-white rounded-t-3xl shadow-2xl px-5 pt-4 pb-6 space-y-4">
+        <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto" />
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="font-bold text-gray-900">{order.id}</p>
+            <p className="text-sm text-gray-500">{order.customerName}</p>
+          </div>
+          <span className="text-brand font-extrabold text-lg">{formatCurrency(order.price)}</span>
+        </div>
+        <div className="flex gap-2">
+          <a href={`tel:${order.customerPhone}`}
+            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-gray-100 text-gray-700 font-semibold text-sm">
+            <PhoneCall size={16} /> Call
+          </a>
+          <a href={`sms:${order.customerPhone}`}
+            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-gray-100 text-gray-700 font-semibold text-sm">
+            <MessageSquare size={16} /> Message
+          </a>
+        </div>
+        <button onClick={() => onStatusUpdate(order.id, nextAction.next)}
+          className="w-full bg-brand text-white py-4 rounded-2xl font-bold text-base hover:bg-brand-dark transition shadow-lg shadow-brand/25">
+          {nextAction.label}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+
 function OrderDetailOverlay({ order, dk, onClose, onAccept, onDecline }: {
   order: Order;
   dk: boolean;
@@ -350,6 +459,11 @@ export default function RiderDashboard() {
   // Ringing modal + full-screen detail state
   const [ringingOrder, setRingingOrder] = useState<Order | null>(null);
   const [detailOrder, setDetailOrder] = useState<Order | null>(null);
+  // The active-delivery nav view opens automatically on accept; this lets
+  // the rider collapse it back to the list without losing the order —
+  // it reopens automatically next time activeOrder changes (e.g. status
+  // advances), so minimizing is a per-glance choice, not a dismissal.
+  const [navMinimized, setNavMinimized] = useState(false);
   const [declinedIds, setDeclinedIds] = useState<string[]>([]);
   const seenIds = useRef<Set<string>>(new Set());
 
@@ -358,6 +472,13 @@ export default function RiderDashboard() {
   const pending = getPendingOrders();
   const myOrders = rider ? getOrdersByRider(rider.id) : [];
   const activeOrder = myOrders.find(o => ['accepted', 'picked_up', 'in_transit'].includes(o.status));
+
+  // Re-open the full nav view whenever the active order's status advances
+  // (e.g. picked up → in transit) even if it was minimized on the
+  // previous leg — each new leg is worth surfacing again.
+  useEffect(() => {
+    setNavMinimized(false);
+  }, [activeOrder?.status]);
 
   // Keep the detail overlay's order fresh from the store
   const liveDetail = detailOrder ? orders.find(o => o.id === detailOrder.id) || detailOrder : null;
@@ -654,6 +775,23 @@ export default function RiderDashboard() {
           )}
         </div>
       </section>
+
+      {/* ── Active delivery: full-screen live nav, auto-opens on accept ── */}
+      {activeOrder && !navMinimized && (
+        <ActiveDeliveryView
+          order={activeOrder}
+          riderLocation={rider.location}
+          dk={dk}
+          onStatusUpdate={handleStatusUpdate}
+          onMinimize={() => setNavMinimized(true)}
+        />
+      )}
+      {activeOrder && navMinimized && (
+        <button onClick={() => setNavMinimized(false)}
+          className="fixed bottom-24 right-4 z-30 flex items-center gap-2 bg-brand text-white px-4 py-3 rounded-full shadow-xl shadow-brand/30 font-bold text-sm">
+          <Navigation2 size={16} /> Resume navigation
+        </button>
+      )}
 
       {/* ── Ringing incoming-order modal ─────────────────────────── */}
       {ringingOrder && liveRinging && (
