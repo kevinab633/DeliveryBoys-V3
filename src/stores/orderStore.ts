@@ -384,7 +384,12 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
       if (!current) {
         byId.set(ro.id, ro);
       } else if ((rank[ro.status] || 0) >= (rank[current.status] || 0)) {
-        byId.set(ro.id, { ...current, ...ro });
+        // respondingRiderId is intentionally broadcast-only, never
+        // persisted to Supabase — a periodic DB re-fetch (used to catch
+        // up on things like cancellations while backgrounded) must not
+        // wipe it back to undefined just because the fetched row doesn't
+        // carry it. Keep whatever the local broadcast already has.
+        byId.set(ro.id, { ...current, ...ro, respondingRiderId: current.respondingRiderId });
       }
     }
     return { orders: Array.from(byId.values()).sort((a, b) => b.createdAt - a.createdAt) };
