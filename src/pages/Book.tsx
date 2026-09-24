@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Bike, Car, Truck, ArrowRight, Info, CheckCircle2, ChevronUp, ChevronDown, Zap, Calendar, Star, X, AlertTriangle } from 'lucide-react';
+import { Bike, Car, Truck, ArrowRight, ArrowLeft as ArrowLeftIcon, Info, CheckCircle2, ChevronUp, ChevronDown, Zap, Calendar, Star, X, AlertTriangle } from 'lucide-react';
 import { useThemeStore } from '../stores/themeStore';
 import { useAuthStore } from '../stores/authStore';
 import { useOrderStore } from '../stores/orderStore';
@@ -46,7 +46,7 @@ export default function Book() {
   const [desc, setDesc] = useState('');
   const [phone, setPhone] = useState(user?.phone || '');
   const [pinMode, setPinMode] = useState<'pickup' | 'dropoff' | null>(null);
-  const [sheetOpen, setSheetOpen] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(true);
 
   // ── Booking phase state ─────────────────────────────────────────
   const [phase, setPhase] = useState<BookPhase>('form');
@@ -687,29 +687,58 @@ export default function Book() {
 
   return (
     <div style={{ position: 'relative', height: '100dvh', width: '100vw', overflow: 'hidden' }}>
-      {/* ── Full-screen map ─────────────────────────────────────── */}
+      {/* ── Full-screen map — no navbar offset, the navbar is hidden on
+          this route entirely per the full-screen map-page convention. ── */}
       <MapView
         markers={markers}
         route={route}
         onMapClick={pinMode ? handleMapClick : undefined}
-        className="absolute inset-0 top-16 z-0"
+        className="absolute inset-0 z-0"
         pinDropActive={!!pinMode}
       />
 
-      {/* ── Pin-drop mode label ─────────────────────────────────── */}
+      {/* ── Back button — replaces the hidden navbar's own way home.
+          Hidden during pin-drop, where its own back/Done bar takes over. ── */}
+      {!pinMode && (
+        <button onClick={() => navigate('/')}
+          className="absolute z-20 w-11 h-11 rounded-full bg-white shadow-lg flex items-center justify-center text-gray-700"
+          style={{ top: 'calc(env(safe-area-inset-top, 0px) + 12px)', left: 12 }}>
+          <ArrowLeftIcon size={20} />
+        </button>
+      )}
+
+      {/* ── Pin-drop mode: sheet fully drops away (handled below via
+          sheetOpen forced false) to reveal the complete map, with a
+          "Done" button and a back button — not the floating label alone
+          that used to sit on top of a partially-visible sheet. ────── */}
       {pinMode && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
-          <div className={cn(
-            'px-4 py-2 rounded-full text-sm font-semibold shadow-lg',
-            pinMode === 'pickup' ? 'bg-success text-white' : 'bg-brand text-white',
-          )}>
-            Drag map to set {pinMode === 'pickup' ? 'pickup' : 'drop-off'} location
+        <>
+          <div className="absolute z-20 flex items-center gap-3"
+            style={{ top: 'calc(env(safe-area-inset-top, 0px) + 12px)', left: 12, right: 12 }}>
+            <button onClick={() => setPinMode(null)}
+              className="w-11 h-11 rounded-full bg-white shadow-lg flex items-center justify-center text-gray-700 shrink-0">
+              <ArrowLeftIcon size={20} />
+            </button>
+            <div className={cn(
+              'flex-1 text-center px-4 py-2.5 rounded-full text-sm font-semibold shadow-lg',
+              pinMode === 'pickup' ? 'bg-success text-white' : 'bg-brand text-white',
+            )}>
+              Drag map to set {pinMode === 'pickup' ? 'pickup' : 'drop-off'}
+            </div>
           </div>
-        </div>
+          <div className="absolute z-20 left-4 right-4" style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)' }}>
+            <button onClick={() => setPinMode(null)}
+              className="w-full bg-brand text-white py-4 rounded-2xl font-bold text-base shadow-xl shadow-brand/30">
+              Done
+            </button>
+          </div>
+        </>
       )}
 
       {/* ══ DESKTOP: floating panel (lg: and up) ════════════════ */}
-      <div className="hidden lg:flex absolute top-20 left-6 bottom-6 z-10 w-[400px] flex-col">
+      <div className={cn('hidden lg:flex absolute left-6 bottom-6 z-10 w-[400px] flex-col transition-opacity',
+        pinMode ? 'opacity-0 pointer-events-none' : 'opacity-100')}
+        style={{ top: 'calc(env(safe-area-inset-top, 0px) + 80px)' }}>
         <div className={cn(
           'flex-1 min-h-0 rounded-2xl shadow-2xl border flex flex-col overflow-hidden',
           dk ? 'bg-surface-dark-2/95 border-white/5 glass' : 'bg-white/95 border-gray-200 glass',
@@ -737,8 +766,10 @@ export default function Book() {
           dk ? 'bg-surface-dark-2 border-t border-white/5' : 'bg-white border-t border-gray-200',
         )}
         animate={{
-          height: sheetOpen ? `calc(100dvh - ${NAV_HEIGHT_REM}rem)` : `${SHEET_COLLAPSED}px`,
+          height: pinMode ? '0px' : sheetOpen ? `calc(100dvh - env(safe-area-inset-top, 0px) - 3.5rem)` : `${SHEET_COLLAPSED}px`,
+          opacity: pinMode ? 0 : 1,
         }}
+        style={{ pointerEvents: pinMode ? 'none' : 'auto' }}
         transition={{ type: 'spring', damping: 30, stiffness: 300 }}
       >
         {/* Handle row — swipeable + tap-to-toggle + collapse button */}

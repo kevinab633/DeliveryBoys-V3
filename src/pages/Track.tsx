@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Search, Package, MapPin, CheckCircle2, Truck, User, ChevronUp, ChevronDown } from 'lucide-react';
+import { Search, Package, MapPin, CheckCircle2, Truck, User, ChevronUp, ChevronDown, ArrowLeft } from 'lucide-react';
 import { useThemeStore } from '../stores/themeStore';
 import { useOrderStore } from '../stores/orderStore';
 import { cn, formatCurrency, formatDistance, formatDate } from '../lib/utils';
@@ -73,6 +73,7 @@ function useSmoothLatLng(
 
 export default function Track() {
   const dk = useThemeStore(s => s.theme === 'dark');
+  const navigate = useNavigate();
   const { orders } = useOrderStore();
   const [searchParams] = useSearchParams();
   const [trackId, setTrackId] = useState(searchParams.get('id') || '');
@@ -317,17 +318,26 @@ export default function Track() {
 
   return (
     <div style={{ position: 'relative', height: '100dvh', width: '100vw', overflow: 'hidden' }}>
-      {/* ── Full-screen map ─────────────────────────────────────── */}
+      {/* ── Full-screen map — no navbar offset, navbar hidden on this
+          route entirely per the full-screen map-page convention. ──── */}
       <MapView
         markers={markers}
         route={route}
         secondaryRoute={riderRoute}
-        className="absolute inset-0 top-16 z-0"
+        className="absolute inset-0 z-0"
         interactive={true}
       />
 
+      {/* ── Back button — replaces the hidden navbar's own way home. ── */}
+      <button onClick={() => navigate('/')}
+        className="absolute z-20 w-11 h-11 rounded-full bg-white shadow-lg flex items-center justify-center text-gray-700"
+        style={{ top: 'calc(env(safe-area-inset-top, 0px) + 12px)', left: 12 }}>
+        <ArrowLeft size={20} />
+      </button>
+
       {/* ══ DESKTOP: floating panel (lg: and up) ════════════════ */}
-      <div className="hidden lg:flex absolute top-20 left-6 bottom-6 z-10 w-[400px] flex-col">
+      <div className="hidden lg:flex absolute left-6 bottom-6 z-10 w-[400px] flex-col"
+        style={{ top: 'calc(env(safe-area-inset-top, 0px) + 80px)' }}>
         <div className={cn(
           'flex-1 min-h-0 rounded-2xl shadow-2xl border flex flex-col overflow-hidden',
           dk ? 'bg-surface-dark-2/95 border-white/5 glass' : 'bg-white/95 border-gray-200 glass',

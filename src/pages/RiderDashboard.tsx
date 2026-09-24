@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Package, MapPin, DollarSign, Star, Clock, Calendar, PhoneCall, MessageSquare, Power, PowerOff, Eye, X, ChevronUp, ChevronDown, CheckCircle2, Navigation2, ArrowLeft, ArrowRight, ArrowUp } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useThemeStore } from '../stores/themeStore';
 import { useAuthStore } from '../stores/authStore';
 import { useOrderStore } from '../stores/orderStore';
@@ -744,7 +745,18 @@ export default function RiderDashboard() {
   };
 
   return (
-    <div className="pt-20 min-h-screen">
+    <div className="min-h-screen" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 3.5rem)' }}>
+      {/* Lightweight page header — replaces the hidden global navbar on
+          this full-screen route, so the rider still has a way back to
+          Home/logout without a permanent heavy navbar competing with the
+          nav view above it. */}
+      <div className="fixed top-0 left-0 right-0 z-30 flex items-center gap-3 px-4 bg-white border-b border-gray-100"
+        style={{ paddingTop: 'env(safe-area-inset-top, 0px)', height: 'calc(env(safe-area-inset-top, 0px) + 3.5rem)' }}>
+        <Link to="/" className="w-9 h-9 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-100 shrink-0">
+          <ArrowLeft size={18} />
+        </Link>
+        <span className="font-bold text-gray-900 text-sm">Rider Dashboard</span>
+      </div>
       <section className={cn('py-6', dk ? 'bg-surface-dark' : 'bg-white')}>
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex flex-wrap items-center justify-between gap-4">

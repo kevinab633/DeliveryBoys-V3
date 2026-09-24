@@ -30,7 +30,7 @@ function ScrollToTop() {
 }
 
 // Routes where the map is full-screen — hide Footer & WhatsApp FAB
-const FULL_SCREEN_ROUTES = ['/book', '/track'];
+const FULL_SCREEN_ROUTES = ['/book', '/track', '/rider/dashboard'];
 
 function AppContent() {
   const theme = useThemeStore(s => s.theme);
@@ -127,7 +127,7 @@ function AppContent() {
   return (
     <div className={theme === 'dark' ? 'theme-dark' : 'theme-light'}>
       <ScrollToTop />
-      <Navbar />
+      {!isFullScreen && <Navbar />}
       <main className="min-h-screen">
         <Routes>
           <Route path="/" element={<Home />} />
