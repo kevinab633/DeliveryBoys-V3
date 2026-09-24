@@ -227,7 +227,8 @@ function ActiveDeliveryView({
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [steps, setSteps] = useState<DirectionStep[]>([]);
   const [heading, setHeading] = useState<number | undefined>(undefined);
-  const prevPosRef = useRef<{ lat: number; lng: number } | null>(null);
+  const [speedKmh, setSpeedKmh] = useState<number | null>(null);
+  const prevPosRef = useRef<{ lat: number; lng: number; t: number } | null>(null);
 
   const leg = order.status === 'accepted'
     ? { label: 'Pickup', address: order.pickup.address, coords: order.pickup }
@@ -239,8 +240,11 @@ function ActiveDeliveryView({
   // fixes — there's no compass reading from watchPosition alone, but a
   // moving vehicle's direction of travel is a reliable stand-in, exactly
   // how Google Maps derives its arrow when not using the device compass.
+  // Speed is derived the same way (distance/time between fixes), matching
+  // Yango's driving-mode top bar, which shows a live speedometer.
   useEffect(() => {
     if (!hasRiderFix || !riderLocation) return;
+    const now = Date.now();
     const prev = prevPosRef.current;
     if (prev && (prev.lat !== riderLocation.lat || prev.lng !== riderLocation.lng)) {
       const toRad = (d: number) => d * Math.PI / 180;
@@ -249,27 +253,46 @@ function ActiveDeliveryView({
       const x = Math.cos(toRad(prev.lat)) * Math.sin(toRad(riderLocation.lat))
         - Math.sin(toRad(prev.lat)) * Math.cos(toRad(riderLocation.lat)) * Math.cos(toRad(riderLocation.lng - prev.lng));
       const brng = (toDeg(Math.atan2(y, x)) + 360) % 360;
-      // Only update heading on real movement (a few metres), so the
-      // arrow doesn't jitter randomly from GPS noise while stationary.
-      const moved = calculateDistance(prev.lat, prev.lng, riderLocation.lat, riderLocation.lng) > 0.003;
-      if (moved) setHeading(brng);
+      const distKm = calculateDistance(prev.lat, prev.lng, riderLocation.lat, riderLocation.lng);
+      const dtHours = (now - prev.t) / 3_600_000;
+      // Only update heading/speed on real movement (a few metres), so
+      // they don't jitter randomly from GPS noise while stationary —
+      // and guard against a near-zero time delta producing a bogus spike.
+      const moved = distKm > 0.003;
+      if (moved) {
+        setHeading(brng);
+        if (dtHours > 0) setSpeedKmh(Math.min(distKm / dtHours, 180)); // clamp absurd GPS-jump spikes
+      } else if (now - prev.t > 5000) {
+        // Stationary for a few seconds — show 0 rather than a stale speed.
+        setSpeedKmh(0);
+      }
     }
-    prevPosRef.current = { lat: riderLocation.lat, lng: riderLocation.lng };
+    prevPosRef.current = { lat: riderLocation.lat, lng: riderLocation.lng, t: now };
   }, [riderLocation?.lat, riderLocation?.lng, hasRiderFix]);
 
-  // Fetch real turn-by-turn steps for the current leg whenever the leg's
-  // destination changes (pickup vs dropoff) — re-fetching on every GPS
-  // tick would be wasteful and hit rate limits, so this only re-runs
-  // when the destination itself changes, not on every position update.
+  // Fetch real turn-by-turn steps + total distance/duration for the
+  // current leg. Re-fetches periodically (not just when the leg
+  // changes) so remaining distance/time/ETA stay roughly accurate as
+  // the rider actually moves — throttled to every 20s to stay well
+  // clear of Mapbox rate limits rather than firing on every GPS tick.
+  const [routeTotals, setRouteTotals] = useState<{ distanceMeters: number; durationSeconds: number } | null>(null);
+  const lastFetchRef = useRef(0);
   useEffect(() => {
-    if (!hasRiderFix || !riderLocation) { setSteps([]); return; }
+    if (!hasRiderFix || !riderLocation) { setSteps([]); setRouteTotals(null); return; }
+    const now = Date.now();
+    if (now - lastFetchRef.current < 20_000 && lastFetchRef.current !== 0) return;
+    lastFetchRef.current = now;
     let cancelled = false;
     fetchTurnByTurnRoute([riderLocation.lat, riderLocation.lng], [leg.coords.lat, leg.coords.lng])
-      .then(res => { if (!cancelled) setSteps(res?.steps || []); })
-      .catch(() => { if (!cancelled) setSteps([]); });
+      .then(res => {
+        if (cancelled) return;
+        setSteps(res?.steps || []);
+        setRouteTotals(res ? { distanceMeters: res.distanceMeters, durationSeconds: res.durationSeconds } : null);
+      })
+      .catch(() => { if (!cancelled) { setSteps([]); setRouteTotals(null); } });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [leg.coords.lat, leg.coords.lng, hasRiderFix]);
+  }, [leg.coords.lat, leg.coords.lng, hasRiderFix, riderLocation?.lat, riderLocation?.lng]);
 
   // Nearest upcoming step to the rider's current position — a rough but
   // effective way to advance "next instruction" without full route
@@ -285,6 +308,26 @@ function ActiveDeliveryView({
   const legRoute: [number, number][] | undefined = hasRiderFix && riderLocation
     ? [[riderLocation.lat, riderLocation.lng], [leg.coords.lat, leg.coords.lng]]
     : undefined;
+
+  // Derived trip metrics for the bottom panel — mirrors Yango's real
+  // driving_modal_view: arrival time + remaining distance + remaining
+  // time shown together, plus a progress bar for how much of the leg
+  // is done so far.
+  const arrivalTime = routeTotals
+    ? new Date(Date.now() + routeTotals.durationSeconds * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+    : null;
+  const remainingKm = routeTotals ? routeTotals.distanceMeters / 1000 : null;
+  const remainingMin = routeTotals ? Math.max(1, Math.round(routeTotals.durationSeconds / 60)) : null;
+  // Progress = how much of the ORIGINAL leg distance has been covered,
+  // estimated from current remaining vs. the first totals fetched for
+  // this leg (a rough but effective stand-in for true route-progress
+  // matching, which needs much more map-matching logic than this needs).
+  const initialTotalRef = useRef<number | null>(null);
+  useEffect(() => { initialTotalRef.current = null; }, [leg.coords.lat, leg.coords.lng]);
+  if (routeTotals && initialTotalRef.current === null) initialTotalRef.current = routeTotals.distanceMeters;
+  const progressPct = routeTotals && initialTotalRef.current
+    ? Math.min(100, Math.max(0, 100 - (routeTotals.distanceMeters / initialTotalRef.current) * 100))
+    : 0;
 
   const nextAction =
     order.status === 'accepted' ? { label: 'Mark Picked Up', next: 'picked_up' as const }
@@ -318,31 +361,43 @@ function ActiveDeliveryView({
         followHeading={heading}
       />
 
-      {/* Turn instruction banner — replaces the old permanent address
-          bar entirely. Only appears once real directions data has
-          loaded; otherwise the map stays clean rather than showing a
-          placeholder. This banner (not a top bar) is the only thing
-          pinned to the top of the screen. */}
-      {currentStep && (
-        <div className="relative z-10 mx-3 mt-3 bg-gray-900 text-white rounded-2xl shadow-xl px-4 py-3 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-white/15 flex items-center justify-center shrink-0">
-            <ManeuverIcon size={20} />
+      {/* Turn instruction (top-left) + speedometer (top-right) — mirrors
+          Yango's actual driving-mode top bar layout: maneuver card on
+          one side, live speed on the other, matching real GPS movement
+          rather than a placeholder. This banner (not a top bar) is the
+          only thing pinned to the top of the screen. */}
+      <div className="relative z-10 flex items-start justify-between gap-2 px-3 pt-3">
+        {currentStep ? (
+          <div className="bg-gray-900 text-white rounded-2xl shadow-xl px-4 py-3 flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-full bg-white/15 flex items-center justify-center shrink-0">
+              <ManeuverIcon size={20} />
+            </div>
+            <div className="min-w-0">
+              <p className="font-bold text-base leading-tight truncate">
+                {formatDistance(currentStep.distanceMeters / 1000)}
+              </p>
+              <p className="text-xs text-white/60 truncate">{currentStep.instruction}</p>
+            </div>
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="font-bold text-base leading-tight truncate">
-              {formatDistance(currentStep.distanceMeters / 1000)}
-            </p>
-            <p className="text-xs text-white/60 truncate">{currentStep.instruction}</p>
-          </div>
-        </div>
-      )}
+        ) : <div />}
 
-      {/* Collapse button (top-right) — the only other persistent
-          control, so the rest of the map stays completely unobstructed. */}
-      <button onClick={onMinimize}
-        className="absolute top-3 right-3 z-10 w-11 h-11 rounded-full bg-white shadow-lg flex items-center justify-center text-gray-700">
-        <ChevronDown size={22} />
-      </button>
+        <div className="flex flex-col items-end gap-2 shrink-0">
+          {/* Speedometer — live speed derived from consecutive real GPS
+              fixes (watchPosition doesn't reliably expose device speed
+              directly on all browsers, so this is computed the same way
+              as heading, from distance/time between fixes). */}
+          {speedKmh !== null && (
+            <div className="bg-white rounded-2xl shadow-lg w-14 h-14 flex flex-col items-center justify-center border-2 border-gray-900">
+              <span className="font-extrabold text-gray-900 text-lg leading-none">{Math.round(speedKmh)}</span>
+              <span className="text-[9px] text-gray-500 font-semibold leading-none mt-0.5">km/h</span>
+            </div>
+          )}
+          <button onClick={onMinimize}
+            className="w-11 h-11 rounded-full bg-white shadow-lg flex items-center justify-center text-gray-700">
+            <ChevronDown size={22} />
+          </button>
+        </div>
+      </div>
 
       {/* Trip-details toggle — a small pill instead of a permanent
           panel, so tapping it is the only time order info covers any
@@ -351,6 +406,27 @@ function ActiveDeliveryView({
         {detailsOpen ? (
           <div className="bg-white rounded-3xl shadow-2xl px-5 pt-4 pb-6 space-y-4">
             <button onClick={() => setDetailsOpen(false)} className="w-10 h-1 bg-gray-200 rounded-full mx-auto block" />
+
+            {/* Trip metrics: arrival time + remaining distance + time
+                together, plus a progress bar — matches Yango's real
+                driving_modal_view layout rather than a single line. */}
+            {routeTotals && (
+              <div className="space-y-2">
+                <div className="flex items-baseline justify-between">
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="font-extrabold text-gray-900 text-xl">{arrivalTime}</span>
+                    <span className="text-xs text-gray-400 font-medium">arrival</span>
+                  </div>
+                  <div className="text-right text-sm text-gray-500 font-semibold">
+                    {remainingMin} min · {formatDistance(remainingKm || 0)}
+                  </div>
+                </div>
+                <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                  <div className="h-full bg-brand rounded-full transition-all duration-700" style={{ width: `${progressPct}%` }} />
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-bold text-gray-900">{order.id}</p>
