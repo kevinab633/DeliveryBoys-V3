@@ -37,6 +37,12 @@ export interface MapViewProps {
    *  outdoors in daylight, where a light map is far easier to read than
    *  a dark one, independent of whether they prefer a dark app UI. */
   forceLightMode?: boolean;
+  /** Turn-by-turn follow mode: camera stays centered on and rotated to
+   *  followPosition's heading, like Google Maps navigation, instead of
+   *  the default fit-all-markers-in-view behavior. followHeading is in
+   *  degrees (0 = north), typically computed from consecutive GPS fixes. */
+  followPosition?: { lat: number; lng: number };
+  followHeading?: number;
 }
 
 // ── Mapbox style + token ───────────────────────────────────────────────
@@ -226,6 +232,80 @@ export function isGpuInitFailure(err: unknown): boolean {
 }
 
 // ── Directions API fetcher ─────────────────────────────────────────────
+// ── Turn-by-turn directions (steps + geometry), used by the rider's
+//    active-delivery navigation view. Separate from fetchDirectionsRoute
+//    above because that one only needs the line shape — this needs the
+//    actual maneuver list (turn left/right, street names, distances).
+export interface DirectionStep {
+  instruction: string;
+  distanceMeters: number;
+  maneuverType: string; // e.g. 'turn', 'depart', 'arrive', 'roundabout'
+  maneuverModifier?: string; // e.g. 'left', 'right', 'straight'
+  location: [number, number]; // [lat, lng] where this step begins
+}
+
+export interface DirectionsResult {
+  coords: [number, number][];
+  steps: DirectionStep[];
+  distanceMeters: number;
+  durationSeconds: number;
+}
+
+export async function fetchTurnByTurnRoute(
+  a: [number, number],
+  b: [number, number],
+): Promise<DirectionsResult | null> {
+  try {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length < 2 || b.length < 2) return null;
+    const latA = a[0], lngA = a[1], latB = b[0], lngB = b[1];
+    if (!Number.isFinite(latA) || !Number.isFinite(lngA) || !Number.isFinite(latB) || !Number.isFinite(lngB)) return null;
+
+    const url =
+      `https://api.mapbox.com/directions/v5/mapbox/driving/` +
+      `${lngA},${latA};${lngB},${latB}` +
+      `?geometries=geojson&overview=full&steps=true&banner_instructions=false&access_token=${MAPBOX_TOKEN}`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const json = await res.json();
+    const route = json?.routes?.[0];
+    const coordsRaw = route?.geometry?.coordinates;
+    if (!Array.isArray(coordsRaw) || coordsRaw.length < 2) return null;
+
+    const coords: [number, number][] = [];
+    for (const c of coordsRaw) {
+      if (Array.isArray(c) && c.length >= 2 && typeof c[0] === 'number' && typeof c[1] === 'number' && Number.isFinite(c[0]) && Number.isFinite(c[1])) {
+        coords.push([c[1], c[0]]);
+      }
+    }
+    if (coords.length < 2) return null;
+
+    const steps: DirectionStep[] = [];
+    const legs = route?.legs || [];
+    for (const leg of legs) {
+      for (const s of leg?.steps || []) {
+        const loc = s?.maneuver?.location;
+        if (!Array.isArray(loc) || loc.length < 2) continue;
+        steps.push({
+          instruction: s?.maneuver?.instruction || s?.name || 'Continue',
+          distanceMeters: Number(s?.distance) || 0,
+          maneuverType: s?.maneuver?.type || 'continue',
+          maneuverModifier: s?.maneuver?.modifier,
+          location: [loc[1], loc[0]],
+        });
+      }
+    }
+
+    return {
+      coords,
+      steps,
+      distanceMeters: Number(route?.distance) || 0,
+      durationSeconds: Number(route?.duration) || 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function fetchDirectionsRoute(
   a: [number, number],
   b: [number, number],
@@ -359,6 +439,8 @@ export default function MapView({
   interactive = true,
   pinDropActive = false,
   forceLightMode = false,
+  followPosition,
+  followHeading,
 }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [engine, setEngine] = useState<'maplibre' | 'leaflet'>(() =>
@@ -717,7 +799,7 @@ export default function MapView({
       };
       animRef.current = requestAnimationFrame(step);
 
-      if (!pinDropActiveRef.current && mapRef.current) {
+      if (!pinDropActiveRef.current && !followPosition && mapRef.current) {
         const all: [number, number][] = [
           ...validMarkers.map((m) => [m.lat, m.lng] as [number, number]),
           ...pts,
@@ -732,6 +814,29 @@ export default function MapView({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engine, routeKey]);
+
+  // ── Turn-by-turn follow camera (MapLibre): keeps the view centered on
+  //    and rotated to followPosition/followHeading, like Google Maps
+  //    navigation — takes over from the normal fit-all-markers behavior
+  //    whenever followPosition is provided. easeTo (not jumpTo) gives a
+  //    smooth glide between GPS fixes instead of a jarring snap. ──────
+  useEffect(() => {
+    if (engine !== 'maplibre' || !mapRef.current || !followPosition) return;
+    if (!Number.isFinite(followPosition.lat) || !Number.isFinite(followPosition.lng)) return;
+    try {
+      mapRef.current.easeTo({
+        center: [followPosition.lng, followPosition.lat],
+        bearing: Number.isFinite(followHeading) ? followHeading : mapRef.current.getBearing(),
+        pitch: 55,
+        zoom: 17.5,
+        duration: 900,
+        easing: (t) => t,
+      });
+    } catch {
+      void 0;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [engine, followPosition?.lat, followPosition?.lng, followHeading]);
 
   // MapLibre Secondary route
   useEffect(() => {

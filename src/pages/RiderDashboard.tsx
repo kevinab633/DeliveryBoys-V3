@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Package, MapPin, DollarSign, Star, Clock, Calendar, PhoneCall, MessageSquare, Power, PowerOff, Eye, X, ChevronUp, ChevronDown, CheckCircle2, Navigation2 } from 'lucide-react';
+import { Package, MapPin, DollarSign, Star, Clock, Calendar, PhoneCall, MessageSquare, Power, PowerOff, Eye, X, ChevronUp, ChevronDown, CheckCircle2, Navigation2, ArrowLeft, ArrowRight, ArrowUp } from 'lucide-react';
 import { useThemeStore } from '../stores/themeStore';
 import { useAuthStore } from '../stores/authStore';
 import { useOrderStore } from '../stores/orderStore';
@@ -9,6 +9,7 @@ import { cn, formatCurrency, formatDistance, formatDate, timeAgo } from '../lib/
 import { calculateDistance } from '../lib/pricing';
 import { RiderProfile, Order } from '../lib/types';
 import MapView from '../components/MapView';
+import { fetchTurnByTurnRoute, DirectionStep } from '../components/MapView';
 import { showToast } from '../components/Toast';
 
 const SHEET_COLLAPSED = 190;
@@ -206,12 +207,13 @@ function IncomingOrderModal({ order, taken, dk, riderLocation, onAccept, onDecli
 }
 
 // ── Full-screen order detail overlay (same layout as /book & /track) ─
-// ── Active Delivery: full-screen live navigation view ────────────────
+// ── Active Delivery: full-screen turn-by-turn navigation view ─────────
 // Opens automatically the moment a rider has an accepted/picked-up/
-// in-transit order — this is the missing "how do I actually get there"
-// screen: live position, route to the current destination, customer
-// contact, and the next status-advance action, all in one place instead
-// of a plain card in a list.
+// in-transit order — Google-Maps-style: the camera follows and rotates
+// with the rider, a turn instruction banner sits at the top, and the
+// trip/order details are tucked behind a small button so they never
+// block the map. No native app has room for a permanent top address
+// bar the way a web page does, so this view deliberately has none.
 function ActiveDeliveryView({
   order, riderLocation, dk, onStatusUpdate, onMinimize,
 }: {
@@ -221,20 +223,65 @@ function ActiveDeliveryView({
   onStatusUpdate: (orderId: string, status: 'picked_up' | 'in_transit' | 'delivered') => void;
   onMinimize: () => void;
 }) {
-  const leg = order.status === 'accepted'
-    ? { label: 'Heading to pickup', address: order.pickup.address, coords: order.pickup }
-    : { label: 'Heading to dropoff', address: order.dropoff.address, coords: order.dropoff };
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [steps, setSteps] = useState<DirectionStep[]>([]);
+  const [heading, setHeading] = useState<number | undefined>(undefined);
+  const prevPosRef = useRef<{ lat: number; lng: number } | null>(null);
 
-  const distanceKm = riderLocation && Number.isFinite(riderLocation.lat) && Number.isFinite(riderLocation.lng)
-    ? calculateDistance(riderLocation.lat, riderLocation.lng, leg.coords.lat, leg.coords.lng)
+  const leg = order.status === 'accepted'
+    ? { label: 'Pickup', address: order.pickup.address, coords: order.pickup }
+    : { label: 'Dropoff', address: order.dropoff.address, coords: order.dropoff };
+
+  const hasRiderFix = !!riderLocation && Number.isFinite(riderLocation.lat) && Number.isFinite(riderLocation.lng);
+
+  // Heading, computed from the bearing between consecutive real GPS
+  // fixes — there's no compass reading from watchPosition alone, but a
+  // moving vehicle's direction of travel is a reliable stand-in, exactly
+  // how Google Maps derives its arrow when not using the device compass.
+  useEffect(() => {
+    if (!hasRiderFix || !riderLocation) return;
+    const prev = prevPosRef.current;
+    if (prev && (prev.lat !== riderLocation.lat || prev.lng !== riderLocation.lng)) {
+      const toRad = (d: number) => d * Math.PI / 180;
+      const toDeg = (r: number) => r * 180 / Math.PI;
+      const y = Math.sin(toRad(riderLocation.lng - prev.lng)) * Math.cos(toRad(riderLocation.lat));
+      const x = Math.cos(toRad(prev.lat)) * Math.sin(toRad(riderLocation.lat))
+        - Math.sin(toRad(prev.lat)) * Math.cos(toRad(riderLocation.lat)) * Math.cos(toRad(riderLocation.lng - prev.lng));
+      const brng = (toDeg(Math.atan2(y, x)) + 360) % 360;
+      // Only update heading on real movement (a few metres), so the
+      // arrow doesn't jitter randomly from GPS noise while stationary.
+      const moved = calculateDistance(prev.lat, prev.lng, riderLocation.lat, riderLocation.lng) > 0.003;
+      if (moved) setHeading(brng);
+    }
+    prevPosRef.current = { lat: riderLocation.lat, lng: riderLocation.lng };
+  }, [riderLocation?.lat, riderLocation?.lng, hasRiderFix]);
+
+  // Fetch real turn-by-turn steps for the current leg whenever the leg's
+  // destination changes (pickup vs dropoff) — re-fetching on every GPS
+  // tick would be wasteful and hit rate limits, so this only re-runs
+  // when the destination itself changes, not on every position update.
+  useEffect(() => {
+    if (!hasRiderFix || !riderLocation) { setSteps([]); return; }
+    let cancelled = false;
+    fetchTurnByTurnRoute([riderLocation.lat, riderLocation.lng], [leg.coords.lat, leg.coords.lng])
+      .then(res => { if (!cancelled) setSteps(res?.steps || []); })
+      .catch(() => { if (!cancelled) setSteps([]); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leg.coords.lat, leg.coords.lng, hasRiderFix]);
+
+  // Nearest upcoming step to the rider's current position — a rough but
+  // effective way to advance "next instruction" without full route
+  // progress-matching, which would need much more map-matching logic.
+  const currentStep = steps.length > 0 && riderLocation
+    ? steps.reduce((closest, s) => {
+        const d = calculateDistance(riderLocation.lat, riderLocation.lng, s.location[0], s.location[1]);
+        const dClosest = calculateDistance(riderLocation.lat, riderLocation.lng, closest.location[0], closest.location[1]);
+        return d < dClosest ? s : closest;
+      })
     : null;
 
-  // Rider → current-destination leg only (matches Track.tsx's own
-  // pre-pickup styling: solid white/grey, no dash). Pickup → dropoff
-  // stays the normal brand-red main route throughout, same convention
-  // as the customer's tracking screen.
-  const legRoute: [number, number][] | undefined = riderLocation
-    && Number.isFinite(riderLocation.lat) && Number.isFinite(riderLocation.lng)
+  const legRoute: [number, number][] | undefined = hasRiderFix && riderLocation
     ? [[riderLocation.lat, riderLocation.lng], [leg.coords.lat, leg.coords.lng]]
     : undefined;
 
@@ -243,15 +290,21 @@ function ActiveDeliveryView({
     : order.status === 'picked_up' ? { label: 'Start Delivery', next: 'in_transit' as const }
     : { label: 'Mark Delivered', next: 'delivered' as const };
 
+  const ManeuverIcon = currentStep?.maneuverModifier === 'left' ? ArrowLeft
+    : currentStep?.maneuverModifier === 'right' ? ArrowRight
+    : currentStep?.maneuverType === 'arrive' ? MapPin
+    : ArrowUp;
+
   return (
-    <div className="fixed inset-0 z-40 flex flex-col">
-      {/* Map fills the whole screen — forceLightMode, same as the rest
-          of the rider's map views, for sunlight readability. */}
+    <div className="fixed inset-0 z-40 flex flex-col bg-white">
+      {/* Map fills the whole screen — forceLightMode for sunlight
+          readability, and follows/rotates with the rider like Google
+          Maps navigation instead of a fixed top-down view. */}
       <MapView
         markers={[
           { lat: order.pickup.lat, lng: order.pickup.lng, icon: 'pickup', label: 'Pickup' },
           { lat: order.dropoff.lat, lng: order.dropoff.lng, icon: 'dropoff', label: 'Dropoff' },
-          ...(riderLocation && Number.isFinite(riderLocation.lat) && Number.isFinite(riderLocation.lng)
+          ...(hasRiderFix && riderLocation
             ? [{ lat: riderLocation.lat, lng: riderLocation.lng, icon: 'rider' as const, label: 'You' }]
             : []),
         ]}
@@ -260,54 +313,77 @@ function ActiveDeliveryView({
         className="absolute inset-0"
         interactive={true}
         forceLightMode
+        followPosition={hasRiderFix ? riderLocation : undefined}
+        followHeading={heading}
       />
 
-      {/* Top bar: minimize + current-leg banner, like a turn-by-turn app's
-          destination strip. */}
-      <div className="relative z-10 px-4 pt-4 flex items-start gap-3">
-        <button onClick={onMinimize}
-          className="w-11 h-11 rounded-full bg-white shadow-lg flex items-center justify-center text-gray-700 shrink-0">
-          <ChevronDown size={22} />
-        </button>
-        <div className="flex-1 bg-white rounded-2xl shadow-lg px-4 py-3 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-brand/10 flex items-center justify-center shrink-0">
-            <Navigation2 size={18} className="text-brand" />
+      {/* Turn instruction banner — replaces the old permanent address
+          bar entirely. Only appears once real directions data has
+          loaded; otherwise the map stays clean rather than showing a
+          placeholder. This banner (not a top bar) is the only thing
+          pinned to the top of the screen. */}
+      {currentStep && (
+        <div className="relative z-10 mx-3 mt-3 bg-gray-900 text-white rounded-2xl shadow-xl px-4 py-3 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-white/15 flex items-center justify-center shrink-0">
+            <ManeuverIcon size={20} />
           </div>
-          <div className="min-w-0">
-            <p className="text-xs font-bold text-brand uppercase tracking-wide">{leg.label}</p>
-            <p className="text-sm font-semibold text-gray-900 truncate">{leg.address}</p>
+          <div className="min-w-0 flex-1">
+            <p className="font-bold text-base leading-tight truncate">
+              {formatDistance(currentStep.distanceMeters / 1000)}
+            </p>
+            <p className="text-xs text-white/60 truncate">{currentStep.instruction}</p>
           </div>
-          {distanceKm !== null && (
-            <span className="ml-auto text-sm font-bold text-gray-700 shrink-0">{formatDistance(distanceKm)}</span>
-          )}
         </div>
-      </div>
+      )}
 
-      {/* Bottom sheet: order id/price, customer contact, next action —
-          the equivalent of a driver app's persistent trip control panel. */}
-      <div className="relative z-10 mt-auto bg-white rounded-t-3xl shadow-2xl px-5 pt-4 pb-6 space-y-4">
-        <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto" />
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="font-bold text-gray-900">{order.id}</p>
-            <p className="text-sm text-gray-500">{order.customerName}</p>
+      {/* Collapse button (top-right) — the only other persistent
+          control, so the rest of the map stays completely unobstructed. */}
+      <button onClick={onMinimize}
+        className="absolute top-3 right-3 z-10 w-11 h-11 rounded-full bg-white shadow-lg flex items-center justify-center text-gray-700">
+        <ChevronDown size={22} />
+      </button>
+
+      {/* Trip-details toggle — a small pill instead of a permanent
+          panel, so tapping it is the only time order info covers any
+          of the map. */}
+      <div className="relative z-10 mt-auto px-3 pb-3">
+        {detailsOpen ? (
+          <div className="bg-white rounded-3xl shadow-2xl px-5 pt-4 pb-6 space-y-4">
+            <button onClick={() => setDetailsOpen(false)} className="w-10 h-1 bg-gray-200 rounded-full mx-auto block" />
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-bold text-gray-900">{order.id}</p>
+                <p className="text-sm text-gray-500">{order.customerName} · {leg.address}</p>
+              </div>
+              <span className="text-brand font-extrabold text-lg shrink-0">{formatCurrency(order.price)}</span>
+            </div>
+            <div className="flex gap-2">
+              <a href={`tel:${order.customerPhone}`}
+                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-gray-100 text-gray-700 font-semibold text-sm">
+                <PhoneCall size={16} /> Call
+              </a>
+              <a href={`sms:${order.customerPhone}`}
+                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-gray-100 text-gray-700 font-semibold text-sm">
+                <MessageSquare size={16} /> Message
+              </a>
+            </div>
+            <button onClick={() => onStatusUpdate(order.id, nextAction.next)}
+              className="w-full bg-brand text-white py-4 rounded-2xl font-bold text-base hover:bg-brand-dark transition shadow-lg shadow-brand/25">
+              {nextAction.label}
+            </button>
           </div>
-          <span className="text-brand font-extrabold text-lg">{formatCurrency(order.price)}</span>
-        </div>
-        <div className="flex gap-2">
-          <a href={`tel:${order.customerPhone}`}
-            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-gray-100 text-gray-700 font-semibold text-sm">
-            <PhoneCall size={16} /> Call
-          </a>
-          <a href={`sms:${order.customerPhone}`}
-            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-gray-100 text-gray-700 font-semibold text-sm">
-            <MessageSquare size={16} /> Message
-          </a>
-        </div>
-        <button onClick={() => onStatusUpdate(order.id, nextAction.next)}
-          className="w-full bg-brand text-white py-4 rounded-2xl font-bold text-base hover:bg-brand-dark transition shadow-lg shadow-brand/25">
-          {nextAction.label}
-        </button>
+        ) : (
+          <div className="flex items-center gap-2">
+            <button onClick={() => setDetailsOpen(true)}
+              className="flex-1 bg-white rounded-2xl shadow-xl px-4 py-3.5 flex items-center gap-2 font-semibold text-sm text-gray-900">
+              <ChevronUp size={16} className="text-gray-400" /> {order.id} · {formatCurrency(order.price)}
+            </button>
+            <button onClick={() => onStatusUpdate(order.id, nextAction.next)}
+              className="bg-brand text-white px-5 py-3.5 rounded-2xl font-bold text-sm shadow-xl shadow-brand/30 whitespace-nowrap">
+              {nextAction.label}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
