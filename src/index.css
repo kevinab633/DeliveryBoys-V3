@@ -47,8 +47,16 @@ body { font-family: var(--font-sans); transition: background-color 0.3s, color 0
 /* Simulated dark-mode basemap: the filter applies ONLY to the MapLibre
    canvas, so markers, pickup/dropoff pins, and the SVG route overlay
    (a separate layer above the canvas) keep their true colors. */
-.map-dark-tiles .maplibregl-canvas { filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%); }
-.map-dark-tiles .leaflet-tile-pane { filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%); }
+.map-dark-tiles .maplibregl-canvas,
+.map-dark-tiles .leaflet-tile-pane {
+  /* Tuned invert-based dark mode — there's no real dark Mapbox style for
+     this app's custom style, so dark mode inverts the light tiles. Plain
+     invert(100%) + hue-rotate(180deg) alone looks muddy and low-contrast;
+     this adds saturate + a stronger contrast/brightness curve so roads,
+     water, and green space stay visually distinct instead of collapsing
+     toward the same washed-out grey. */
+  filter: invert(94%) hue-rotate(180deg) brightness(85%) contrast(115%) saturate(115%);
+}
 .db-zoom-wrap {
   display: flex; flex-direction: column; gap: 6px;
   margin-bottom: 8px !important; margin-right: 4px !important;

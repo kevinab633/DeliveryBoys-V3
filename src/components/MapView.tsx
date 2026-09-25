@@ -18,6 +18,11 @@ export interface MarkerData {
   color?: string;
   popup?: string;
   icon?: 'pin' | 'rider' | 'bike' | 'pickup' | 'dropoff';
+  /** Heading in degrees (0 = north), for markers that should rotate to
+   *  face their direction of travel — e.g. the rider's own position
+   *  while navigating, so it reads as a moving vehicle rather than a
+   *  static "you are here" dot. */
+  heading?: number;
 }
 
 export interface MapViewProps {
@@ -43,6 +48,13 @@ export interface MapViewProps {
    *  degrees (0 = north), typically computed from consecutive GPS fixes. */
   followPosition?: { lat: number; lng: number };
   followHeading?: number;
+  /** Traffic-colored route segments (from fetchTurnByTurnRoute's
+   *  congestionSegments) — drawn as multiple colored polyline pieces
+   *  instead of route/secondaryRoute's single flat color. When present,
+   *  this replaces the "route" prop's rendering for the main trip line;
+   *  pass both if you also want a plain-colored fallback for legs where
+   *  traffic data wasn't available. */
+  congestionRoute?: CongestionSegment[];
 }
 
 // ── Mapbox style + token ───────────────────────────────────────────────
@@ -244,11 +256,23 @@ export interface DirectionStep {
   location: [number, number]; // [lat, lng] where this step begins
 }
 
+export interface CongestionSegment {
+  coords: [number, number][];
+  level: 'unknown' | 'low' | 'moderate' | 'heavy' | 'severe';
+}
+
 export interface DirectionsResult {
   coords: [number, number][];
   steps: DirectionStep[];
   distanceMeters: number;
   durationSeconds: number;
+  /** Route geometry split into contiguous same-congestion segments, using
+   *  Mapbox's driving-traffic profile — mirrors Yango's real traffic-
+   *  colored route (green/yellow/orange/red/black by congestion level,
+   *  confirmed from their app's own mapkit_styling_automotive_jam_*
+   *  color resources) rather than a single flat-colored line. Empty when
+   *  traffic data isn't available for the requested area. */
+  congestionSegments: CongestionSegment[];
 }
 
 export async function fetchTurnByTurnRoute(
@@ -260,10 +284,14 @@ export async function fetchTurnByTurnRoute(
     const latA = a[0], lngA = a[1], latB = b[0], lngB = b[1];
     if (!Number.isFinite(latA) || !Number.isFinite(lngA) || !Number.isFinite(latB) || !Number.isFinite(lngB)) return null;
 
+    // driving-traffic (not plain driving) is required for congestion
+    // annotations — it's the only Mapbox profile that returns live
+    // traffic-segment data alongside the route geometry.
     const url =
-      `https://api.mapbox.com/directions/v5/mapbox/driving/` +
+      `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/` +
       `${lngA},${latA};${lngB},${latB}` +
-      `?geometries=geojson&overview=full&steps=true&banner_instructions=false&access_token=${MAPBOX_TOKEN}`;
+      `?geometries=geojson&overview=full&steps=true&banner_instructions=false` +
+      `&annotations=congestion&access_token=${MAPBOX_TOKEN}`;
     const res = await fetch(url);
     if (!res.ok) return null;
     const json = await res.json();
@@ -295,11 +323,34 @@ export async function fetchTurnByTurnRoute(
       }
     }
 
+    // congestion[] has one entry PER COORDINATE PAIR (i.e. length =
+    // coords.length - 1), one level per segment between consecutive
+    // points. Group consecutive same-level segments into runs so we
+    // draw a handful of colored polylines instead of one per point pair.
+    const congestionSegments: CongestionSegment[] = [];
+    const congestionRaw: string[] = legs.flatMap((l: any) => l?.annotation?.congestion || []);
+    if (congestionRaw.length === coords.length - 1) {
+      let runStart = 0;
+      let runLevel = congestionRaw[0] || 'unknown';
+      for (let i = 1; i <= congestionRaw.length; i++) {
+        const lvl = i < congestionRaw.length ? (congestionRaw[i] || 'unknown') : null;
+        if (lvl !== runLevel) {
+          congestionSegments.push({
+            coords: coords.slice(runStart, i + 1),
+            level: (['unknown', 'low', 'moderate', 'heavy', 'severe'].includes(runLevel) ? runLevel : 'unknown') as CongestionSegment['level'],
+          });
+          runStart = i;
+          runLevel = lvl || 'unknown';
+        }
+      }
+    }
+
     return {
       coords,
       steps,
       distanceMeters: Number(route?.distance) || 0,
       durationSeconds: Number(route?.duration) || 0,
+      congestionSegments,
     };
   } catch {
     return null;
@@ -365,14 +416,22 @@ function markerSpec(
   color: string,
 ): { html: string; w: number; h: number; anchor: 'center' | 'bottom' } {
   if (type === 'rider') {
+    // Directional puck: a chevron/arrow pointing "up" inside the SVG's
+    // own coordinate space, so a CSS rotation on the wrapping element
+    // (driven by the marker's heading) turns the whole shape to face the
+    // real direction of travel — this is what makes it read as a moving
+    // vehicle rather than a static "you are here" dot.
     return {
-      html: `<div style="position:relative;width:36px;height:36px;display:flex;align-items:center;justify-content:center">
-        <div style="position:absolute;inset:-4px;border-radius:50%;background:${color}40;animation:pulse-ring 2s ease-out infinite"></div>
-        <div style="width:22px;height:22px;background:${color};border:3px solid white;border-radius:50%;box-shadow:0 3px 12px rgba(0,0,0,0.35);position:relative;z-index:2;display:flex;align-items:center;justify-content:center">
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="white"><path d="M12 2L4 7v10l8 5 8-5V7l-8-5z"/></svg>
+      html: `<div style="position:relative;width:44px;height:44px;display:flex;align-items:center;justify-content:center">
+        <div style="position:absolute;inset:-2px;border-radius:50%;background:${color}35;animation:pulse-ring 2s ease-out infinite"></div>
+        <div class="rider-heading-rotor" style="width:34px;height:34px;position:relative;z-index:2;transition:transform 0.4s linear">
+          <svg width="34" height="34" viewBox="0 0 34 34">
+            <circle cx="17" cy="17" r="15" fill="${color}" stroke="white" stroke-width="3"/>
+            <path d="M17 6 L24 21 L17 17.5 L10 21 Z" fill="white"/>
+          </svg>
         </div>
       </div>`,
-      w: 36, h: 36, anchor: 'center',
+      w: 44, h: 44, anchor: 'center',
     };
   }
   if (type === 'bike') {
@@ -452,6 +511,7 @@ export default function MapView({
   const [ml, setMl] = useState<MapLibreNS | null>(null);
   const markerRefs = useRef<MLMarker[]>([]);
   const locateMarkerRef = useRef<MLMarker | null>(null);
+  const riderPuckMarkerRef = useRef<MLMarker | null>(null);
   const [preparedStyle, setPreparedStyle] = useState<unknown>(null);
 
   // Leaflet state & refs
@@ -717,7 +777,10 @@ export default function MapView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engine, ml, preparedStyle]);
 
-  // MapLibre Markers
+  // MapLibre Markers — excludes the 'rider' marker while followPosition
+  // is active; that one is handled by its own effect below with smooth
+  // in-place updates instead of destroy-and-recreate every GPS tick,
+  // which is what made the old marker jump instead of glide.
   useEffect(() => {
     if (engine !== 'maplibre') return;
     const map = mapRef.current;
@@ -729,6 +792,7 @@ export default function MapView({
     markerRefs.current = [];
 
     validMarkers.forEach((m) => {
+      if (followPosition && m.icon === 'rider') return;
       try {
         const spec = markerSpec(m.icon || 'pin', m.color || '#C41E1E');
         const el = document.createElement('div');
@@ -751,6 +815,40 @@ export default function MapView({
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engine, markersKey, ml]);
+
+  // Rider puck — smooth in-place position + rotation updates instead of
+  // destroy-and-recreate, so it glides between real GPS fixes and turns
+  // to face the heading like Google Maps' navigation arrow, rather than
+  // jumping to a new static dot every ~4 seconds.
+  useEffect(() => {
+    if (engine !== 'maplibre' || !followPosition) {
+      try { riderPuckMarkerRef.current?.remove(); } catch { void 0; }
+      riderPuckMarkerRef.current = null;
+      return;
+    }
+    const map = mapRef.current;
+    if (!map || !ml) return;
+    if (!Number.isFinite(followPosition.lat) || !Number.isFinite(followPosition.lng)) return;
+
+    if (!riderPuckMarkerRef.current) {
+      const spec = markerSpec('rider', '#C41E1E');
+      const el = document.createElement('div');
+      el.style.width = `${spec.w}px`;
+      el.style.height = `${spec.h}px`;
+      el.innerHTML = spec.html;
+      riderPuckMarkerRef.current = new ml.Marker({ element: el, anchor: spec.anchor })
+        .setLngLat([followPosition.lng, followPosition.lat])
+        .addTo(map);
+    } else {
+      riderPuckMarkerRef.current.setLngLat([followPosition.lng, followPosition.lat]);
+    }
+
+    if (Number.isFinite(followHeading)) {
+      const rotor = riderPuckMarkerRef.current.getElement()?.querySelector('.rider-heading-rotor') as HTMLElement | null;
+      if (rotor) rotor.style.transform = `rotate(${followHeading}deg)`;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [engine, ml, followPosition?.lat, followPosition?.lng, followHeading]);
 
   // MapLibre Single-marker auto-center
   useEffect(() => {
@@ -1136,12 +1234,20 @@ export default function MapView({
       {/* SVG route overlay (MapLibre vector mode only) */}
       {engine === 'maplibre' && (
         <svg className="absolute inset-0 z-[2] pointer-events-none" width="100%" height="100%">
-          <path ref={pathCasingRef} fill="none" stroke="#ffffff" strokeWidth={9} strokeOpacity={0.7} strokeLinecap="round" strokeLinejoin="round" />
+          {/* Soft outer glow, bolder during turn-by-turn navigation
+              (followPosition active) to match a real nav app's route
+              weight — a plain thin line reads as a static map, not an
+              active "follow this" indicator. */}
+          <path ref={pathCasingRef} fill="none" stroke={followPosition ? '#C41E1E' : '#ffffff'}
+            strokeWidth={followPosition ? 16 : 9} strokeOpacity={followPosition ? 0.25 : 0.7}
+            strokeLinecap="round" strokeLinejoin="round" />
           {/* Rider → pickup leg: solid, theme-aware — white on a dark
               map, deep grey on a light map — distinct from the main red
               trip route without a dashed pattern competing for attention. */}
-          <path ref={pathSecondaryRef} fill="none" stroke={dk ? '#FFFFFF' : '#374151'} strokeWidth={4.5} strokeOpacity={0.95} strokeLinecap="round" strokeLinejoin="round" />
-          <path ref={pathMainRef} fill="none" stroke="#C41E1E" strokeWidth={5} strokeOpacity={0.95} strokeLinecap="round" strokeLinejoin="round" />
+          <path ref={pathSecondaryRef} fill="none" stroke={dk ? '#FFFFFF' : '#374151'}
+            strokeWidth={followPosition ? 6 : 4.5} strokeOpacity={0.95} strokeLinecap="round" strokeLinejoin="round" />
+          <path ref={pathMainRef} fill="none" stroke="#C41E1E"
+            strokeWidth={followPosition ? 8 : 5} strokeOpacity={0.95} strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       )}
 
