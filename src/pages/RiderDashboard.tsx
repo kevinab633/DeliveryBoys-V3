@@ -230,6 +230,45 @@ function ActiveDeliveryView({
   const [speedKmh, setSpeedKmh] = useState<number | null>(null);
   const [engineDebug, setEngineDebug] = useState<{ engine: 'maplibre' | 'leaflet'; reason?: string } | null>(null);
   const prevPosRef = useRef<{ lat: number; lng: number; t: number } | null>(null);
+  // Whether the last heading update came from the device compass
+  // (accurate even while stationary) vs. GPS movement bearing (only
+  // available once actually moving) — GPS movement is treated as the
+  // more trustworthy source once available, since compass readings can
+  // drift, but compass is what lets the arrow turn as the phone turns
+  // while parked or crawling in traffic, which GPS bearing alone cannot.
+  const usingCompassRef = useRef(false);
+
+  // Device compass — subscribes to real orientation events so the map
+  // can rotate to match which way the phone (and rider) is actually
+  // facing even at 0 km/h. iOS Safari requires an explicit permission
+  // prompt for this; Android Chrome generally does not.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('DeviceOrientationEvent' in window)) return;
+
+    function handleOrientation(e: DeviceOrientationEvent) {
+      // webkitCompassHeading (iOS) is already a true compass heading;
+      // alpha (standard) is relative to the device's initial orientation
+      // and needs inverting to become a compass heading in most browsers.
+      const anyE = e as any;
+      let compassHeading: number | null = null;
+      if (typeof anyE.webkitCompassHeading === 'number') {
+        compassHeading = anyE.webkitCompassHeading;
+      } else if (typeof e.alpha === 'number') {
+        compassHeading = (360 - e.alpha) % 360;
+      }
+      if (compassHeading !== null && Number.isFinite(compassHeading)) {
+        usingCompassRef.current = true;
+        setHeading(compassHeading);
+      }
+    }
+
+    window.addEventListener('deviceorientationabsolute', handleOrientation as any, true);
+    window.addEventListener('deviceorientation', handleOrientation, true);
+    return () => {
+      window.removeEventListener('deviceorientationabsolute', handleOrientation as any, true);
+      window.removeEventListener('deviceorientation', handleOrientation, true);
+    };
+  }, []);
 
   const leg = order.status === 'accepted'
     ? { label: 'Pickup', address: order.pickup.address, coords: order.pickup }
@@ -417,8 +456,11 @@ function ActiveDeliveryView({
           of the map. */}
       <div className="relative z-10 mt-auto px-3 pb-3">
         {detailsOpen ? (
-          <div className="bg-white rounded-3xl shadow-2xl px-5 pt-4 pb-6 space-y-4">
-            <button onClick={() => setDetailsOpen(false)} className="w-10 h-1 bg-gray-200 rounded-full mx-auto block" />
+          <div className="bg-white rounded-3xl shadow-2xl px-5 pt-2 pb-6 space-y-4">
+            <button onClick={() => setDetailsOpen(false)}
+              className="w-full flex items-center justify-center py-3 -mt-1 mb-1">
+              <span className="w-10 h-1 bg-gray-300 rounded-full" />
+            </button>
 
             {/* Trip metrics: arrival time + remaining distance + time
                 together, plus a progress bar — matches Yango's real

@@ -955,31 +955,26 @@ export default function MapView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engine, styleReady, followPosition?.lat, followPosition?.lng, followHeading]);
 
-  // MapLibre Secondary route
+  // MapLibre Secondary route — the rider→destination "you are heading
+  // here" indicator. Drawn as a direct straight line, updated instantly
+  // on every position tick with no network round-trip: this used to call
+  // fetchDirectionsRoute() on every GPS update (every ~4s while driving),
+  // which raced overlapping requests against each other and could apply
+  // a stale, out-of-order response — the actual symptom being "the line
+  // doesn't move/update as the rider moves". The road-accurate path is
+  // already shown separately via the main route/congestion rendering;
+  // this line only needs to point at the destination, not trace roads.
   useEffect(() => {
     if (engine !== 'maplibre') return;
-    secondaryPtsRef.current = null;
-    redrawRoutes();
-
-    if (!validSecondaryRoute || validSecondaryRoute.length < 2 || !validSecondaryRoute[0]) return;
-
-    const start = validSecondaryRoute[0];
-    const end = validSecondaryRoute[validSecondaryRoute.length - 1];
-    if (!start || !end) return;
-    let cancelled = false;
-
-    (async () => {
-      const roadPts = await fetchDirectionsRoute(start, end);
-      if (cancelled) return;
-      secondaryPtsRef.current = roadPts ?? [start, end];
+    if (!validSecondaryRoute || validSecondaryRoute.length < 2 || !validSecondaryRoute[0]) {
+      secondaryPtsRef.current = null;
       redrawRoutes();
-    })();
-
-    return () => {
-      cancelled = true;
-    };
+      return;
+    }
+    secondaryPtsRef.current = validSecondaryRoute;
+    redrawRoutes();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [engine, secondaryRouteKey]);
+  }, [engine, secondaryRouteKey, styleReady]);
 
   // ─────────────────────────────────────────────────────────────────────
   // LEAFLET FALLBACK INITIALIZATION & LOGIC
@@ -1282,22 +1277,28 @@ export default function MapView({
         </div>
       )}
 
-      {/* Zoom and geolocation buttons */}
-      <div className="absolute bottom-4 right-3 z-[10] flex flex-col items-center">
-        <div className="db-zoom-wrap">
-          <button className="db-zoom-btn db-zoom-in" title="Zoom in" onClick={handleZoomIn}>
-            +
-          </button>
-          <button className="db-zoom-btn db-zoom-out" title="Zoom out" onClick={handleZoomOut}>
-            {'\u2212'}
+      {/* Zoom and geolocation buttons — hidden during turn-by-turn
+          navigation (followPosition active), where the camera is meant
+          to stay locked onto the rider; ActiveDeliveryView provides its
+          own dedicated re-centre control instead, styled and positioned
+          for that screen rather than this generic corner cluster. */}
+      {!followPosition && (
+        <div className="absolute bottom-4 right-3 z-[10] flex flex-col items-center">
+          <div className="db-zoom-wrap">
+            <button className="db-zoom-btn db-zoom-in" title="Zoom in" onClick={handleZoomIn}>
+              +
+            </button>
+            <button className="db-zoom-btn db-zoom-out" title="Zoom out" onClick={handleZoomOut}>
+              {'\u2212'}
+            </button>
+          </div>
+          <button className="db-locate-btn" title="My location" onClick={handleLocate}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="3 11 22 2 13 21 11 13 3 11" />
+            </svg>
           </button>
         </div>
-        <button className="db-locate-btn" title="My location" onClick={handleLocate}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <polygon points="3 11 22 2 13 21 11 13 3 11" />
-          </svg>
-        </button>
-      </div>
+      )}
 
       {/* Attribution credit */}
       <div
