@@ -232,11 +232,11 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
 
     // Lifecycle notification: order created
     if (orderType === 'scheduled') {
-      pushNotify(data.customerId, 'Order Scheduled!', `Order ${order.id} is scheduled for ${formatDate(order.scheduledFor!)}.`);
-      fireBrowserNotification('Order Scheduled', `Order ${order.id} is scheduled for ${formatDate(order.scheduledFor!)}.`);
+      pushNotify(data.customerId, 'Order Scheduled!', `Order ${order.displayCode} is scheduled for ${formatDate(order.scheduledFor!)}.`);
+      fireBrowserNotification('Order Scheduled', `Order ${order.displayCode} is scheduled for ${formatDate(order.scheduledFor!)}.`);
     } else {
-      pushNotify(data.customerId, 'Order Placed!', `Order ${order.id} has been placed. Waiting for a rider.`);
-      fireBrowserNotification('Order Placed', `Order ${order.id} has been placed. Waiting for a rider.`);
+      pushNotify(data.customerId, 'Order Placed!', `Order ${order.displayCode} has been placed. Waiting for a rider.`);
+      fireBrowserNotification('Order Placed', `Order ${order.displayCode} has been placed. Waiting for a rider.`);
     }
     return order;
   },
@@ -267,9 +267,9 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
     } catch (err) {
       console.warn('[orderStore] broadcastOrderAccepted failed:', err);
     }
-    pushNotify(order.customerId, 'Rider Assigned!', `A rider is on the way to pickup — ${riderName} accepted your order ${orderId}.${phone}`);
-    pushNotify(riderId, 'Order Accepted', `You accepted order ${orderId}. Head to the pickup point.`);
-    fireBrowserNotification('Rider Assigned', `${riderName} accepted order ${orderId} — on the way to pickup.`);
+    pushNotify(order.customerId, 'Rider Assigned!', `A rider is on the way to pickup — ${riderName} accepted your order ${order.displayCode}.${phone}`);
+    pushNotify(riderId, 'Order Accepted', `You accepted order ${order.displayCode}. Head to the pickup point.`);
+    fireBrowserNotification('Rider Assigned', `${riderName} accepted order ${order.displayCode} — on the way to pickup.`);
     return true;
   },
 
@@ -287,11 +287,11 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
         console.warn('[orderStore] broadcastOrderCancelled failed:', err);
       }
       // Lifecycle notification: manual cancellation
-      pushNotify(order.customerId, 'Order Cancelled', `Your order ${orderId} was cancelled.`);
+      pushNotify(order.customerId, 'Order Cancelled', `Your order ${order.displayCode} was cancelled.`);
       if (order.riderId) {
-        pushNotify(order.riderId, 'Order Cancelled', `Order ${orderId} was cancelled by the customer.`);
+        pushNotify(order.riderId, 'Order Cancelled', `Order ${order.displayCode} was cancelled by the customer.`);
       }
-      fireBrowserNotification('Order Cancelled', `Order ${orderId} was cancelled.`);
+      fireBrowserNotification('Order Cancelled', `Order ${order.displayCode} was cancelled.`);
     }
   },
 
@@ -321,28 +321,28 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
 
     // Lifecycle notifications per status (customer + rider)
     if (status === 'picked_up') {
-      pushNotify(order.customerId, 'Package Picked Up', `Your order ${orderId} has been picked up and is on its way.`);
-      if (order.riderId) pushNotify(order.riderId, 'Picked Up', `You picked up order ${orderId}. Safe travels!`);
-      fireBrowserNotification('Package Picked Up', `Order ${orderId} has been picked up.`);
+      pushNotify(order.customerId, 'Package Picked Up', `Your order ${order.displayCode} has been picked up and is on its way.`);
+      if (order.riderId) pushNotify(order.riderId, 'Picked Up', `You picked up order ${order.displayCode}. Safe travels!`);
+      fireBrowserNotification('Package Picked Up', `Order ${order.displayCode} has been picked up.`);
     } else if (status === 'in_transit') {
-      pushNotify(order.customerId, 'In Transit', `Your order ${orderId} is in transit — track it live on the map.`);
-      if (order.riderId) pushNotify(order.riderId, 'Delivery Started', `Order ${orderId} is in transit to the drop-off.`);
-      fireBrowserNotification('In Transit', `Order ${orderId} is on its way.`);
+      pushNotify(order.customerId, 'In Transit', `Your order ${order.displayCode} is in transit — track it live on the map.`);
+      if (order.riderId) pushNotify(order.riderId, 'Delivery Started', `Order ${order.displayCode} is in transit to the drop-off.`);
+      fireBrowserNotification('In Transit', `Order ${order.displayCode} is on its way.`);
     } else if (status === 'delivered') {
-      pushNotify(order.customerId, 'Delivered 🎉', `Your order ${orderId} has been delivered. Thank you for using Delivery Boys!`);
+      pushNotify(order.customerId, 'Delivered 🎉', `Your order ${order.displayCode} has been delivered. Thank you for using Delivery Boys!`);
       if (order.riderId) {
-        pushNotify(order.riderId, 'Delivered', `Order ${orderId} delivered. Great job!`);
+        pushNotify(order.riderId, 'Delivered', `Order ${order.displayCode} delivered. Great job!`);
         // Persist the completed delivery against the rider's own record —
         // without this, the dashboard's delivery/earnings counters only
         // ever reflected orders still held in local session state, so
         // they reset on reload and never actually accumulated.
         useAuthStore.getState().recordDelivery(order.riderId, order.price * 0.75);
       }
-      fireBrowserNotification('Delivered 🎉', `Order ${orderId} has been delivered.`);
+      fireBrowserNotification('Delivered 🎉', `Order ${order.displayCode} has been delivered.`);
     } else if (status === 'cancelled') {
-      pushNotify(order.customerId, 'Order Cancelled', `Your order ${orderId} was cancelled.`);
-      if (order.riderId) pushNotify(order.riderId, 'Order Cancelled', `Order ${orderId} was cancelled.`);
-      fireBrowserNotification('Order Cancelled', `Order ${orderId} was cancelled.`);
+      pushNotify(order.customerId, 'Order Cancelled', `Your order ${order.displayCode} was cancelled.`);
+      if (order.riderId) pushNotify(order.riderId, 'Order Cancelled', `Order ${order.displayCode} was cancelled.`);
+      fireBrowserNotification('Order Cancelled', `Order ${order.displayCode} was cancelled.`);
     }
   },
 
@@ -415,8 +415,8 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
     }));
     if (current) {
       const phone = riderPhone ? ` Rider phone: ${riderPhone}.` : '';
-      pushNotify(current.customerId, 'Rider Assigned!', `A rider is on the way to pickup — ${riderName} accepted your order ${orderId}.${phone}`);
-      fireBrowserNotification('Rider Assigned', `${riderName} accepted order ${orderId} — on the way to pickup.`);
+      pushNotify(current.customerId, 'Rider Assigned!', `A rider is on the way to pickup — ${riderName} accepted your order ${current.displayCode}.${phone}`);
+      fireBrowserNotification('Rider Assigned', `${riderName} accepted order ${current.displayCode} — on the way to pickup.`);
     }
   },
 
@@ -434,14 +434,14 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
     }));
     if (!order) return;
     if (status === 'picked_up') {
-      pushNotify(order.customerId, 'Package Picked Up', `Your order ${orderId} has been picked up and is on its way.`);
-      fireBrowserNotification('Package Picked Up', `Order ${orderId} has been picked up.`);
+      pushNotify(order.customerId, 'Package Picked Up', `Your order ${order.displayCode} has been picked up and is on its way.`);
+      fireBrowserNotification('Package Picked Up', `Order ${order.displayCode} has been picked up.`);
     } else if (status === 'in_transit') {
-      pushNotify(order.customerId, 'In Transit', `Your order ${orderId} is in transit — track it live on the map.`);
-      fireBrowserNotification('In Transit', `Order ${orderId} is on its way.`);
+      pushNotify(order.customerId, 'In Transit', `Your order ${order.displayCode} is in transit — track it live on the map.`);
+      fireBrowserNotification('In Transit', `Order ${order.displayCode} is on its way.`);
     } else if (status === 'delivered') {
-      pushNotify(order.customerId, 'Delivered 🎉', `Your order ${orderId} has been delivered. Thank you for using Delivery Boys!`);
-      fireBrowserNotification('Delivered 🎉', `Order ${orderId} has been delivered.`);
+      pushNotify(order.customerId, 'Delivered 🎉', `Your order ${order.displayCode} has been delivered. Thank you for using Delivery Boys!`);
+      fireBrowserNotification('Delivered 🎉', `Order ${order.displayCode} has been delivered.`);
     }
   },
 
@@ -526,7 +526,7 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
   sweepExpiredOrders: () => {
     const now = Date.now();
     const ordersNow = get().orders;
-    const toCancel: { id: string; customerId: string; reason: string; scheduled: boolean }[] = [];
+    const toCancel: { id: string; displayCode: string; customerId: string; reason: string; scheduled: boolean }[] = [];
 
     for (const o of ordersNow) {
       if (o.status !== 'pending') continue;
@@ -534,7 +534,7 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
 
       if (!scheduled) {
         if (now - o.createdAt > AUTO_CANCEL_MS) {
-          toCancel.push({ id: o.id, customerId: o.customerId, reason: 'no_riders_available', scheduled: false });
+          toCancel.push({ id: o.id, displayCode: o.displayCode, customerId: o.customerId, reason: 'no_riders_available', scheduled: false });
         }
         continue;
       }
@@ -557,15 +557,15 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
             u => u.role === 'rider' && (u as { availability?: string }).availability === 'online',
           );
           onlineRiders.forEach(r => {
-            pushNotify(r.id, 'Scheduled Delivery Coming Up', `Order ${o.id} is due at ${formatDate(when)} — ${o.pickup.address} → ${o.dropoff.address}.`);
+            pushNotify(r.id, 'Scheduled Delivery Coming Up', `Order ${o.displayCode} is due at ${formatDate(when)} — ${o.pickup.address} → ${o.dropoff.address}.`);
           });
-          fireBrowserNotification('Scheduled Delivery Coming Up', `Order ${o.id} is due at ${formatDate(when)}.`);
+          fireBrowserNotification('Scheduled Delivery Coming Up', `Order ${o.displayCode} is due at ${formatDate(when)}.`);
         }
       }
 
       // 3) Missed the scheduled window entirely
       if (now > when + SCHEDULED_GRACE_MS) {
-        toCancel.push({ id: o.id, customerId: o.customerId, reason: 'no_riders_available_scheduled', scheduled: true });
+        toCancel.push({ id: o.id, displayCode: o.displayCode, customerId: o.customerId, reason: 'no_riders_available_scheduled', scheduled: true });
       }
     }
 
@@ -584,8 +584,8 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
     toCancel.forEach(c => {
       const title = c.scheduled ? 'Scheduled Delivery Unfilled' : 'No Riders Available';
       const msg = c.scheduled
-        ? `We couldn't find a rider for your scheduled delivery ${c.id} — please rebook or try again.`
-        : `No riders were available for order ${c.id}. Please try again shortly.`;
+        ? `We couldn't find a rider for your scheduled delivery ${c.displayCode} — please rebook or try again.`
+        : `No riders were available for order ${c.displayCode}. Please try again shortly.`;
       pushNotify(c.customerId, title, msg);
       fireBrowserNotification(title, msg);
     });
