@@ -107,7 +107,7 @@ export default function ManagerDashboard() {
               <div className="space-y-3">
                 {orders.slice(0, 8).map(o => (
                   <div key={o.id} className={cn('p-4 rounded-xl border flex flex-wrap items-center gap-4', dk ? 'bg-surface-dark-3 border-white/5' : 'bg-white border-gray-200')}>
-                    <span className={cn('font-bold text-sm', dk ? 'text-white' : 'text-gray-900')}>{o.id}</span>
+                    <span className={cn('font-bold text-sm', dk ? 'text-white' : 'text-gray-900')}>{o.displayCode}</span>
                     <span className={cn('text-sm', dk ? 'text-white/50' : 'text-gray-500')}>{o.customerName}</span>
                     <span className={cn('text-sm', dk ? 'text-white/40' : 'text-gray-400')}>{o.riderName || 'No rider'}</span>
                     <span className={cn('px-2 py-0.5 rounded-full text-xs font-bold capitalize ml-auto',
@@ -130,7 +130,7 @@ export default function ManagerDashboard() {
                   <tbody>
                     {orders.map(o => (
                       <tr key={o.id} className={cn('border-t', dk ? 'border-white/5' : 'border-gray-100')}>
-                        <td className={cn('p-3 font-bold', dk ? 'text-white' : 'text-gray-900')}>{o.id}</td>
+                        <td className={cn('p-3 font-bold', dk ? 'text-white' : 'text-gray-900')}>{o.displayCode}</td>
                         <td className={cn('p-3', dk ? 'text-white/70' : 'text-gray-700')}>{o.customerName}</td>
                         <td className={cn('p-3', dk ? 'text-white/50' : 'text-gray-500')}>{o.riderName || '-'}</td>
                         <td className={cn('p-3 max-w-[200px] truncate', dk ? 'text-white/40' : 'text-gray-400')}>{o.pickup.address} → {o.dropoff.address}</td>

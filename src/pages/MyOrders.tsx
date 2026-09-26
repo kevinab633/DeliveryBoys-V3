@@ -44,7 +44,7 @@ export default function MyOrders() {
               className={cn('p-5 rounded-xl border', dk ? 'bg-surface-dark-3 border-white/5' : 'bg-white border-gray-200')}>
               <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
                 <div className="flex items-center gap-3">
-                  <span className={cn('font-bold', dk ? 'text-white' : 'text-gray-900')}>{o.id}</span>
+                  <span className={cn('font-bold', dk ? 'text-white' : 'text-gray-900')}>{o.displayCode}</span>
                   <span className={cn('px-2 py-0.5 rounded-full text-xs font-bold capitalize',
                     o.status==='delivered'?'bg-success/10 text-success':o.status==='cancelled'?'bg-danger/10 text-danger':'bg-warning/10 text-warning')}>{o.status.replace('_',' ')}</span>
                 </div>

@@ -206,7 +206,7 @@ export default function Book() {
       // Scheduled orders skip the searching/ringing flow entirely —
       // they post straight to riders' Available list as a Scheduled entry.
       // (Customer notification fires inside createOrder.)
-      showToast({ title: '📅 Order Scheduled!', message: `${order.id} — riders will see it in their available list`, type: 'success' });
+      showToast({ title: '📅 Order Scheduled!', message: `${order.displayCode} — riders will see it in their available list`, type: 'success' });
       setPhase('scheduled');
     } else {
       // (Customer notification fires inside createOrder.)
@@ -497,7 +497,7 @@ export default function Book() {
         <p className={cn('text-sm mt-1', dk ? 'text-white/50' : 'text-gray-500')}>
           {isResponding
             ? 'Reviewing your order now — hang tight'
-            : <>Order <span className="font-bold text-brand">{orderId}</span> · notifying nearby riders</>}
+            : <>Order <span className="font-bold text-brand">{activeOrder?.displayCode || orderId}</span> · notifying nearby riders</>}
         </p>
       </div>
       {!isResponding && (
@@ -565,7 +565,7 @@ export default function Book() {
           <span className="font-bold text-brand">{formatDate(activeOrder?.scheduledFor || Date.now())}</span>
         </p>
         <p className={cn('text-xs mt-2', dk ? 'text-white/35' : 'text-gray-400')}>
-          Order <span className="font-bold">{orderId}</span> is now visible to riders as a Scheduled delivery.
+          Order <span className="font-bold">{activeOrder?.displayCode || orderId}</span> is now visible to riders as a Scheduled delivery.
         </p>
       </div>
       <div className="flex flex-col gap-2">
@@ -592,7 +592,7 @@ export default function Book() {
       <div>
         <h2 className={cn('text-2xl font-extrabold', dk ? 'text-white' : 'text-gray-900')}>No riders available right now</h2>
         <p className={cn('text-sm mt-2 leading-relaxed', dk ? 'text-white/50' : 'text-gray-500')}>
-          Order <span className="font-bold">{orderId}</span> was cancelled because no rider accepted within 5 minutes.
+          Order <span className="font-bold">{activeOrder?.displayCode || orderId}</span> was cancelled because no rider accepted within 5 minutes.
           Please try again shortly.
         </p>
       </div>
@@ -613,7 +613,7 @@ export default function Book() {
       <div>
         <h2 className={cn('text-2xl font-extrabold', dk ? 'text-white' : 'text-gray-900')}>No rider found for your scheduled delivery</h2>
         <p className={cn('text-sm mt-2 leading-relaxed', dk ? 'text-white/50' : 'text-gray-500')}>
-          We couldn't find a rider for your scheduled delivery <span className="font-bold">{orderId}</span> —
+          We couldn't find a rider for your scheduled delivery <span className="font-bold">{activeOrder?.displayCode || orderId}</span> —
           please rebook or try again.
         </p>
       </div>

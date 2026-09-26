@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
 import { Order, OrderStatus, OrderType, VehicleType, Location, RiderProfile } from '../lib/types';
-import { formatDate } from '../lib/utils';
+import { formatDate, generateOrderCode } from '../lib/utils';
 import { syncService } from '../lib/syncService';
 import { calculatePrice, calculateDistance } from '../lib/pricing';
 import { getDefaultRules } from '../lib/pricing';
@@ -135,7 +135,7 @@ interface OrderStore {
 
 const DEMO_ORDERS: Order[] = [
   {
-    id: 'ORD-001', customerId: 'cust-1', customerName: 'Nana Yaa', customerPhone: '+233201111111',
+    id: 'ORD-001', displayCode: 'DB-A001', customerId: 'cust-1', customerName: 'Nana Yaa', customerPhone: '+233201111111',
     pickup: { lat: 5.6037, lng: -0.1870, address: 'University of Ghana, Legon' },
     dropoff: { lat: 5.5560, lng: -0.1824, address: 'Osu Oxford Street' },
     distance: 7.2, price: 28.50, status: 'delivered', vehicleType: 'motorcycle',
@@ -144,7 +144,7 @@ const DEMO_ORDERS: Order[] = [
     orderType: 'instant',
   },
   {
-    id: 'ORD-002', customerId: 'cust-2', customerName: 'Kofi Brew', customerPhone: '+233202222222',
+    id: 'ORD-002', displayCode: 'DB-A002', customerId: 'cust-2', customerName: 'Kofi Brew', customerPhone: '+233202222222',
     pickup: { lat: 5.6245, lng: -0.1674, address: 'Accra Mall' },
     dropoff: { lat: 5.5650, lng: -0.2350, address: 'Kaneshie Market' },
     distance: 9.8, price: 35.20, status: 'delivered', vehicleType: 'motorcycle',
@@ -153,7 +153,7 @@ const DEMO_ORDERS: Order[] = [
     orderType: 'instant',
   },
   {
-    id: 'ORD-003', customerId: 'cust-3', customerName: 'Esi Mensah', customerPhone: '+233203333333',
+    id: 'ORD-003', displayCode: 'DB-A003', customerId: 'cust-3', customerName: 'Esi Mensah', customerPhone: '+233203333333',
     pickup: { lat: 5.5710, lng: -0.2200, address: 'Kwame Nkrumah Circle' },
     dropoff: { lat: 5.6350, lng: -0.1580, address: 'East Legon' },
     distance: 11.5, price: 42.00, status: 'pending', vehicleType: 'car',
@@ -161,7 +161,7 @@ const DEMO_ORDERS: Order[] = [
     orderType: 'instant',
   },
   {
-    id: 'ORD-004', customerId: 'cust-1', customerName: 'Nana Yaa', customerPhone: '+233201111111',
+    id: 'ORD-004', displayCode: 'DB-A004', customerId: 'cust-1', customerName: 'Nana Yaa', customerPhone: '+233201111111',
     pickup: { lat: 5.6052, lng: -0.1718, address: 'Kotoka International Airport' },
     dropoff: { lat: 5.6700, lng: -0.1700, address: 'Madina' },
     distance: 8.3, price: 31.50, status: 'pending', vehicleType: 'motorcycle',
@@ -181,6 +181,7 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
       // NOTE: the Supabase `orders.id` column is a real `uuid` — a
       // human-style "ORD-XXXXXX" string is rejected by Postgres on insert.
       id: uuidv4(),
+      displayCode: generateOrderCode(),
       customerId: data.customerId,
       customerName: data.customerName,
       customerPhone: data.customerPhone,

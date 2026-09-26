@@ -221,7 +221,7 @@ export default function Track() {
         className={cn('p-5 rounded-2xl border', dk ? 'bg-surface-dark-3 border-white/5' : 'bg-gray-50 border-gray-200')}>
         <div className="flex justify-between items-start mb-4">
           <div>
-            <h3 className={cn('font-bold text-lg', dk ? 'text-white' : 'text-gray-900')}>{order.id}</h3>
+            <h3 className={cn('font-bold text-lg', dk ? 'text-white' : 'text-gray-900')}>{order.displayCode}</h3>
             <p className={cn('text-xs', dk ? 'text-white/40' : 'text-gray-500')}>{formatDate(order.createdAt)}</p>
           </div>
           <span className={cn('px-3 py-1 rounded-full text-xs font-bold capitalize',
@@ -399,7 +399,7 @@ export default function Track() {
                 <span className="flex items-center gap-2 text-sm font-bold min-w-0">
                   <span className={cn('w-2 h-2 rounded-full shrink-0',
                     order.status === 'delivered' ? 'bg-success' : order.status === 'cancelled' ? 'bg-danger' : 'bg-warning animate-pulse')} />
-                  <span className="truncate">{order.id} · {order.status.replace('_', ' ')}</span>
+                  <span className="truncate">{order.displayCode} · {order.status.replace('_', ' ')}</span>
                 </span>
                 <span className={cn('flex items-center gap-1 text-xs font-semibold shrink-0', dk ? 'text-white/40' : 'text-gray-400')}>
                   Details <ChevronUp size={14} />

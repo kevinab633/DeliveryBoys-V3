@@ -106,6 +106,11 @@ export function rowToOrder(row: any): Order {
 
   return {
     id: row.id,
+    // Older rows created before this field existed won't have it in the
+    // stored pickup blob — fall back to a code derived from the id so
+    // nothing ever displays blank, though it won't match any code the
+    // customer was originally shown (there wasn't one to show yet).
+    displayCode: pickupData.displayCode || `DB-${String(row.id).slice(0, 4).toUpperCase()}`,
     customerId: row.customer_id || 'cust-anon',
     customerName: pickupData.customerName || 'Customer',
     customerPhone: pickupData.customerPhone || '',
@@ -156,6 +161,7 @@ export function orderToRow(order: Order): any {
       customerName: order.customerName,
       customerPhone: order.customerPhone,
       distance: order.distance,
+      displayCode: order.displayCode,
       acceptedAt: order.acceptedAt,
       pickedUpAt: order.pickedUpAt,
       deliveredAt: order.deliveredAt,

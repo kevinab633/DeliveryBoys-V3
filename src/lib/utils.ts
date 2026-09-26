@@ -2,6 +2,19 @@ export function generateId(): string {
   return Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
 }
 
+// Short, human-friendly order code — e.g. "DB-4F82". The real database
+// key (Order.id) stays a UUID for Postgres/Supabase; this is what's
+// actually shown to customers and riders anywhere an order needs to be
+// read, said aloud, or typed, since a raw UUID is unreadable clutter.
+const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I — avoids visual confusion
+export function generateOrderCode(): string {
+  let code = '';
+  for (let i = 0; i < 4; i++) {
+    code += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
+  }
+  return `DB-${code}`;
+}
+
 export function generateOTP(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }

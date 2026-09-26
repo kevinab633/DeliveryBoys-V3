@@ -160,7 +160,7 @@ function IncomingOrderModal({ order, taken, dk, riderLocation, onAccept, onDecli
             <div className="text-center mb-5">
               <h3 className={cn('text-2xl font-extrabold', dk ? 'text-white' : 'text-gray-900')}>Incoming Order!</h3>
               <p className={cn('text-xs mt-1', dk ? 'text-white/40' : 'text-gray-500')}>
-                {order.id} · accept before another rider takes it
+                {order.displayCode} · accept before another rider takes it
               </p>
             </div>
 
@@ -484,7 +484,7 @@ function ActiveDeliveryView({
 
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-bold text-gray-900">{order.id}</p>
+                <p className="font-bold text-gray-900">{order.displayCode}</p>
                 <p className="text-sm text-gray-500">{order.customerName} · {leg.address}</p>
               </div>
               <span className="text-brand font-extrabold text-lg shrink-0">{formatCurrency(order.price)}</span>
@@ -508,7 +508,7 @@ function ActiveDeliveryView({
           <div className="flex items-center gap-2">
             <button onClick={() => setDetailsOpen(true)}
               className="flex-1 bg-white rounded-2xl shadow-xl px-4 py-3.5 flex items-center gap-2 font-semibold text-sm text-gray-900">
-              <ChevronUp size={16} className="text-gray-400" /> {order.id} · {formatCurrency(order.price)}
+              <ChevronUp size={16} className="text-gray-400" /> {order.displayCode} · {formatCurrency(order.price)}
             </button>
             <button onClick={() => onStatusUpdate(order.id, nextAction.next)}
               className="bg-brand text-white px-5 py-3.5 rounded-2xl font-bold text-sm shadow-xl shadow-brand/30 whitespace-nowrap">
@@ -546,7 +546,7 @@ function OrderDetailOverlay({ order, dk, onClose, onAccept, onDecline }: {
     <>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className={cn('text-lg font-extrabold', dk ? 'text-white' : 'text-gray-900')}>Trip: {order.id}</h2>
+          <h2 className={cn('text-lg font-extrabold', dk ? 'text-white' : 'text-gray-900')}>Trip: {order.displayCode}</h2>
           <p className={cn('text-xs mt-0.5', dk ? 'text-white/40' : 'text-gray-500')}>
             {isPending ? 'Waiting for a rider' : `Status: ${order.status.replace('_', ' ')}`} · {timeAgo(order.createdAt)}
           </p>
@@ -640,7 +640,7 @@ function OrderDetailOverlay({ order, dk, onClose, onAccept, onDecline }: {
           <button onClick={() => setSheetOpen(true)}
             className={cn('w-full px-4 pb-3 flex items-center justify-center gap-2 py-2 text-sm font-bold',
               dk ? 'text-white/70' : 'text-gray-700')}>
-            {order.id} · {formatCurrency(order.price)} <ChevronUp size={14} />
+            {order.displayCode} · {formatCurrency(order.price)} <ChevronUp size={14} />
           </button>
         )}
 
@@ -851,7 +851,7 @@ export default function RiderDashboard() {
       setDetailOrder(null);
       return;
     }
-    showToast({ title: 'Order Accepted!', message: `You accepted ${order.id}. Head to pickup.`, type: 'success' });
+    showToast({ title: 'Order Accepted!', message: `You accepted ${order.displayCode}. Head to pickup.`, type: 'success' });
     syncService.broadcastRiderResponding(order.id);
     setRingingOrder(null);
     setDetailOrder(null);
@@ -946,7 +946,7 @@ export default function RiderDashboard() {
                       dk ? 'bg-surface-dark-3 border-white/5 hover:border-brand/30' : 'bg-white border-gray-200 hover:border-brand/40 hover:shadow-md')}>
                     <div className="flex-1">
                       <div className="flex flex-wrap items-center gap-2 mb-2">
-                        <span className={cn('font-bold', dk ? 'text-white' : 'text-gray-900')}>{o.id}</span>
+                        <span className={cn('font-bold', dk ? 'text-white' : 'text-gray-900')}>{o.displayCode}</span>
                         <span className="text-xs text-brand font-semibold">{formatDistance(o.distance)}</span>
                         {scheduled ? (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-500">
@@ -978,7 +978,7 @@ export default function RiderDashboard() {
                 <div key={o.id} className={cn('p-5 rounded-xl border', dk ? 'bg-surface-dark-3 border-white/5' : 'bg-white border-gray-200')}>
                   <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
                     <div>
-                      <span className={cn('font-bold', dk ? 'text-white' : 'text-gray-900')}>{o.id}</span>
+                      <span className={cn('font-bold', dk ? 'text-white' : 'text-gray-900')}>{o.displayCode}</span>
                       <span className={cn('ml-2 px-2 py-0.5 rounded-full text-xs font-bold capitalize',
                         o.status === 'delivered' ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning')}>{o.status.replace('_', ' ')}</span>
                     </div>

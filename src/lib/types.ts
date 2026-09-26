@@ -39,6 +39,11 @@ export interface Location {
 
 export interface Order {
   id: string;
+  /** Short, human-readable order code shown to customers/riders (e.g.
+   *  "DB-4F82") — the real database key (id) is a UUID and unreadable,
+   *  so this is what appears anywhere an order needs to be shown, read
+   *  aloud, or referenced in conversation. */
+  displayCode: string;
   customerId: string;
   customerName: string;
   customerPhone: string;
