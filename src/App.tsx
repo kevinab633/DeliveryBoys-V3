@@ -10,7 +10,7 @@ import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import WhatsAppFloat from './components/WhatsAppFloat';
 import ToastContainer from './components/Toast';
-import DebugBanner, { DebugErrorBoundary } from './components/DebugBanner';
+import { DebugErrorBoundary } from './components/DebugBanner';
 import Home from './pages/Home';
 import Services from './pages/Services';
 import Book from './pages/Book';
@@ -148,7 +148,6 @@ function AppContent() {
       {!isFullScreen && <Footer />}
       {!isFullScreen && <WhatsAppFloat />}
       <ToastContainer />
-      <DebugBanner />
     </div>
   );
 }

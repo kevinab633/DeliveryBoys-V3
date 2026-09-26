@@ -228,6 +228,7 @@ function ActiveDeliveryView({
   const [steps, setSteps] = useState<DirectionStep[]>([]);
   const [heading, setHeading] = useState<number | undefined>(undefined);
   const [speedKmh, setSpeedKmh] = useState<number | null>(null);
+  const [engineDebug, setEngineDebug] = useState<{ engine: 'maplibre' | 'leaflet'; reason?: string } | null>(null);
   const prevPosRef = useRef<{ lat: number; lng: number; t: number } | null>(null);
 
   const leg = order.status === 'accepted'
@@ -359,6 +360,7 @@ function ActiveDeliveryView({
         forceLightMode
         followPosition={hasRiderFix ? riderLocation : undefined}
         followHeading={heading}
+        onEngineChange={(engine, reason) => setEngineDebug({ engine, reason })}
       />
 
       {/* Turn instruction (top-left) + speedometer (top-right) — mirrors
@@ -398,6 +400,17 @@ function ActiveDeliveryView({
           </button>
         </div>
       </div>
+
+      {/* TEMPORARY diagnostic badge — shows which map engine is actually
+          running and why, since a silent fallback to Leaflet would
+          explain a flat, non-rotating map with none of the navigation
+          styling applied. Remove once the real cause is confirmed. */}
+      {engineDebug && (
+        <div className={cn('relative z-10 mx-3 mt-2 px-3 py-2 rounded-xl text-xs font-mono',
+          engineDebug.engine === 'maplibre' ? 'bg-green-600 text-white' : 'bg-red-600 text-white')}>
+          engine: {engineDebug.engine}{engineDebug.reason ? ` — ${engineDebug.reason}` : ''}
+        </div>
+      )}
 
       {/* Trip-details toggle — a small pill instead of a permanent
           panel, so tapping it is the only time order info covers any

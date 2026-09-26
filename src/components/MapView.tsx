@@ -55,6 +55,12 @@ export interface MapViewProps {
    *  pass both if you also want a plain-colored fallback for legs where
    *  traffic data wasn't available. */
   congestionRoute?: CongestionSegment[];
+  /** Fires whenever the engine changes or a fallback reason is known —
+   *  temporary diagnostic hook so a caller (like the rider nav view) can
+   *  surface on-screen why MapLibre isn't running on a given device,
+   *  since console.warn is invisible without remote debugging on a
+   *  phone. Not meant to stay long-term once the real cause is found. */
+  onEngineChange?: (engine: 'maplibre' | 'leaflet', reason?: string) => void;
 }
 
 // ── Mapbox style + token ───────────────────────────────────────────────
@@ -500,6 +506,7 @@ export default function MapView({
   forceLightMode = false,
   followPosition,
   followHeading,
+  onEngineChange,
 }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [engine, setEngine] = useState<'maplibre' | 'leaflet'>(() =>
@@ -609,23 +616,22 @@ export default function MapView({
 
     if (!isWebGL2Supported()) {
       setEngine('leaflet');
+      onEngineChange?.('leaflet', 'WebGL2 not supported on this device/browser');
       return;
     }
 
     loadMapLibre()
       .then((mod) => {
         if (cancelled) return;
-        // MapLibre 6 resolves its module worker relative to the package URL.
-        // That works in dev but can point at a missing/chunked asset after a
-        // Vercel production build. The worker is deployed with its sibling
-        // shared module in public/assets, so vector tiles can be parsed on
-        // production browsers as well as locally.
         mod.setWorkerUrl('/assets/maplibre-gl-worker.mjs');
         setMl(mod);
       })
       .catch((err) => {
         console.warn('[MapView] MapLibre module load failed, falling back to Leaflet:', err);
-        if (!cancelled) setEngine('leaflet');
+        if (!cancelled) {
+          setEngine('leaflet');
+          onEngineChange?.('leaflet', `MapLibre module load failed: ${err?.message || err}`);
+        }
       });
 
     return () => {
@@ -648,7 +654,10 @@ export default function MapView({
       })
       .catch((err) => {
         console.warn('[MapView] Vector style failed, falling back to Leaflet:', err);
-        if (!cancelled) setEngine('leaflet');
+        if (!cancelled) {
+          setEngine('leaflet');
+          onEngineChange?.('leaflet', `Style fetch failed: ${err?.message || err}`);
+        }
       });
 
     return () => {
@@ -701,6 +710,7 @@ export default function MapView({
     } catch (err) {
       console.warn('[MapView] MapLibre creation threw, switching to Leaflet:', err);
       setEngine('leaflet');
+      onEngineChange?.('leaflet', `Map creation threw: ${(err as any)?.message || err}`);
       return;
     }
 
@@ -710,7 +720,10 @@ export default function MapView({
       const msg = String(e?.error?.message || '');
       if (msg.includes('WebGL') || msg.includes('GPU') || msg.includes('context')) {
         console.warn('[MapView] WebGL runtime error, switching to Leaflet:', msg);
-        if (!disposed) setEngine('leaflet');
+        if (!disposed) {
+          setEngine('leaflet');
+          onEngineChange?.('leaflet', `WebGL runtime error: ${msg}`);
+        }
       } else {
         if (!disposed) setStyleReady(true);
       }
@@ -721,6 +734,7 @@ export default function MapView({
     } catch (err) {
       console.warn('[MapView] setStyle error, switching to Leaflet:', err);
       setEngine('leaflet');
+      onEngineChange?.('leaflet', `setStyle error: ${(err as any)?.message || err}`);
       return;
     }
 
@@ -745,7 +759,12 @@ export default function MapView({
 
     map.on('moveend', onMoveEnd);
     map.on('move', onMove);
-    map.on('load', () => { if (!disposed) setStyleReady(true); });
+    map.on('load', () => {
+      if (!disposed) {
+        setStyleReady(true);
+        onEngineChange?.('maplibre');
+      }
+    });
 
     return () => {
       disposed = true;
@@ -827,7 +846,7 @@ export default function MapView({
       return;
     }
     const map = mapRef.current;
-    if (!map || !ml) return;
+    if (!map || !ml || !styleReady) return;
     if (!Number.isFinite(followPosition.lat) || !Number.isFinite(followPosition.lng)) return;
 
     if (!riderPuckMarkerRef.current) {
@@ -848,7 +867,7 @@ export default function MapView({
       if (rotor) rotor.style.transform = `rotate(${followHeading}deg)`;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [engine, ml, followPosition?.lat, followPosition?.lng, followHeading]);
+  }, [engine, ml, styleReady, followPosition?.lat, followPosition?.lng, followHeading]);
 
   // MapLibre Single-marker auto-center
   useEffect(() => {
@@ -919,7 +938,7 @@ export default function MapView({
   //    whenever followPosition is provided. easeTo (not jumpTo) gives a
   //    smooth glide between GPS fixes instead of a jarring snap. ──────
   useEffect(() => {
-    if (engine !== 'maplibre' || !mapRef.current || !followPosition) return;
+    if (engine !== 'maplibre' || !mapRef.current || !styleReady || !followPosition) return;
     if (!Number.isFinite(followPosition.lat) || !Number.isFinite(followPosition.lng)) return;
     try {
       mapRef.current.easeTo({
@@ -934,7 +953,7 @@ export default function MapView({
       void 0;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [engine, followPosition?.lat, followPosition?.lng, followHeading]);
+  }, [engine, styleReady, followPosition?.lat, followPosition?.lng, followHeading]);
 
   // MapLibre Secondary route
   useEffect(() => {
