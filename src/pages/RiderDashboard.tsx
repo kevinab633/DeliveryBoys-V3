@@ -10,7 +10,7 @@ import { cn, formatCurrency, formatDistance, formatDate, timeAgo } from '../lib/
 import { calculateDistance } from '../lib/pricing';
 import { RiderProfile, Order } from '../lib/types';
 import MapView from '../components/MapView';
-import { fetchTurnByTurnRoute, DirectionStep } from '../components/MapView';
+import { fetchTurnByTurnRoute, DirectionStep, CongestionSegment } from '../components/MapView';
 import { showToast } from '../components/Toast';
 
 const SHEET_COLLAPSED = 190;
@@ -316,11 +316,15 @@ function ActiveDeliveryView({
   // the rider actually moves — throttled to every 20s to stay well
   // clear of Mapbox rate limits rather than firing on every GPS tick.
   const [routeTotals, setRouteTotals] = useState<{ distanceMeters: number; durationSeconds: number } | null>(null);
+  const [congestionSegments, setCongestionSegments] = useState<CongestionSegment[]>([]);
+  const [speedLimitKmh, setSpeedLimitKmh] = useState<number | null>(null);
+  const [rerouteNonce, setRerouteNonce] = useState(0);
   const lastFetchRef = useRef(0);
   useEffect(() => {
-    if (!hasRiderFix || !riderLocation) { setSteps([]); setRouteTotals(null); return; }
+    if (!hasRiderFix || !riderLocation) { setSteps([]); setRouteTotals(null); setCongestionSegments([]); setSpeedLimitKmh(null); return; }
     const now = Date.now();
-    if (now - lastFetchRef.current < 20_000 && lastFetchRef.current !== 0) return;
+    const forced = rerouteNonce > 0;
+    if (!forced && now - lastFetchRef.current < 20_000 && lastFetchRef.current !== 0) return;
     lastFetchRef.current = now;
     let cancelled = false;
     fetchTurnByTurnRoute([riderLocation.lat, riderLocation.lng], [leg.coords.lat, leg.coords.lng])
@@ -328,22 +332,29 @@ function ActiveDeliveryView({
         if (cancelled) return;
         setSteps(res?.steps || []);
         setRouteTotals(res ? { distanceMeters: res.distanceMeters, durationSeconds: res.durationSeconds } : null);
+        setCongestionSegments(res?.congestionSegments || []);
+        setSpeedLimitKmh(res?.speedLimitKmh ?? null);
       })
-      .catch(() => { if (!cancelled) { setSteps([]); setRouteTotals(null); } });
+      .catch(() => { if (!cancelled) { setSteps([]); setRouteTotals(null); setCongestionSegments([]); setSpeedLimitKmh(null); } });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [leg.coords.lat, leg.coords.lng, hasRiderFix, riderLocation?.lat, riderLocation?.lng]);
+  }, [leg.coords.lat, leg.coords.lng, hasRiderFix, riderLocation?.lat, riderLocation?.lng, rerouteNonce]);
 
   // Nearest upcoming step to the rider's current position — a rough but
   // effective way to advance "next instruction" without full route
   // progress-matching, which would need much more map-matching logic.
-  const currentStep = steps.length > 0 && riderLocation
-    ? steps.reduce((closest, s) => {
+  const currentStepIndex = steps.length > 0 && riderLocation
+    ? steps.reduce((closestIdx, s, i) => {
         const d = calculateDistance(riderLocation.lat, riderLocation.lng, s.location[0], s.location[1]);
-        const dClosest = calculateDistance(riderLocation.lat, riderLocation.lng, closest.location[0], closest.location[1]);
-        return d < dClosest ? s : closest;
-      })
-    : null;
+        const dClosest = calculateDistance(riderLocation.lat, riderLocation.lng, steps[closestIdx].location[0], steps[closestIdx].location[1]);
+        return d < dClosest ? i : closestIdx;
+      }, 0)
+    : -1;
+  const currentStep = currentStepIndex >= 0 ? steps[currentStepIndex] : null;
+  // Secondary action preview — the maneuver immediately after the
+  // current one, shown as a smaller sub-banner (per Google's own layout:
+  // primary instruction, then a preview of what follows it).
+  const nextStep = currentStepIndex >= 0 && currentStepIndex + 1 < steps.length ? steps[currentStepIndex + 1] : null;
 
   const legRoute: [number, number][] | undefined = hasRiderFix && riderLocation
     ? [[riderLocation.lat, riderLocation.lng], [leg.coords.lat, leg.coords.lng]]
@@ -369,6 +380,18 @@ function ActiveDeliveryView({
     ? Math.min(100, Math.max(0, 100 - (routeTotals.distanceMeters / initialTotalRef.current) * 100))
     : 0;
 
+  // ETA color reflects the worst congestion level on the route ahead —
+  // green/orange/red per Google's own spec, rather than a flat neutral
+  // color regardless of how bad traffic actually is.
+  const worstCongestion = congestionSegments.reduce((worst, s) => {
+    const rank: Record<string, number> = { unknown: 0, low: 1, moderate: 2, heavy: 3, severe: 4 };
+    return rank[s.level] > rank[worst] ? s.level : worst;
+  }, 'unknown' as CongestionSegment['level']);
+  const etaColorClass =
+    worstCongestion === 'severe' || worstCongestion === 'heavy' ? 'text-red-600'
+    : worstCongestion === 'moderate' ? 'text-orange-500'
+    : 'text-green-600';
+
   const nextAction =
     order.status === 'accepted' ? { label: 'Mark Picked Up', next: 'picked_up' as const }
     : order.status === 'picked_up' ? { label: 'Start Delivery', next: 'in_transit' as const }
@@ -377,6 +400,10 @@ function ActiveDeliveryView({
   const ManeuverIcon = currentStep?.maneuverModifier === 'left' ? ArrowLeft
     : currentStep?.maneuverModifier === 'right' ? ArrowRight
     : currentStep?.maneuverType === 'arrive' ? MapPin
+    : ArrowUp;
+  const NextManeuverIcon = nextStep?.maneuverModifier === 'left' ? ArrowLeft
+    : nextStep?.maneuverModifier === 'right' ? ArrowRight
+    : nextStep?.maneuverType === 'arrive' ? MapPin
     : ArrowUp;
 
   return (
@@ -394,6 +421,7 @@ function ActiveDeliveryView({
         ]}
         route={[[order.pickup.lat, order.pickup.lng], [order.dropoff.lat, order.dropoff.lng]]}
         secondaryRoute={legRoute}
+        congestionRoute={congestionSegments}
         className="absolute inset-0"
         interactive={true}
         forceLightMode
@@ -402,37 +430,57 @@ function ActiveDeliveryView({
         onEngineChange={(engine, reason) => setEngineDebug({ engine, reason })}
       />
 
-      {/* Turn instruction (top-left) + speedometer (top-right) — mirrors
-          Yango's actual driving-mode top bar layout: maneuver card on
-          one side, live speed on the other, matching real GPS movement
-          rather than a placeholder. This banner (not a top bar) is the
-          only thing pinned to the top of the screen. */}
+      {/* Top navigation banner — primary instruction + secondary preview
+          of the following maneuver (per Google's own layout: a smaller
+          sub-banner showing what comes right after the current turn),
+          plus speed limit alongside your live speed on the right. */}
       <div className="relative z-10 flex items-start justify-between gap-2 px-3 pt-3">
         {currentStep ? (
-          <div className="bg-gray-900 text-white rounded-2xl shadow-xl px-4 py-3 flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-full bg-white/15 flex items-center justify-center shrink-0">
-              <ManeuverIcon size={20} />
+          <div className="flex flex-col gap-1 min-w-0">
+            <div className="bg-gray-900 text-white rounded-2xl shadow-xl px-4 py-3 flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-full bg-white/15 flex items-center justify-center shrink-0">
+                <ManeuverIcon size={20} />
+              </div>
+              <div className="min-w-0">
+                <p className="font-bold text-base leading-tight truncate">
+                  {formatDistance(currentStep.distanceMeters / 1000)}
+                </p>
+                <p className="text-xs text-white/60 truncate">{currentStep.instruction}</p>
+              </div>
             </div>
-            <div className="min-w-0">
-              <p className="font-bold text-base leading-tight truncate">
-                {formatDistance(currentStep.distanceMeters / 1000)}
-              </p>
-              <p className="text-xs text-white/60 truncate">{currentStep.instruction}</p>
-            </div>
+            {/* Secondary action preview: the maneuver right after this one. */}
+            {nextStep && (
+              <div className="bg-gray-800/90 text-white/70 rounded-xl px-3 py-1.5 flex items-center gap-2 ml-4 max-w-[85%]">
+                <span className="text-[10px] font-semibold uppercase tracking-wide shrink-0">Then</span>
+                <NextManeuverIcon size={13} className="shrink-0" />
+                <p className="text-[11px] truncate">{nextStep.instruction}</p>
+              </div>
+            )}
           </div>
         ) : <div />}
 
         <div className="flex flex-col items-end gap-2 shrink-0">
-          {/* Speedometer — live speed derived from consecutive real GPS
-              fixes (watchPosition doesn't reliably expose device speed
-              directly on all browsers, so this is computed the same way
-              as heading, from distance/time between fixes). */}
-          {speedKmh !== null && (
-            <div className="bg-white rounded-2xl shadow-lg w-14 h-14 flex flex-col items-center justify-center border-2 border-gray-900">
-              <span className="font-extrabold text-gray-900 text-lg leading-none">{Math.round(speedKmh)}</span>
-              <span className="text-[9px] text-gray-500 font-semibold leading-none mt-0.5">km/h</span>
-            </div>
-          )}
+          {/* Speed limit + your speed, side by side like Google's own
+              safety overlay — flashes red when over the posted limit. */}
+          <div className="flex items-center gap-1.5">
+            {speedLimitKmh !== null && (
+              <div className="bg-white rounded-full w-12 h-12 flex flex-col items-center justify-center border-[3px] border-red-600">
+                <span className="font-extrabold text-gray-900 text-base leading-none">{speedLimitKmh}</span>
+              </div>
+            )}
+            {speedKmh !== null && (
+              <div className={cn('rounded-2xl shadow-lg w-14 h-14 flex flex-col items-center justify-center border-2',
+                speedLimitKmh !== null && speedKmh > speedLimitKmh + 5
+                  ? 'bg-red-600 border-red-700 animate-pulse' : 'bg-white border-gray-900')}>
+                <span className={cn('font-extrabold text-lg leading-none',
+                  speedLimitKmh !== null && speedKmh > speedLimitKmh + 5 ? 'text-white' : 'text-gray-900')}>
+                  {Math.round(speedKmh)}
+                </span>
+                <span className={cn('text-[9px] font-semibold leading-none mt-0.5',
+                  speedLimitKmh !== null && speedKmh > speedLimitKmh + 5 ? 'text-white/80' : 'text-gray-500')}>km/h</span>
+              </div>
+            )}
+          </div>
           <button onClick={onMinimize}
             className="w-11 h-11 rounded-full bg-white shadow-lg flex items-center justify-center text-gray-700">
             <ChevronDown size={22} />
@@ -464,12 +512,13 @@ function ActiveDeliveryView({
 
             {/* Trip metrics: arrival time + remaining distance + time
                 together, plus a progress bar — matches Yango's real
-                driving_modal_view layout rather than a single line. */}
+                driving_modal_view layout. Arrival time colored by live
+                traffic severity, per Google's own ETA color spec. */}
             {routeTotals && (
               <div className="space-y-2">
                 <div className="flex items-baseline justify-between">
                   <div className="flex items-baseline gap-1.5">
-                    <span className="font-extrabold text-gray-900 text-xl">{arrivalTime}</span>
+                    <span className={cn('font-extrabold text-xl', etaColorClass)}>{arrivalTime}</span>
                     <span className="text-xs text-gray-400 font-medium">arrival</span>
                   </div>
                   <div className="text-right text-sm text-gray-500 font-semibold">
@@ -505,15 +554,34 @@ function ActiveDeliveryView({
             </button>
           </div>
         ) : (
-          <div className="flex items-center gap-2">
-            <button onClick={() => setDetailsOpen(true)}
-              className="flex-1 bg-white rounded-2xl shadow-xl px-4 py-3.5 flex items-center gap-2 font-semibold text-sm text-gray-900">
-              <ChevronUp size={16} className="text-gray-400" /> {order.displayCode} · {formatCurrency(order.price)}
-            </button>
-            <button onClick={() => onStatusUpdate(order.id, nextAction.next)}
-              className="bg-brand text-white px-5 py-3.5 rounded-2xl font-bold text-sm shadow-xl shadow-brand/30 whitespace-nowrap">
-              {nextAction.label}
-            </button>
+          <div className="space-y-2">
+            {/* Persistent trip summary bar, always visible even
+                collapsed — per Google's spec: time | distance | ETA,
+                with re-route and stop controls, not tucked behind a tap. */}
+            {routeTotals && (
+              <div className="bg-gray-900 text-white rounded-2xl shadow-xl px-4 py-2.5 flex items-center justify-between text-sm">
+                <div className="flex items-center gap-3 font-semibold">
+                  <span>{remainingMin} min</span>
+                  <span className="text-white/40">|</span>
+                  <span>{formatDistance(remainingKm || 0)}</span>
+                  <span className="text-white/40">|</span>
+                  <span className={etaColorClass.replace('text-', 'text-')}>{arrivalTime}</span>
+                </div>
+                <button onClick={() => setRerouteNonce(n => n + 1)} className="text-white/60 text-xs font-semibold underline underline-offset-2">
+                  Re-route
+                </button>
+              </div>
+            )}
+            <div className="flex items-center gap-2">
+              <button onClick={() => setDetailsOpen(true)}
+                className="flex-1 bg-white rounded-2xl shadow-xl px-4 py-3.5 flex items-center gap-2 font-semibold text-sm text-gray-900">
+                <ChevronUp size={16} className="text-gray-400" /> {order.displayCode} · {formatCurrency(order.price)}
+              </button>
+              <button onClick={() => onStatusUpdate(order.id, nextAction.next)}
+                className="bg-brand text-white px-5 py-3.5 rounded-2xl font-bold text-sm shadow-xl shadow-brand/30 whitespace-nowrap">
+                {nextAction.label}
+              </button>
+            </div>
           </div>
         )}
       </div>

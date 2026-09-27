@@ -279,6 +279,10 @@ export interface DirectionsResult {
    *  color resources) rather than a single flat-colored line. Empty when
    *  traffic data isn't available for the requested area. */
   congestionSegments: CongestionSegment[];
+  /** Posted speed limit for roughly the start of this leg, in km/h — null
+   *  when Mapbox has no speed-limit data for the area (common outside
+   *  well-mapped regions). */
+  speedLimitKmh: number | null;
 }
 
 export async function fetchTurnByTurnRoute(
@@ -297,7 +301,7 @@ export async function fetchTurnByTurnRoute(
       `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/` +
       `${lngA},${latA};${lngB},${latB}` +
       `?geometries=geojson&overview=full&steps=true&banner_instructions=false` +
-      `&annotations=congestion&access_token=${MAPBOX_TOKEN}`;
+      `&annotations=congestion,maxspeed&access_token=${MAPBOX_TOKEN}`;
     const res = await fetch(url);
     if (!res.ok) return null;
     const json = await res.json();
@@ -351,11 +355,23 @@ export async function fetchTurnByTurnRoute(
       }
     }
 
+    // Speed limit for the segment nearest the route's start — a single
+    // representative value for display (per-segment speed-limit-following
+    // UI, like Google's, would need matching the rider's live position to
+    // the nearest annotated segment on every tick; this gives a "current
+    // road's limit" reading that's close enough without that complexity).
+    const maxspeedRaw: any[] = legs.flatMap((l: any) => l?.annotation?.maxspeed || []);
+    const firstKnownSpeed = maxspeedRaw.find(s => s && typeof s.speed === 'number' && s.unit);
+    const speedLimitKmh = firstKnownSpeed
+      ? (firstKnownSpeed.unit === 'mph' ? Math.round(firstKnownSpeed.speed * 1.60934) : Math.round(firstKnownSpeed.speed))
+      : null;
+
     return {
       coords,
       steps,
       distanceMeters: Number(route?.distance) || 0,
       durationSeconds: Number(route?.duration) || 0,
+      speedLimitKmh,
       congestionSegments,
     };
   } catch {
@@ -507,6 +523,7 @@ export default function MapView({
   followPosition,
   followHeading,
   onEngineChange,
+  congestionRoute,
 }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [engine, setEngine] = useState<'maplibre' | 'leaflet'>(() =>
@@ -533,9 +550,11 @@ export default function MapView({
   const mainPtsRef = useRef<[number, number][] | null>(null);
   const mainDrawnRef = useRef<[number, number][] | null>(null);
   const secondaryPtsRef = useRef<[number, number][] | null>(null);
+  const congestionSegmentsRef = useRef<CongestionSegment[]>([]);
   const pathCasingRef = useRef<SVGPathElement>(null);
   const pathMainRef = useRef<SVGPathElement>(null);
   const pathSecondaryRef = useRef<SVGPathElement>(null);
+  const congestionGroupRef = useRef<SVGGElement>(null);
   const animRef = useRef(0);
 
   const onClickRef = useRef(onMapClick);
@@ -688,6 +707,41 @@ export default function MapView({
     if (pathCasingRef.current) pathCasingRef.current.setAttribute('d', toD(mainPtsRef.current));
     if (pathMainRef.current) pathMainRef.current.setAttribute('d', toD(mainDrawnRef.current));
     if (pathSecondaryRef.current) pathSecondaryRef.current.setAttribute('d', toD(secondaryPtsRef.current));
+
+    // Traffic-colored segments (from congestionRoute), drawn as their own
+    // set of paths on top of the main route — one per contiguous
+    // same-congestion run, colored green/yellow/orange/red per Mapbox's
+    // congestion level, matching how Yango/Google show live traffic
+    // density directly on the route rather than a single flat color.
+    const group = congestionGroupRef.current;
+    if (group) {
+      const segments = congestionSegmentsRef.current;
+      // Reuse existing <path> children where possible instead of
+      // recreating the whole set every redraw (which fires on every
+      // map move/pan), to avoid needless DOM churn while panning.
+      while (group.children.length > segments.length) {
+        group.removeChild(group.lastChild as ChildNode);
+      }
+      while (group.children.length < segments.length) {
+        group.appendChild(document.createElementNS('http://www.w3.org/2000/svg', 'path'));
+      }
+      segments.forEach((seg, i) => {
+        const el = group.children[i] as SVGPathElement;
+        const color =
+          seg.level === 'severe' ? '#7F1D1D'
+          : seg.level === 'heavy' ? '#DC2626'
+          : seg.level === 'moderate' ? '#F59E0B'
+          : seg.level === 'low' ? '#22C55E'
+          : '#3B82F6'; // unknown congestion data: fall back to plain active-route blue
+        el.setAttribute('d', toD(seg.coords));
+        el.setAttribute('fill', 'none');
+        el.setAttribute('stroke', color);
+        el.setAttribute('stroke-width', followPosition ? '8' : '5');
+        el.setAttribute('stroke-opacity', '0.95');
+        el.setAttribute('stroke-linecap', 'round');
+        el.setAttribute('stroke-linejoin', 'round');
+      });
+    }
   }, []);
   const redrawRef = useRef(redrawRoutes);
   redrawRef.current = redrawRoutes;
@@ -976,6 +1030,18 @@ export default function MapView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engine, secondaryRouteKey, styleReady]);
 
+  // MapLibre Congestion (traffic-colored) route segments
+  const congestionKey = (congestionRoute || [])
+    .map(s => `${s.level}:${s.coords.map(c => `${c[0].toFixed(4)},${c[1].toFixed(4)}`).join(',')}`)
+    .join('|');
+  const hasCongestionData = (congestionRoute || []).length > 0;
+  useEffect(() => {
+    if (engine !== 'maplibre') return;
+    congestionSegmentsRef.current = congestionRoute || [];
+    redrawRoutes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [engine, congestionKey, styleReady]);
+
   // ─────────────────────────────────────────────────────────────────────
   // LEAFLET FALLBACK INITIALIZATION & LOGIC
   // ─────────────────────────────────────────────────────────────────────
@@ -1252,7 +1318,7 @@ export default function MapView({
               (followPosition active) to match a real nav app's route
               weight — a plain thin line reads as a static map, not an
               active "follow this" indicator. */}
-          <path ref={pathCasingRef} fill="none" stroke={followPosition ? '#C41E1E' : '#ffffff'}
+          <path ref={pathCasingRef} fill="none" stroke={followPosition ? '#2563EB' : '#ffffff'}
             strokeWidth={followPosition ? 16 : 9} strokeOpacity={followPosition ? 0.25 : 0.7}
             strokeLinecap="round" strokeLinejoin="round" />
           {/* Rider → pickup leg: solid, theme-aware — white on a dark
@@ -1260,8 +1326,20 @@ export default function MapView({
               trip route without a dashed pattern competing for attention. */}
           <path ref={pathSecondaryRef} fill="none" stroke={dk ? '#FFFFFF' : '#374151'}
             strokeWidth={followPosition ? 6 : 4.5} strokeOpacity={0.95} strokeLinecap="round" strokeLinejoin="round" />
-          <path ref={pathMainRef} fill="none" stroke="#C41E1E"
-            strokeWidth={followPosition ? 8 : 5} strokeOpacity={0.95} strokeLinecap="round" strokeLinejoin="round" />
+          {/* Plain active-route line — Google's own spec colors this
+              blue, not red. Hidden when live congestion data is present,
+              since the congestion segments below fully replace it with
+              traffic-colored pieces covering the same path; without
+              hiding it, the two would overlap and just look like a
+              slightly thicker blue line with no visible traffic info. */}
+          {congestionSegmentsRef.current.length === 0 && !hasCongestionData && (
+            <path ref={pathMainRef} fill="none" stroke="#2563EB"
+              strokeWidth={followPosition ? 8 : 5} strokeOpacity={0.95} strokeLinecap="round" strokeLinejoin="round" />
+          )}
+          {/* Traffic-colored segments — green/yellow/orange/red pieces
+              covering the same path, matching Google's and Yango's own
+              real-time traffic overlay instead of one flat color. */}
+          <g ref={congestionGroupRef} />
         </svg>
       )}
 
