@@ -61,6 +61,14 @@ export interface MapViewProps {
    *  since console.warn is invisible without remote debugging on a
    *  phone. Not meant to stay long-term once the real cause is found. */
   onEngineChange?: (engine: 'maplibre' | 'leaflet', reason?: string) => void;
+  /** Bump this number to make the map resume following the rider after
+   *  the user manually panned away — drives the nav screen's Re-centre
+   *  button. */
+  recenterSignal?: number;
+  /** Fires whenever follow-mode is paused (user dragged the map) or
+   *  resumed, so the parent can show/hide its Re-centre button only
+   *  while it's actually needed. */
+  onFollowPausedChange?: (paused: boolean) => void;
 }
 
 // ── Mapbox style + token ───────────────────────────────────────────────
@@ -524,6 +532,8 @@ export default function MapView({
   followHeading,
   onEngineChange,
   congestionRoute,
+  recenterSignal,
+  onFollowPausedChange,
 }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [engine, setEngine] = useState<'maplibre' | 'leaflet'>(() =>
@@ -545,6 +555,12 @@ export default function MapView({
   const leafletLocateMarkerRef = useRef<LeafletType.Marker | null>(null);
 
   const [styleReady, setStyleReady] = useState(false);
+  // Paused whenever the rider manually drags the map during turn-by-turn
+  // navigation — matches Google Maps' own behavior: panning away stops
+  // the camera auto-following until the rider explicitly re-centers.
+  // Without this, the camera would just yank itself back mid-drag, which
+  // makes freely panning around impossible.
+  const [followPaused, setFollowPaused] = useState(false);
 
   // SVG route overlay refs (used in MapLibre mode)
   const mainPtsRef = useRef<[number, number][] | null>(null);
@@ -810,9 +826,15 @@ export default function MapView({
       }
     };
     const onMove = () => redrawRef.current();
+    // MapLibre distinguishes user-initiated drags from programmatic
+    // camera moves (like our own follow-camera easeTo calls) via
+    // *DragStart specifically — this only fires for real touch/mouse
+    // drags, so it won't falsely trigger from our own auto-follow.
+    const onDragStart = () => setFollowPaused(true);
 
     map.on('moveend', onMoveEnd);
     map.on('move', onMove);
+    map.on('dragstart', onDragStart);
     map.on('load', () => {
       if (!disposed) {
         setStyleReady(true);
@@ -827,6 +849,7 @@ export default function MapView({
       if (map) {
         try { map.off('moveend', onMoveEnd); } catch { void 0; }
         try { map.off('move', onMove); } catch { void 0; }
+        try { map.off('dragstart', onDragStart); } catch { void 0; }
       }
       markerRefs.current.forEach((m) => {
         try { m.remove(); } catch { void 0; }
@@ -993,6 +1016,7 @@ export default function MapView({
   //    smooth glide between GPS fixes instead of a jarring snap. ──────
   useEffect(() => {
     if (engine !== 'maplibre' || !mapRef.current || !styleReady || !followPosition) return;
+    if (followPaused) return;
     if (!Number.isFinite(followPosition.lat) || !Number.isFinite(followPosition.lng)) return;
     try {
       mapRef.current.easeTo({
@@ -1001,13 +1025,38 @@ export default function MapView({
         pitch: 55,
         zoom: 17.5,
         duration: 900,
-        easing: (t) => t,
+        // Ease-out cubic instead of linear: the camera decelerates into
+        // each new position instead of moving at a constant speed and
+        // stopping abruptly, which is what made the follow-camera feel
+        // mechanical rather than smooth.
+        easing: (t) => 1 - Math.pow(1 - t, 3),
       });
     } catch {
       void 0;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [engine, styleReady, followPosition?.lat, followPosition?.lng, followHeading]);
+  }, [engine, styleReady, followPaused, followPosition?.lat, followPosition?.lng, followHeading]);
+
+  // Parent-triggered recenter: bumping recenterSignal resumes following
+  // (clears the pause set by a manual drag) and immediately re-snaps the
+  // camera onto the rider — this is what the nav screen's Re-centre
+  // button drives.
+  useEffect(() => {
+    if (!recenterSignal) return;
+    setFollowPaused(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recenterSignal]);
+
+  // A fresh navigation session (followPosition going from off to on)
+  // should never start paused from a leftover drag in a previous one.
+  useEffect(() => {
+    if (!followPosition) setFollowPaused(false);
+  }, [!!followPosition]);
+
+  useEffect(() => {
+    onFollowPausedChange?.(followPaused);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [followPaused]);
 
   // MapLibre Secondary route — the rider→destination "you are heading
   // here" indicator. Drawn as a direct straight line, updated instantly

@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useEffect } from 'react';
 import { useThemeStore } from './stores/themeStore';
 import { useOrderStore } from './stores/orderStore';
@@ -34,7 +35,8 @@ const FULL_SCREEN_ROUTES = ['/book', '/track', '/rider/dashboard'];
 
 function AppContent() {
   const theme = useThemeStore(s => s.theme);
-  const { pathname } = useLocation();
+  const location = useLocation();
+  const { pathname } = location;
   const isFullScreen = FULL_SCREEN_ROUTES.includes(pathname);
   const user = useAuthStore(s => s.user);
 
@@ -129,7 +131,21 @@ function AppContent() {
       <ScrollToTop />
       {!isFullScreen && <Navbar />}
       <main className="min-h-screen">
-        <Routes>
+        {/* Route-level page transition: a short fade + slight upward
+            slide on every screen change instead of an instant snap.
+            Only opacity/transform are animated (GPU-friendly), and the
+            duration is kept brief so it feels responsive rather than
+            slow, which matters on mid-range phones and in the native
+            app conversion where navigation should feel native. */}
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={pathname}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+          >
+        <Routes location={location}>
           <Route path="/" element={<Home />} />
           <Route path="/services" element={<Services />} />
           <Route path="/book" element={<Book />} />
@@ -144,6 +160,8 @@ function AppContent() {
           <Route path="/profile" element={<Profile />} />
           <Route path="/my-orders" element={<MyOrders />} />
         </Routes>
+          </motion.div>
+        </AnimatePresence>
       </main>
       {!isFullScreen && <Footer />}
       {!isFullScreen && <WhatsAppFloat />}

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Package, MapPin, DollarSign, Star, Clock, Calendar, PhoneCall, MessageSquare, Power, PowerOff, Eye, X, ChevronUp, ChevronDown, CheckCircle2, Navigation2, ArrowLeft, ArrowRight, ArrowUp } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useThemeStore } from '../stores/themeStore';
@@ -216,59 +216,35 @@ function IncomingOrderModal({ order, taken, dk, riderLocation, onAccept, onDecli
 // block the map. No native app has room for a permanent top address
 // bar the way a web page does, so this view deliberately has none.
 function ActiveDeliveryView({
-  order, riderLocation, dk, onStatusUpdate, onMinimize,
+  order, riderLocation, gpsHeading, dk, onStatusUpdate, onMinimize,
 }: {
   order: Order;
   riderLocation?: { lat: number; lng: number };
+  gpsHeading?: number | null;
   dk: boolean;
   onStatusUpdate: (orderId: string, status: 'picked_up' | 'in_transit' | 'delivered') => void;
   onMinimize: () => void;
 }) {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [steps, setSteps] = useState<DirectionStep[]>([]);
-  const [heading, setHeading] = useState<number | undefined>(undefined);
+  const [computedHeading, setComputedHeading] = useState<number | undefined>(undefined);
   const [speedKmh, setSpeedKmh] = useState<number | null>(null);
-  const [engineDebug, setEngineDebug] = useState<{ engine: 'maplibre' | 'leaflet'; reason?: string } | null>(null);
+  const [followPaused, setFollowPaused] = useState(false);
+  const [recenterSignal, setRecenterSignal] = useState(0);
   const prevPosRef = useRef<{ lat: number; lng: number; t: number } | null>(null);
-  // Whether the last heading update came from the device compass
-  // (accurate even while stationary) vs. GPS movement bearing (only
-  // available once actually moving) — GPS movement is treated as the
-  // more trustworthy source once available, since compass readings can
-  // drift, but compass is what lets the arrow turn as the phone turns
-  // while parked or crawling in traffic, which GPS bearing alone cannot.
-  const usingCompassRef = useRef(false);
 
-  // Device compass — subscribes to real orientation events so the map
-  // can rotate to match which way the phone (and rider) is actually
-  // facing even at 0 km/h. iOS Safari requires an explicit permission
-  // prompt for this; Android Chrome generally does not.
-  useEffect(() => {
-    if (typeof window === 'undefined' || !('DeviceOrientationEvent' in window)) return;
-
-    function handleOrientation(e: DeviceOrientationEvent) {
-      // webkitCompassHeading (iOS) is already a true compass heading;
-      // alpha (standard) is relative to the device's initial orientation
-      // and needs inverting to become a compass heading in most browsers.
-      const anyE = e as any;
-      let compassHeading: number | null = null;
-      if (typeof anyE.webkitCompassHeading === 'number') {
-        compassHeading = anyE.webkitCompassHeading;
-      } else if (typeof e.alpha === 'number') {
-        compassHeading = (360 - e.alpha) % 360;
-      }
-      if (compassHeading !== null && Number.isFinite(compassHeading)) {
-        usingCompassRef.current = true;
-        setHeading(compassHeading);
-      }
-    }
-
-    window.addEventListener('deviceorientationabsolute', handleOrientation as any, true);
-    window.addEventListener('deviceorientation', handleOrientation, true);
-    return () => {
-      window.removeEventListener('deviceorientationabsolute', handleOrientation as any, true);
-      window.removeEventListener('deviceorientation', handleOrientation, true);
-    };
-  }, []);
+  // Real GPS course-over-ground (from watchPosition's own coords.heading,
+  // captured by the parent) is the primary, most reliable source — it
+  // comes straight from the device's GPS chip's own direction-of-travel
+  // calculation. The device compass (deviceorientation) was tried here
+  // previously but removed: its "alpha" value is frequently relative to
+  // whatever orientation the device happened to be in when the listener
+  // attached, not a true compass bearing, and produced arrows pointing in
+  // directions with no relation to the actual road — worse than having
+  // no heading at all. When GPS doesn't report a heading (stationary, or
+  // unsupported), fall back to a bearing computed between the last two
+  // real position fixes.
+  const heading = Number.isFinite(gpsHeading as number) ? (gpsHeading as number) : computedHeading;
 
   const leg = order.status === 'accepted'
     ? { label: 'Pickup', address: order.pickup.address, coords: order.pickup }
@@ -276,12 +252,10 @@ function ActiveDeliveryView({
 
   const hasRiderFix = !!riderLocation && Number.isFinite(riderLocation.lat) && Number.isFinite(riderLocation.lng);
 
-  // Heading, computed from the bearing between consecutive real GPS
-  // fixes — there's no compass reading from watchPosition alone, but a
-  // moving vehicle's direction of travel is a reliable stand-in, exactly
-  // how Google Maps derives its arrow when not using the device compass.
-  // Speed is derived the same way (distance/time between fixes), matching
-  // Yango's driving-mode top bar, which shows a live speedometer.
+  // Fallback heading + speed, computed from the bearing/distance between
+  // consecutive real GPS fixes — used only when the device doesn't
+  // report coords.heading directly (e.g. some Android/browser
+  // combinations while moving slowly).
   useEffect(() => {
     if (!hasRiderFix || !riderLocation) return;
     const now = Date.now();
@@ -300,7 +274,7 @@ function ActiveDeliveryView({
       // and guard against a near-zero time delta producing a bogus spike.
       const moved = distKm > 0.003;
       if (moved) {
-        setHeading(brng);
+        setComputedHeading(brng);
         if (dtHours > 0) setSpeedKmh(Math.min(distKm / dtHours, 180)); // clamp absurd GPS-jump spikes
       } else if (now - prev.t > 5000) {
         // Stationary for a few seconds — show 0 rather than a stale speed.
@@ -356,9 +330,11 @@ function ActiveDeliveryView({
   // primary instruction, then a preview of what follows it).
   const nextStep = currentStepIndex >= 0 && currentStepIndex + 1 < steps.length ? steps[currentStepIndex + 1] : null;
 
-  const legRoute: [number, number][] | undefined = hasRiderFix && riderLocation
-    ? [[riderLocation.lat, riderLocation.lng], [leg.coords.lat, leg.coords.lng]]
-    : undefined;
+  // legRoute (the old straight-line rider→destination indicator) has
+  // been removed from this screen entirely — with real turn-by-turn
+  // routing and the traffic-colored route now doing the actual
+  // navigation job, a second unrelated straight line just draws an ugly,
+  // disconnected diagonal across the map instead of adding information.
 
   // Derived trip metrics for the bottom panel — mirrors Yango's real
   // driving_modal_view: arrival time + remaining distance + remaining
@@ -407,7 +383,11 @@ function ActiveDeliveryView({
     : ArrowUp;
 
   return (
-    <div className="fixed inset-0 z-40 flex flex-col bg-white">
+    <motion.div
+      initial={{ opacity: 0, y: 60 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: 'spring', stiffness: 260, damping: 30 }}
+      className="fixed inset-0 z-40 flex flex-col bg-white">
       {/* Map fills the whole screen — forceLightMode for sunlight
           readability, and follows/rotates with the rider like Google
           Maps navigation instead of a fixed top-down view. */}
@@ -420,14 +400,14 @@ function ActiveDeliveryView({
             : []),
         ]}
         route={[[order.pickup.lat, order.pickup.lng], [order.dropoff.lat, order.dropoff.lng]]}
-        secondaryRoute={legRoute}
         congestionRoute={congestionSegments}
         className="absolute inset-0"
         interactive={true}
         forceLightMode
         followPosition={hasRiderFix ? riderLocation : undefined}
         followHeading={heading}
-        onEngineChange={(engine, reason) => setEngineDebug({ engine, reason })}
+        recenterSignal={recenterSignal}
+        onFollowPausedChange={setFollowPaused}
       />
 
       {/* Top navigation banner — primary instruction + secondary preview
@@ -488,23 +468,37 @@ function ActiveDeliveryView({
         </div>
       </div>
 
-      {/* TEMPORARY diagnostic badge — shows which map engine is actually
-          running and why, since a silent fallback to Leaflet would
-          explain a flat, non-rotating map with none of the navigation
-          styling applied. Remove once the real cause is confirmed. */}
-      {engineDebug && (
-        <div className={cn('relative z-10 mx-3 mt-2 px-3 py-2 rounded-xl text-xs font-mono',
-          engineDebug.engine === 'maplibre' ? 'bg-green-600 text-white' : 'bg-red-600 text-white')}>
-          engine: {engineDebug.engine}{engineDebug.reason ? ` — ${engineDebug.reason}` : ''}
-        </div>
-      )}
+      {/* Re-centre — appears only after the rider has dragged the map
+          away from their position (follow-mode paused), like Google's
+          own "Re-centre" pill. Tapping it resumes auto-follow and snaps
+          the camera back onto the rider. Positioned above the bottom
+          trip controls so it can never be covered by them. */}
+      <AnimatePresence>
+        {followPaused && (
+          <motion.div key="recentre"
+            initial={{ opacity: 0, y: 16, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 16, scale: 0.9 }}
+            transition={{ type: 'spring', stiffness: 380, damping: 28 }}
+            className="relative z-10 px-3 mb-2 flex justify-start">
+            <button onClick={() => setRecenterSignal(n => n + 1)}
+              className="flex items-center gap-2 bg-gray-900 text-white px-5 py-3 rounded-full shadow-xl font-bold text-sm active:scale-95 transition-transform">
+              <Navigation2 size={16} /> Re-centre
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Trip-details toggle — a small pill instead of a permanent
           panel, so tapping it is the only time order info covers any
           of the map. */}
       <div className="relative z-10 mt-auto px-3 pb-3">
         {detailsOpen ? (
-          <div className="bg-white rounded-3xl shadow-2xl px-5 pt-2 pb-6 space-y-4">
+          <motion.div
+            initial={{ opacity: 0, y: 40 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ type: 'spring', stiffness: 320, damping: 30 }}
+            className="bg-white rounded-3xl shadow-2xl px-5 pt-2 pb-6 space-y-4">
             <button onClick={() => setDetailsOpen(false)}
               className="w-full flex items-center justify-center py-3 -mt-1 mb-1">
               <span className="w-10 h-1 bg-gray-300 rounded-full" />
@@ -552,7 +546,7 @@ function ActiveDeliveryView({
               className="w-full bg-brand text-white py-4 rounded-2xl font-bold text-base hover:bg-brand-dark transition shadow-lg shadow-brand/25">
               {nextAction.label}
             </button>
-          </div>
+          </motion.div>
         ) : (
           <div className="space-y-2">
             {/* Persistent trip summary bar, always visible even
@@ -585,7 +579,7 @@ function ActiveDeliveryView({
           </div>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -740,6 +734,14 @@ export default function RiderDashboard() {
   // it reopens automatically next time activeOrder changes (e.g. status
   // advances), so minimizing is a per-glance choice, not a dismissal.
   const [navMinimized, setNavMinimized] = useState(false);
+  // Real GPS course-over-ground, captured directly from watchPosition's
+  // own coords.heading — this is provided by the device's GPS chip when
+  // moving and is far more reliable than either a manually-computed
+  // bearing between two points or the device compass (deviceorientation
+  // is frequently unreliable/arbitrarily-zeroed across Android/Chrome).
+  // null when the device isn't moving fast enough for GPS to derive a
+  // course, or doesn't report it at all.
+  const [gpsHeading, setGpsHeading] = useState<number | null>(null);
   const [declinedIds, setDeclinedIds] = useState<string[]>([]);
   const seenIds = useRef<Set<string>>(new Set());
 
@@ -800,6 +802,9 @@ export default function RiderDashboard() {
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
         const { latitude: lat, longitude: lng } = pos.coords;
+        if (typeof pos.coords.heading === 'number' && Number.isFinite(pos.coords.heading)) {
+          setGpsHeading(pos.coords.heading);
+        }
         const now = Date.now();
         const movedEnough = lastSentLat === null || metersBetween(lastSentLat, lastSentLng!, lat, lng) >= 10;
         const timeEnough = now - lastSentAt >= 4000;
@@ -1068,6 +1073,7 @@ export default function RiderDashboard() {
         <ActiveDeliveryView
           order={activeOrder}
           riderLocation={rider.location}
+          gpsHeading={gpsHeading}
           dk={dk}
           onStatusUpdate={handleStatusUpdate}
           onMinimize={() => setNavMinimized(true)}

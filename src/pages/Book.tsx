@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Bike, Car, Truck, ArrowRight, ArrowLeft as ArrowLeftIcon, Info, CheckCircle2, ChevronUp, ChevronDown, Zap, Calendar, Star, X, AlertTriangle } from 'lucide-react';
 import { useThemeStore } from '../stores/themeStore';
 import { useAuthStore } from '../stores/authStore';
@@ -624,7 +624,7 @@ export default function Book() {
     </div>
   );
 
-  const panelContent =
+  const rawPanelContent =
     phase === 'form' ? formContent
     : phase === 'searching' ? searchingContent
     : phase === 'rider_responding' ? searchingContent
@@ -633,6 +633,30 @@ export default function Book() {
     : phase === 'no_riders' ? noRidersContent
     : phase === 'no_riders_scheduled' ? noRidersScheduledContent
     : scheduledContent;
+
+  // searching and rider_responding share one key on purpose — the swap
+  // between them is just a copy/color change on the same panel, so it
+  // shouldn't replay a full entrance animation. Every other phase change
+  // (form -> searching, searching -> assigned, ...) is a genuinely new
+  // screen and gets the fade + slide.
+  const panelKey =
+    phase === 'searching' || phase === 'rider_responding' ? 'searching'
+    : phase === 'just_assigned' || phase === 'assigned' ? 'assigned'
+    : phase;
+
+  const panelContent = (
+    <AnimatePresence mode="wait" initial={false}>
+      <motion.div
+        key={panelKey}
+        initial={{ opacity: 0, y: 14 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -8 }}
+        transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+      >
+        {rawPanelContent}
+      </motion.div>
+    </AnimatePresence>
+  );
 
   const panelTitle =
     phase === 'form' ? 'Book a Delivery'
