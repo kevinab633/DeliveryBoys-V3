@@ -939,10 +939,16 @@ export default function MapView({
       riderPuckMarkerRef.current.setLngLat([followPosition.lng, followPosition.lat]);
     }
 
-    if (Number.isFinite(followHeading)) {
-      const rotor = riderPuckMarkerRef.current.getElement()?.querySelector('.rider-heading-rotor') as HTMLElement | null;
-      if (rotor) rotor.style.transform = `rotate(${followHeading}deg)`;
-    }
+    // The map camera itself is already rotated to followHeading via
+    // easeTo({bearing}) above (or in the follow-camera effect), which
+    // turns the whole canvas so "forward" faces up on screen. Rotating
+    // this marker by the SAME heading again was double-applying the
+    // turn — the arrow ended up pointing roughly double the real angle
+    // away from the actual direction of travel. Once the map is already
+    // oriented to heading, the puck should just point straight up
+    // relative to the rotated canvas, i.e. no additional rotation here.
+    const rotor = riderPuckMarkerRef.current.getElement()?.querySelector('.rider-heading-rotor') as HTMLElement | null;
+    if (rotor) rotor.style.transform = 'rotate(0deg)';
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engine, ml, styleReady, followPosition?.lat, followPosition?.lng, followHeading]);
 

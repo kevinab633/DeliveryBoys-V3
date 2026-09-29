@@ -269,13 +269,18 @@ function ActiveDeliveryView({
       const brng = (toDeg(Math.atan2(y, x)) + 360) % 360;
       const distKm = calculateDistance(prev.lat, prev.lng, riderLocation.lat, riderLocation.lng);
       const dtHours = (now - prev.t) / 3_600_000;
-      // Only update heading/speed on real movement (a few metres), so
-      // they don't jitter randomly from GPS noise while stationary —
-      // and guard against a near-zero time delta producing a bogus spike.
-      const moved = distKm > 0.003;
+      const impliedKmh = dtHours > 0 ? distKm / dtHours : 0;
+      // Consumer GPS commonly has 3-8m of error even standing still, so
+      // a 3m threshold was letting pure noise compute a random bearing
+      // and spin the map to face nowhere real — this is what was making
+      // the camera rotate on its own while genuinely stationary. Require
+      // BOTH a real distance (15m — comfortably above typical jitter)
+      // AND a plausible implied speed (a real vehicle moving, not a GPS
+      // fix that "teleported" 15m in one tick while actually parked).
+      const moved = distKm > 0.015 && impliedKmh > 3 && impliedKmh < 180;
       if (moved) {
         setComputedHeading(brng);
-        if (dtHours > 0) setSpeedKmh(Math.min(distKm / dtHours, 180)); // clamp absurd GPS-jump spikes
+        setSpeedKmh(impliedKmh);
       } else if (now - prev.t > 5000) {
         // Stationary for a few seconds — show 0 rather than a stale speed.
         setSpeedKmh(0);
@@ -293,12 +298,18 @@ function ActiveDeliveryView({
   const [congestionSegments, setCongestionSegments] = useState<CongestionSegment[]>([]);
   const [speedLimitKmh, setSpeedLimitKmh] = useState<number | null>(null);
   const [rerouteNonce, setRerouteNonce] = useState(0);
+  const [rerouting, setRerouting] = useState(false);
   const lastFetchRef = useRef(0);
   useEffect(() => {
     if (!hasRiderFix || !riderLocation) { setSteps([]); setRouteTotals(null); setCongestionSegments([]); setSpeedLimitKmh(null); return; }
     const now = Date.now();
     const forced = rerouteNonce > 0;
-    if (!forced && now - lastFetchRef.current < 20_000 && lastFetchRef.current !== 0) return;
+    // Re-fetch every ~6s while actively navigating — the earlier 20s
+    // throttle was chosen purely to be conservative on API calls, but
+    // real turn-by-turn apps re-route much more often; at 20s the
+    // displayed route visibly lagged behind the rider's actual
+    // position/deviation instead of tracking it live.
+    if (!forced && now - lastFetchRef.current < 6_000 && lastFetchRef.current !== 0) return;
     lastFetchRef.current = now;
     let cancelled = false;
     fetchTurnByTurnRoute([riderLocation.lat, riderLocation.lng], [leg.coords.lat, leg.coords.lng])
@@ -561,8 +572,9 @@ function ActiveDeliveryView({
                   <span className="text-white/40">|</span>
                   <span className={etaColorClass.replace('text-', 'text-')}>{arrivalTime}</span>
                 </div>
-                <button onClick={() => setRerouteNonce(n => n + 1)} className="text-white/60 text-xs font-semibold underline underline-offset-2">
-                  Re-route
+                <button onClick={() => { setRerouting(true); setRerouteNonce(n => n + 1); setTimeout(() => setRerouting(false), 1200); }}
+                  className="text-white/60 text-xs font-semibold underline underline-offset-2 active:text-white transition-colors">
+                  {rerouting ? 'Rerouting…' : 'Re-route'}
                 </button>
               </div>
             )}
@@ -802,8 +814,18 @@ export default function RiderDashboard() {
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
         const { latitude: lat, longitude: lng } = pos.coords;
-        if (typeof pos.coords.heading === 'number' && Number.isFinite(pos.coords.heading)) {
+        // Only trust a reported heading when the device also reports
+        // real speed alongside it — some devices return a stale/
+        // last-known heading value even while stationary instead of
+        // null, which was making the camera rotate on its own with no
+        // actual movement. Requiring speed > ~1 m/s (~3.6 km/h) filters
+        // that out; the fallback bearing-from-fixes calc in the nav view
+        // has its own, separate noise guard for when this never fires.
+        const reportedSpeedOk = typeof pos.coords.speed === 'number' && pos.coords.speed > 1;
+        if (reportedSpeedOk && typeof pos.coords.heading === 'number' && Number.isFinite(pos.coords.heading)) {
           setGpsHeading(pos.coords.heading);
+        } else {
+          setGpsHeading(null);
         }
         const now = Date.now();
         const movedEnough = lastSentLat === null || metersBetween(lastSentLat, lastSentLng!, lat, lng) >= 10;
