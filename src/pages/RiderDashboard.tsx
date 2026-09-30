@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Package, MapPin, DollarSign, Star, Clock, Calendar, PhoneCall, MessageSquare, Power, PowerOff, Eye, X, ChevronUp, ChevronDown, CheckCircle2, Navigation2, ArrowLeft, ArrowRight, ArrowUp } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -228,23 +228,72 @@ function ActiveDeliveryView({
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [steps, setSteps] = useState<DirectionStep[]>([]);
   const [computedHeading, setComputedHeading] = useState<number | undefined>(undefined);
+  const [compassHeading, setCompassHeading] = useState<number | undefined>(undefined);
   const [speedKmh, setSpeedKmh] = useState<number | null>(null);
   const [followPaused, setFollowPaused] = useState(false);
   const [recenterSignal, setRecenterSignal] = useState(0);
   const prevPosRef = useRef<{ lat: number; lng: number; t: number } | null>(null);
+  const smoothedHeadingRef = useRef<number | undefined>(undefined);
 
-  // Real GPS course-over-ground (from watchPosition's own coords.heading,
-  // captured by the parent) is the primary, most reliable source — it
-  // comes straight from the device's GPS chip's own direction-of-travel
-  // calculation. The device compass (deviceorientation) was tried here
-  // previously but removed: its "alpha" value is frequently relative to
-  // whatever orientation the device happened to be in when the listener
-  // attached, not a true compass bearing, and produced arrows pointing in
-  // directions with no relation to the actual road — worse than having
-  // no heading at all. When GPS doesn't report a heading (stationary, or
-  // unsupported), fall back to a bearing computed between the last two
-  // real position fixes.
-  const heading = Number.isFinite(gpsHeading as number) ? (gpsHeading as number) : computedHeading;
+  // Heading priority: real GPS course-over-ground (most reliable once
+  // genuinely moving) > device compass (works at any speed, including
+  // stationary or turning slowly — GPS heading requires enough movement
+  // to compute a course, so without a compass the arrow simply couldn't
+  // rotate at low speed at all, which was the "no rotation, then it
+  // eventually worked" symptom) > distance-based fallback bearing for
+  // devices/browsers with neither.
+  const rawHeading = Number.isFinite(gpsHeading as number) ? (gpsHeading as number)
+    : compassHeading !== undefined ? compassHeading
+    : computedHeading;
+
+  // Smoothing with correct circular wraparound: naively averaging 359°
+  // and 1° gives 180° (the opposite direction) — this instead always
+  // takes the SHORTEST angular step toward the new reading, so the
+  // arrow can't suddenly flip through the "wrong side" of the compass
+  // at the 0°/360° seam, which is what compass jitter often looks like
+  // without this correction.
+  if (rawHeading !== undefined && Number.isFinite(rawHeading)) {
+    if (smoothedHeadingRef.current === undefined) {
+      smoothedHeadingRef.current = rawHeading;
+    } else {
+      let diff = rawHeading - smoothedHeadingRef.current;
+      diff = ((diff + 180) % 360 + 360) % 360 - 180;
+      smoothedHeadingRef.current = (smoothedHeadingRef.current + diff * 0.35 + 360) % 360;
+    }
+  }
+  const heading = smoothedHeadingRef.current;
+
+  // Device compass — the only source that works while stationary or
+  // moving too slowly for GPS to derive a course. iOS Safari requires an
+  // explicit permission prompt (not requested here automatically since
+  // it must come from a user gesture; Android Chrome generally doesn't
+  // need one). Real device compasses are noisy on their own, but the
+  // circular smoothing above handles that rather than needing extra
+  // filtering here.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('DeviceOrientationEvent' in window)) return;
+    function handleOrientation(e: DeviceOrientationEvent) {
+      const anyE = e as any;
+      let h: number | null = null;
+      if (typeof anyE.webkitCompassHeading === 'number') {
+        h = anyE.webkitCompassHeading;
+      } else if (typeof e.alpha === 'number' && e.absolute) {
+        // Only trust non-webkit alpha when the browser flags it as an
+        // ABSOLUTE reading (tied to true/magnetic north) — a relative
+        // alpha (the common case that caused the original bad-rotation
+        // bug) is relative to wherever the device happened to be
+        // pointed when the listener attached, not a real bearing.
+        h = (360 - e.alpha) % 360;
+      }
+      if (h !== null && Number.isFinite(h)) setCompassHeading(h);
+    }
+    window.addEventListener('deviceorientationabsolute', handleOrientation as any, true);
+    window.addEventListener('deviceorientation', handleOrientation, true);
+    return () => {
+      window.removeEventListener('deviceorientationabsolute', handleOrientation as any, true);
+      window.removeEventListener('deviceorientation', handleOrientation, true);
+    };
+  }, []);
 
   const leg = order.status === 'accepted'
     ? { label: 'Pickup', address: order.pickup.address, coords: order.pickup }
@@ -297,19 +346,26 @@ function ActiveDeliveryView({
   const [routeTotals, setRouteTotals] = useState<{ distanceMeters: number; durationSeconds: number } | null>(null);
   const [congestionSegments, setCongestionSegments] = useState<CongestionSegment[]>([]);
   const [speedLimitKmh, setSpeedLimitKmh] = useState<number | null>(null);
+  // The actual route geometry (list of lat/lng points along the road) —
+  // fetched once per leg/re-route, then trimmed LOCALLY on every GPS
+  // tick using plain geometry math, no network call. This is the "line
+  // eats itself as you move" behavior real nav apps use: only the
+  // route's *shape* needs the server; how much of it is still ahead of
+  // you is just math on data you already have on the device.
+  const [routeCoords, setRouteCoords] = useState<[number, number][]>([]);
   const [rerouteNonce, setRerouteNonce] = useState(0);
   const [rerouting, setRerouting] = useState(false);
   const lastFetchRef = useRef(0);
   useEffect(() => {
-    if (!hasRiderFix || !riderLocation) { setSteps([]); setRouteTotals(null); setCongestionSegments([]); setSpeedLimitKmh(null); return; }
+    if (!hasRiderFix || !riderLocation) { setSteps([]); setRouteTotals(null); setCongestionSegments([]); setSpeedLimitKmh(null); setRouteCoords([]); return; }
     const now = Date.now();
     const forced = rerouteNonce > 0;
-    // Re-fetch every ~6s while actively navigating — the earlier 20s
-    // throttle was chosen purely to be conservative on API calls, but
-    // real turn-by-turn apps re-route much more often; at 20s the
-    // displayed route visibly lagged behind the rider's actual
-    // position/deviation instead of tracking it live.
-    if (!forced && now - lastFetchRef.current < 6_000 && lastFetchRef.current !== 0) return;
+    // Re-fetch only every ~25s (or when forced via Re-route) — this is
+    // now just for refreshing turn-by-turn steps, traffic colors, and
+    // catching genuine off-route deviation; it is NOT what makes the
+    // line track the rider's live position. That's handled locally
+    // below on every GPS tick, with zero extra API calls.
+    if (!forced && now - lastFetchRef.current < 25_000 && lastFetchRef.current !== 0) return;
     lastFetchRef.current = now;
     let cancelled = false;
     fetchTurnByTurnRoute([riderLocation.lat, riderLocation.lng], [leg.coords.lat, leg.coords.lng])
@@ -318,9 +374,10 @@ function ActiveDeliveryView({
         setSteps(res?.steps || []);
         setRouteTotals(res ? { distanceMeters: res.distanceMeters, durationSeconds: res.durationSeconds } : null);
         setCongestionSegments(res?.congestionSegments || []);
+        setRouteCoords(res?.coords || []);
         setSpeedLimitKmh(res?.speedLimitKmh ?? null);
       })
-      .catch(() => { if (!cancelled) { setSteps([]); setRouteTotals(null); setCongestionSegments([]); setSpeedLimitKmh(null); } });
+      .catch(() => { if (!cancelled) { setSteps([]); setRouteTotals(null); setCongestionSegments([]); setSpeedLimitKmh(null); setRouteCoords([]); } });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leg.coords.lat, leg.coords.lng, hasRiderFix, riderLocation?.lat, riderLocation?.lng, rerouteNonce]);
@@ -340,6 +397,61 @@ function ActiveDeliveryView({
   // current one, shown as a smaller sub-banner (per Google's own layout:
   // primary instruction, then a preview of what follows it).
   const nextStep = currentStepIndex >= 0 && currentStepIndex + 1 < steps.length ? steps[currentStepIndex + 1] : null;
+
+  // ── Live client-side route trimming ("the line eats itself") ──────
+  // Only the route's SHAPE needs Mapbox — that's fetched occasionally
+  // above. How much of that already-known line is still ahead of the
+  // rider is pure geometry on data already on the device: find the
+  // closest point on the fetched route to the rider's live position,
+  // and only draw from there onward. This runs on every GPS tick with
+  // zero network calls, so the line visibly shortens as the rider
+  // drives it and lengthens back out if they drift off it — no API
+  // cost, no waiting on a fetch to see it move.
+  const trimmedRouteCoords = useMemo(() => {
+    if (!hasRiderFix || !riderLocation || routeCoords.length < 2) return routeCoords;
+    let closestIdx = 0;
+    let closestDist = Infinity;
+    for (let i = 0; i < routeCoords.length; i++) {
+      const d = calculateDistance(riderLocation.lat, riderLocation.lng, routeCoords[i][0], routeCoords[i][1]);
+      if (d < closestDist) { closestDist = d; closestIdx = i; }
+    }
+    // Lead in from the rider's actual position (not just the nearest
+    // route point) so the trimmed line always starts exactly at the
+    // puck, with no visible gap or overshoot.
+    return [[riderLocation.lat, riderLocation.lng] as [number, number], ...routeCoords.slice(closestIdx)];
+  }, [routeCoords, riderLocation?.lat, riderLocation?.lng, hasRiderFix]);
+
+  // Traffic-colored segments only make sense for the part of the route
+  // still ahead — trim them the same way as the plain route line so the
+  // two never contradict each other (one shortening, the other not).
+  const trimmedCongestionSegments = useMemo(() => {
+    if (!hasRiderFix || !riderLocation || congestionSegments.length === 0) return congestionSegments;
+    // Find which segment the rider's closest route point currently
+    // falls inside, using cumulative point counts per segment.
+    let closestOverallIdx = 0;
+    let closestOverallDist = Infinity;
+    let running = 0;
+    const segStarts: number[] = [];
+    for (const seg of congestionSegments) {
+      segStarts.push(running);
+      for (const c of seg.coords) {
+        const d = calculateDistance(riderLocation.lat, riderLocation.lng, c[0], c[1]);
+        if (d < closestOverallDist) { closestOverallDist = d; closestOverallIdx = running; }
+        running++;
+      }
+    }
+    const out: CongestionSegment[] = [];
+    for (let i = 0; i < congestionSegments.length; i++) {
+      const seg = congestionSegments[i];
+      const segStart = segStarts[i];
+      const segEnd = segStart + seg.coords.length;
+      if (segEnd <= closestOverallIdx) continue; // fully behind the rider
+      if (segStart >= closestOverallIdx) { out.push(seg); continue; } // fully ahead
+      // Rider is partway through this segment — trim it.
+      out.push({ ...seg, coords: seg.coords.slice(closestOverallIdx - segStart) });
+    }
+    return out;
+  }, [congestionSegments, riderLocation?.lat, riderLocation?.lng, hasRiderFix]);
 
   // legRoute (the old straight-line rider→destination indicator) has
   // been removed from this screen entirely — with real turn-by-turn
@@ -410,8 +522,8 @@ function ActiveDeliveryView({
             ? [{ lat: riderLocation.lat, lng: riderLocation.lng, icon: 'rider' as const, label: 'You' }]
             : []),
         ]}
-        route={[[order.pickup.lat, order.pickup.lng], [order.dropoff.lat, order.dropoff.lng]]}
-        congestionRoute={congestionSegments}
+        route={trimmedRouteCoords.length >= 2 ? trimmedRouteCoords : [[order.pickup.lat, order.pickup.lng], [order.dropoff.lat, order.dropoff.lng]]}
+        congestionRoute={trimmedCongestionSegments}
         className="absolute inset-0"
         interactive={true}
         forceLightMode

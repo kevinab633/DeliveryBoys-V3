@@ -912,19 +912,31 @@ export default function MapView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engine, markersKey, ml]);
 
+  const lastFollowUpdateRef = useRef<number>(0);
+  const puckAnimRef = useRef<number>(0);
+  const puckFromRef = useRef<{ lng: number; lat: number } | null>(null);
+
   // Rider puck — smooth in-place position + rotation updates instead of
   // destroy-and-recreate, so it glides between real GPS fixes and turns
   // to face the heading like Google Maps' navigation arrow, rather than
-  // jumping to a new static dot every ~4 seconds.
+  // jumping to a new static dot every ~4 seconds. Position is animated
+  // with a manual requestAnimationFrame loop (MapLibre's Marker has no
+  // built-in animated setLngLat), matched to the same duration as the
+  // camera's own glide above so the puck and the camera move together
+  // instead of the puck teleporting ahead of/behind a moving camera.
   useEffect(() => {
     if (engine !== 'maplibre' || !followPosition) {
+      cancelAnimationFrame(puckAnimRef.current);
       try { riderPuckMarkerRef.current?.remove(); } catch { void 0; }
       riderPuckMarkerRef.current = null;
+      puckFromRef.current = null;
       return;
     }
     const map = mapRef.current;
     if (!map || !ml || !styleReady) return;
     if (!Number.isFinite(followPosition.lat) || !Number.isFinite(followPosition.lng)) return;
+
+    const target = { lng: followPosition.lng, lat: followPosition.lat };
 
     if (!riderPuckMarkerRef.current) {
       const spec = markerSpec('rider', '#C41E1E');
@@ -933,10 +945,27 @@ export default function MapView({
       el.style.height = `${spec.h}px`;
       el.innerHTML = spec.html;
       riderPuckMarkerRef.current = new ml.Marker({ element: el, anchor: spec.anchor })
-        .setLngLat([followPosition.lng, followPosition.lat])
+        .setLngLat([target.lng, target.lat])
         .addTo(map);
+      puckFromRef.current = target;
     } else {
-      riderPuckMarkerRef.current.setLngLat([followPosition.lng, followPosition.lat]);
+      const from = puckFromRef.current || target;
+      const gapMs = lastFollowUpdateRef.current ? Date.now() - lastFollowUpdateRef.current + 1 : 1200;
+      const duration = Math.min(Math.max(gapMs * 0.92, 600), 4500);
+      const startTime = performance.now();
+      cancelAnimationFrame(puckAnimRef.current);
+      const step = (now: number) => {
+        const t = Math.min(1, (now - startTime) / duration);
+        const lng = from.lng + (target.lng - from.lng) * t;
+        const lat = from.lat + (target.lat - from.lat) * t;
+        riderPuckMarkerRef.current?.setLngLat([lng, lat]);
+        if (t < 1) {
+          puckAnimRef.current = requestAnimationFrame(step);
+        } else {
+          puckFromRef.current = target;
+        }
+      };
+      puckAnimRef.current = requestAnimationFrame(step);
     }
 
     // The map camera itself is already rotated to followHeading via
@@ -1017,25 +1046,37 @@ export default function MapView({
 
   // ── Turn-by-turn follow camera (MapLibre): keeps the view centered on
   //    and rotated to followPosition/followHeading, like Google Maps
-  //    navigation — takes over from the normal fit-all-markers behavior
-  //    whenever followPosition is provided. easeTo (not jumpTo) gives a
-  //    smooth glide between GPS fixes instead of a jarring snap. ──────
+  //    navigation. Real GPS fixes only arrive every ~4s (see the rider's
+  //    own location-watch throttle), so a single easeTo per fix used to
+  //    animate for under a second and then sit frozen for the rest of
+  //    the gap — that stop-start pattern is what read as laggy/glitchy.
+  //    Instead, animate continuously toward each new fix over the FULL
+  //    gap since the previous one, so motion never actually stops. ────
   useEffect(() => {
     if (engine !== 'maplibre' || !mapRef.current || !styleReady || !followPosition) return;
     if (followPaused) return;
     if (!Number.isFinite(followPosition.lat) || !Number.isFinite(followPosition.lng)) return;
+    const now = Date.now();
+    const gapMs = lastFollowUpdateRef.current ? now - lastFollowUpdateRef.current : 1200;
+    lastFollowUpdateRef.current = now;
+    // Animate across (most of) the real gap between fixes, not a fixed
+    // short duration — clamped to a sane range so a very late fix
+    // doesn't produce an absurdly slow crawl, and a very quick one
+    // doesn't snap instantly.
+    const duration = Math.min(Math.max(gapMs * 0.92, 600), 4500);
     try {
       mapRef.current.easeTo({
         center: [followPosition.lng, followPosition.lat],
         bearing: Number.isFinite(followHeading) ? followHeading : mapRef.current.getBearing(),
         pitch: 55,
         zoom: 17.5,
-        duration: 900,
-        // Ease-out cubic instead of linear: the camera decelerates into
-        // each new position instead of moving at a constant speed and
-        // stopping abruptly, which is what made the follow-camera feel
-        // mechanical rather than smooth.
-        easing: (t) => 1 - Math.pow(1 - t, 3),
+        duration,
+        // Linear, not eased — the whole point is a constant-speed glide
+        // that matches how the vehicle is actually moving between real
+        // fixes; an ease-out here would make it visibly decelerate and
+        // then sit still right as the next real fix should be arriving,
+        // recreating the same stutter this is meant to fix.
+        easing: (t) => t,
       });
     } catch {
       void 0;
