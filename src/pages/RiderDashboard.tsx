@@ -287,11 +287,41 @@ function ActiveDeliveryView({
       }
       if (h !== null && Number.isFinite(h)) setCompassHeading(h);
     }
-    window.addEventListener('deviceorientationabsolute', handleOrientation as any, true);
-    window.addEventListener('deviceorientation', handleOrientation, true);
+
+    // iOS Safari refuses to fire ANY orientation event at all until
+    // DeviceOrientationEvent.requestPermission() has been called from a
+    // real user gesture (tap/click) — it cannot be requested
+    // automatically on mount. This listens for the first tap anywhere on
+    // the nav screen and requests it then; Android and other browsers
+    // don't have this API at all, so they just skip straight to
+    // attaching the listener normally.
+    const needsIOSPermission = typeof (window as any).DeviceOrientationEvent?.requestPermission === 'function';
+    let attached = false;
+    function attach() {
+      if (attached) return;
+      attached = true;
+      window.addEventListener('deviceorientationabsolute', handleOrientation as any, true);
+      window.addEventListener('deviceorientation', handleOrientation, true);
+    }
+    function requestIOSPermissionOnce() {
+      (window as any).DeviceOrientationEvent.requestPermission()
+        .then((state: string) => { if (state === 'granted') attach(); })
+        .catch(() => void 0);
+      document.removeEventListener('click', requestIOSPermissionOnce, true);
+      document.removeEventListener('touchend', requestIOSPermissionOnce, true);
+    }
+    if (needsIOSPermission) {
+      document.addEventListener('click', requestIOSPermissionOnce, true);
+      document.addEventListener('touchend', requestIOSPermissionOnce, true);
+    } else {
+      attach();
+    }
+
     return () => {
       window.removeEventListener('deviceorientationabsolute', handleOrientation as any, true);
       window.removeEventListener('deviceorientation', handleOrientation, true);
+      document.removeEventListener('click', requestIOSPermissionOnce, true);
+      document.removeEventListener('touchend', requestIOSPermissionOnce, true);
     };
   }, []);
 
@@ -846,7 +876,7 @@ function OrderDetailOverlay({ order, dk, onClose, onAccept, onDecline }: {
 // ── Main dashboard ─────────────────────────────────────────────────
 export default function RiderDashboard() {
   const dk = useThemeStore(s => s.theme === 'dark');
-  const { user, setRiderAvailability, updateRiderLocation } = useAuthStore();
+  const { user, setRiderAvailability, updateRiderLocation, persistRiderLocation } = useAuthStore();
   const { orders, acceptOrder, updateOrderStatus, getPendingOrders, getOrdersByRider, fetchOrders } = useOrderStore();
   const [tab, setTab] = useState<'available' | 'my'>('available');
 
@@ -940,21 +970,33 @@ export default function RiderDashboard() {
           setGpsHeading(null);
         }
         const now = Date.now();
+        // Two independent throttles that were wrongly merged into one:
+        // updateRiderLocation() drives the LOCAL map/camera/arrow and
+        // should reflect every GPS fix the device gives us — gating it
+        // behind a 10m/4s threshold (meant only to limit how often we
+        // write to Supabase) is exactly why walking tests and slow
+        // driving felt laggy: real fixes were being thrown away before
+        // ever reaching the screen. The network broadcast keeps its own,
+        // separate throttle below, since that one genuinely does cost a
+        // database write per call.
+        updateRiderLocation(lat, lng);
+
         const movedEnough = lastSentLat === null || metersBetween(lastSentLat, lastSentLng!, lat, lng) >= 10;
         const timeEnough = now - lastSentAt >= 4000;
-        if (!movedEnough && !timeEnough) return;
-        lastSentAt = now;
-        lastSentLat = lat;
-        lastSentLng = lng;
-        updateRiderLocation(lat, lng);
-        if (activeOrder) {
-          syncService.broadcastRiderLocation(activeOrder.id, lat, lng, rider.id);
+        if (movedEnough || timeEnough) {
+          lastSentAt = now;
+          lastSentLat = lat;
+          lastSentLng = lng;
+          persistRiderLocation(lat, lng);
+          if (activeOrder) {
+            syncService.broadcastRiderLocation(activeOrder.id, lat, lng, rider.id);
+          }
         }
       },
       (err) => {
         console.warn('[RiderDashboard] Geolocation error:', err.message);
       },
-      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 },
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 },
     );
 
     return () => navigator.geolocation.clearWatch(watchId);

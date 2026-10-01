@@ -32,6 +32,7 @@ interface AuthStore {
   getRiders: () => RiderProfile[];
   getCustomers: () => User[];
   updateRiderLocation: (lat: number, lng: number) => void;
+  persistRiderLocation: (lat: number, lng: number) => void;
   setRiderAvailability: (status: 'online' | 'offline' | 'busy') => void;
   recordDelivery: (riderId: string, earnedAmount: number) => void;
   // ── Remote sync handlers (called by syncService on incoming events) ──
@@ -326,10 +327,13 @@ export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
 
   getCustomers: () => get().allUsers.filter(u => u.role === 'customer'),
 
+  // Local-only — updates the in-memory position immediately, with no
+  // network write. This is what should drive the map/camera/arrow, since
+  // it needs every real GPS tick, not throttled. Call persistLocation
+  // (below) separately, on its own throttle, for the Supabase write.
   updateRiderLocation: (lat, lng) => {
     const s = get();
     if (!s.user || s.user.role !== 'rider') return;
-    void usersApi.update(s.user.id, { location: { lat, lng } });
     set(s2 => {
       if (!s2.user || s2.user.role !== 'rider') return s2;
       const updated = { ...s2.user, location: { lat, lng } } as RiderProfile;
@@ -338,6 +342,14 @@ export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
         allUsers: s2.allUsers.map(u => u.id === updated.id ? updated : u),
       };
     });
+  },
+
+  // Network write — call this on its own throttle (not every GPS tick),
+  // since every call is a real Supabase write.
+  persistRiderLocation: (lat, lng) => {
+    const s = get();
+    if (!s.user || s.user.role !== 'rider') return;
+    void usersApi.update(s.user.id, { location: { lat, lng } });
   },
 
   setRiderAvailability: (status) => {
