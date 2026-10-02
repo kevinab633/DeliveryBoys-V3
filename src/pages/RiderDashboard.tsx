@@ -385,9 +385,31 @@ function ActiveDeliveryView({
   const [routeCoords, setRouteCoords] = useState<[number, number][]>([]);
   const [rerouteNonce, setRerouteNonce] = useState(0);
   const [rerouting, setRerouting] = useState(false);
+  const [offline, setOffline] = useState(false);
   const lastFetchRef = useRef(0);
+
+  // Cache key scoped to this specific order + leg (pickup vs dropoff),
+  // so a cached route never gets reused for the wrong destination once
+  // the rider picks up and the leg switches.
+  const routeCacheKey = `db-route-cache:${order.id}:${order.status === 'accepted' ? 'pickup' : 'dropoff'}`;
+
+  // Immediate connectivity signal — the browser's own online/offline
+  // events fire right away, rather than waiting for the next ~25s route
+  // fetch to time out before the rider finds out they're offline.
   useEffect(() => {
-    if (!hasRiderFix || !riderLocation) { setSteps([]); setRouteTotals(null); setCongestionSegments([]); setSpeedLimitKmh(null); setRouteCoords([]); return; }
+    function goOffline() { setOffline(true); }
+    function goOnline() { setOffline(false); setRerouteNonce(n => n + 1); } // force a fresh fetch the moment connectivity returns
+    window.addEventListener('offline', goOffline);
+    window.addEventListener('online', goOnline);
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) setOffline(true);
+    return () => {
+      window.removeEventListener('offline', goOffline);
+      window.removeEventListener('online', goOnline);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!hasRiderFix || !riderLocation) return;
     const now = Date.now();
     const forced = rerouteNonce > 0;
     // Re-fetch only every ~25s (or when forced via Re-route) — this is
@@ -401,13 +423,62 @@ function ActiveDeliveryView({
     fetchTurnByTurnRoute([riderLocation.lat, riderLocation.lng], [leg.coords.lat, leg.coords.lng])
       .then(res => {
         if (cancelled) return;
-        setSteps(res?.steps || []);
-        setRouteTotals(res ? { distanceMeters: res.distanceMeters, durationSeconds: res.durationSeconds } : null);
-        setCongestionSegments(res?.congestionSegments || []);
-        setRouteCoords(res?.coords || []);
-        setSpeedLimitKmh(res?.speedLimitKmh ?? null);
+        if (res) {
+          setOffline(false);
+          setSteps(res.steps);
+          setRouteTotals({ distanceMeters: res.distanceMeters, durationSeconds: res.durationSeconds });
+          setCongestionSegments(res.congestionSegments);
+          setRouteCoords(res.coords);
+          setSpeedLimitKmh(res.speedLimitKmh);
+          // Cache a successful route so the screen can keep showing
+          // something real if the connection drops before the next
+          // refresh — the rider's GPS (and the local route-trimming
+          // math) keeps working offline; only the Directions API call
+          // itself needs the network, so caching its last good result
+          // is what lets the nav screen survive a signal loss instead
+          // of going blank right when it matters most.
+          try {
+            localStorage.setItem(routeCacheKey, JSON.stringify({
+              steps: res.steps,
+              distanceMeters: res.distanceMeters,
+              durationSeconds: res.durationSeconds,
+              congestionSegments: res.congestionSegments,
+              coords: res.coords,
+              speedLimitKmh: res.speedLimitKmh,
+              cachedAt: now,
+            }));
+          } catch { void 0; }
+        } else {
+          loadCachedRoute();
+        }
       })
-      .catch(() => { if (!cancelled) { setSteps([]); setRouteTotals(null); setCongestionSegments([]); setSpeedLimitKmh(null); setRouteCoords([]); } });
+      .catch(() => { if (!cancelled) loadCachedRoute(); });
+
+    function loadCachedRoute() {
+      // Network failed (or returned nothing) — fall back to the last
+      // good route for this exact leg instead of wiping the screen
+      // blank. The route shape/steps go stale, but it's far better than
+      // no route at all while offline; it corrects itself the moment
+      // the connection returns and the next fetch succeeds.
+      try {
+        const raw = localStorage.getItem(routeCacheKey);
+        if (raw) {
+          const cached = JSON.parse(raw);
+          setSteps(cached.steps || []);
+          setRouteTotals(cached.distanceMeters != null ? { distanceMeters: cached.distanceMeters, durationSeconds: cached.durationSeconds } : null);
+          setCongestionSegments(cached.congestionSegments || []);
+          setRouteCoords(cached.coords || []);
+          setSpeedLimitKmh(cached.speedLimitKmh ?? null);
+          setOffline(true);
+          return;
+        }
+      } catch { void 0; }
+      // No cache available either (first load ever happened offline) —
+      // only now actually clear everything.
+      setSteps([]); setRouteTotals(null); setCongestionSegments([]); setSpeedLimitKmh(null); setRouteCoords([]);
+      setOffline(true);
+    }
+
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leg.coords.lat, leg.coords.lng, hasRiderFix, riderLocation?.lat, riderLocation?.lng, rerouteNonce]);
@@ -562,6 +633,18 @@ function ActiveDeliveryView({
         recenterSignal={recenterSignal}
         onFollowPausedChange={setFollowPaused}
       />
+
+      {/* Offline indicator — shown whenever the last route fetch failed
+          and the screen is running on a cached route instead. GPS
+          tracking itself keeps working with no connection at all; only
+          the route shape/turn instructions go stale until the network
+          returns, so the rider should know that's happening rather than
+          silently trusting possibly-outdated directions. */}
+      {offline && (
+        <div className="relative z-10 mx-3 mt-2 bg-amber-500 text-white text-xs font-semibold px-3 py-2 rounded-xl text-center shadow-lg">
+          No connection — showing last known route. GPS tracking still works.
+        </div>
+      )}
 
       {/* Top navigation banner — primary instruction + secondary preview
           of the following maneuver (per Google's own layout: a smaller
