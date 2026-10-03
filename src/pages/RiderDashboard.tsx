@@ -508,14 +508,32 @@ function ActiveDeliveryView({
   // zero network calls, so the line visibly shortens as the rider
   // drives it and lengthens back out if they drift off it — no API
   // cost, no waiting on a fetch to see it move.
+  // Tracks the last matched index into routeCoords so the search below
+  // never jumps backward or far ahead — without this constraint, GPS
+  // noise or a nearby parallel road could match a point from a totally
+  // different, disconnected part of the route as "closest" purely by
+  // straight-line distance, producing a line that snaps across space
+  // and cuts through buildings instead of following the real road shape
+  // in order. This is exactly what real map-matching does: search only
+  // forward from where you last knew you were.
+  const lastMatchedIdxRef = useRef(0);
+  useEffect(() => { lastMatchedIdxRef.current = 0; }, [routeCoords]);
+
   const trimmedRouteCoords = useMemo(() => {
     if (!hasRiderFix || !riderLocation || routeCoords.length < 2) return routeCoords;
-    let closestIdx = 0;
+    // Search only within a forward-looking window from the last match —
+    // wide enough to tolerate normal GPS jitter and real forward
+    // progress between renders, but not so wide that a distant,
+    // unrelated point on the route can ever win.
+    const searchStart = lastMatchedIdxRef.current;
+    const searchEnd = Math.min(routeCoords.length, searchStart + 60);
+    let closestIdx = searchStart;
     let closestDist = Infinity;
-    for (let i = 0; i < routeCoords.length; i++) {
+    for (let i = searchStart; i < searchEnd; i++) {
       const d = calculateDistance(riderLocation.lat, riderLocation.lng, routeCoords[i][0], routeCoords[i][1]);
       if (d < closestDist) { closestDist = d; closestIdx = i; }
     }
+    lastMatchedIdxRef.current = closestIdx;
     // Lead in from the rider's actual position (not just the nearest
     // route point) so the trimmed line always starts exactly at the
     // puck, with no visible gap or overshoot.
@@ -525,22 +543,38 @@ function ActiveDeliveryView({
   // Traffic-colored segments only make sense for the part of the route
   // still ahead — trim them the same way as the plain route line so the
   // two never contradict each other (one shortening, the other not).
+  const lastMatchedCongestionIdxRef = useRef(0);
+  useEffect(() => { lastMatchedCongestionIdxRef.current = 0; }, [congestionSegments]);
+
   const trimmedCongestionSegments = useMemo(() => {
     if (!hasRiderFix || !riderLocation || congestionSegments.length === 0) return congestionSegments;
-    // Find which segment the rider's closest route point currently
-    // falls inside, using cumulative point counts per segment.
-    let closestOverallIdx = 0;
-    let closestOverallDist = Infinity;
+    // Same forward-window constraint as trimmedRouteCoords above — an
+    // unconstrained nearest-point search here had the identical bug:
+    // any point in any segment could "win" purely by straight-line
+    // distance, letting the visible congestion-colored line jump to an
+    // unrelated, disconnected part of the route.
     let running = 0;
     const segStarts: number[] = [];
     for (const seg of congestionSegments) {
       segStarts.push(running);
+      running += seg.coords.length;
+    }
+    const totalPoints = running;
+    const searchStart = lastMatchedCongestionIdxRef.current;
+    const searchEnd = Math.min(totalPoints, searchStart + 60);
+    let closestOverallIdx = searchStart;
+    let closestOverallDist = Infinity;
+    running = 0;
+    for (const seg of congestionSegments) {
       for (const c of seg.coords) {
-        const d = calculateDistance(riderLocation.lat, riderLocation.lng, c[0], c[1]);
-        if (d < closestOverallDist) { closestOverallDist = d; closestOverallIdx = running; }
+        if (running >= searchStart && running < searchEnd) {
+          const d = calculateDistance(riderLocation.lat, riderLocation.lng, c[0], c[1]);
+          if (d < closestOverallDist) { closestOverallDist = d; closestOverallIdx = running; }
+        }
         running++;
       }
     }
+    lastMatchedCongestionIdxRef.current = closestOverallIdx;
     const out: CongestionSegment[] = [];
     for (let i = 0; i < congestionSegments.length; i++) {
       const seg = congestionSegments[i];
