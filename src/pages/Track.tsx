@@ -205,10 +205,10 @@ export default function Track() {
   const searchForm = (
     <form onSubmit={handleSearch} className="flex gap-2">
       <div className="flex-1 relative">
-        <Search size={16} className={cn('absolute left-3 top-1/2 -translate-y-1/2', dk ? 'text-white/30' : 'text-gray-400')} />
+        <Search size={16} className={cn('absolute left-3 top-1/2 -translate-y-1/2', dk ? 'text-white/30' : 'text-surface-light-3')} />
         <input value={trackId} onChange={e => setTrackId(e.target.value)} placeholder="Order ID (e.g. ORD-003)"
           className={cn('w-full pl-9 pr-3 py-3 rounded-xl text-sm border',
-            dk ? 'bg-surface-dark-3 border-white/10 text-white placeholder:text-white/30' : 'bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-400')} />
+            dk ? 'bg-surface-dark-3 border-white/10 text-white placeholder:text-white/30' : 'bg-surface-light-2 border-surface-light-3 text-text-light placeholder:text-surface-light-3')} />
       </div>
       <button type="submit" className="bg-brand text-white px-5 py-3 rounded-xl font-bold hover:bg-brand-dark transition">Track</button>
     </form>
@@ -218,11 +218,11 @@ export default function Track() {
     <>
       {/* Order info */}
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-        className={cn('p-5 rounded-2xl border', dk ? 'bg-surface-dark-3 border-white/5' : 'bg-gray-50 border-gray-200')}>
+        className={cn('p-5 rounded-2xl border', dk ? 'bg-surface-dark-3 border-white/5' : 'bg-surface-light-2 border-surface-light-3')}>
         <div className="flex justify-between items-start mb-4">
           <div>
-            <h3 className={cn('font-bold text-lg', dk ? 'text-white' : 'text-gray-900')}>{order.displayCode}</h3>
-            <p className={cn('text-xs', dk ? 'text-white/40' : 'text-gray-500')}>{formatDate(order.createdAt)}</p>
+            <h3 className={cn('font-bold text-lg', dk ? 'text-white' : 'text-text-light')}>{order.displayCode}</h3>
+            <p className={cn('text-xs', dk ? 'text-white/40' : 'text-text-light-2')}>{formatDate(order.createdAt)}</p>
           </div>
           <span className={cn('px-3 py-1 rounded-full text-xs font-bold capitalize',
             order.status === 'delivered' ? 'bg-success/10 text-success' :
@@ -233,39 +233,39 @@ export default function Track() {
           <div className="flex gap-3">
             <MapPin size={16} className="text-success shrink-0 mt-0.5" />
             <div className="min-w-0">
-              <p className={dk ? 'text-white/40' : 'text-gray-500'}>Pickup</p>
-              <p className={cn('font-medium break-words', dk ? 'text-white' : 'text-gray-900')}>{order.pickup.address}</p>
+              <p className={dk ? 'text-white/40' : 'text-text-light-2'}>Pickup</p>
+              <p className={cn('font-medium break-words', dk ? 'text-white' : 'text-text-light')}>{order.pickup.address}</p>
             </div>
           </div>
           <div className="flex gap-3">
             <MapPin size={16} className="text-brand shrink-0 mt-0.5" />
             <div className="min-w-0">
-              <p className={dk ? 'text-white/40' : 'text-gray-500'}>Drop-off</p>
-              <p className={cn('font-medium break-words', dk ? 'text-white' : 'text-gray-900')}>{order.dropoff.address}</p>
+              <p className={dk ? 'text-white/40' : 'text-text-light-2'}>Drop-off</p>
+              <p className={cn('font-medium break-words', dk ? 'text-white' : 'text-text-light')}>{order.dropoff.address}</p>
             </div>
           </div>
           <div className="flex justify-between">
-            <span className={dk ? 'text-white/50' : 'text-gray-500'}>Distance</span>
-            <span className={cn('font-semibold', dk ? 'text-white' : 'text-gray-900')}>{formatDistance(order.distance)}</span>
+            <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Distance</span>
+            <span className={cn('font-semibold', dk ? 'text-white' : 'text-text-light')}>{formatDistance(order.distance)}</span>
           </div>
-          <div className={cn('flex justify-between pt-2 border-t', dk ? 'border-white/5' : 'border-gray-200')}>
-            <span className={dk ? 'text-white/50' : 'text-gray-500'}>Total</span>
+          <div className={cn('flex justify-between pt-2 border-t', dk ? 'border-white/5' : 'border-surface-light-3')}>
+            <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Total</span>
             <span className="font-bold text-brand text-lg">{formatCurrency(order.price)}</span>
           </div>
         </div>
         {order.riderName && (
-          <div className={cn('mt-4 p-3 rounded-xl flex items-center gap-3', dk ? 'bg-surface-dark-2' : 'bg-white border border-gray-100')}>
+          <div className={cn('mt-4 p-3 rounded-xl flex items-center gap-3', dk ? 'bg-surface-dark-2' : 'bg-white border border-surface-light-2')}>
             <div className="w-10 h-10 rounded-full bg-brand flex items-center justify-center text-white font-bold">{order.riderName[0]}</div>
             <div>
-              <p className={cn('font-semibold text-sm', dk ? 'text-white' : 'text-gray-900')}>{order.riderName}</p>
-              <p className={cn('text-xs', dk ? 'text-white/40' : 'text-gray-500')}>
+              <p className={cn('font-semibold text-sm', dk ? 'text-white' : 'text-text-light')}>{order.riderName}</p>
+              <p className={cn('text-xs', dk ? 'text-white/40' : 'text-text-light-2')}>
                 {order.status === 'accepted' ? 'Heading to pickup' : 'Your Rider'}
               </p>
             </div>
           </div>
         )}
         {order.status === 'accepted' && (
-          <div className={cn('mt-3 flex items-center gap-2 text-xs', dk ? 'text-white/40' : 'text-gray-500')}>
+          <div className={cn('mt-3 flex items-center gap-2 text-xs', dk ? 'text-white/40' : 'text-text-light-2')}>
             <svg width="26" height="6" aria-hidden="true">
               <line x1="0" y1="3" x2="26" y2="3" stroke="#64748B" strokeWidth="3" strokeDasharray="5 4" strokeLinecap="round" />
             </svg>
@@ -275,8 +275,8 @@ export default function Track() {
       </motion.div>
 
       {/* Status timeline */}
-      <div className={cn('p-5 rounded-2xl border', dk ? 'bg-surface-dark-3 border-white/5' : 'bg-gray-50 border-gray-200')}>
-        <h4 className={cn('font-bold mb-4', dk ? 'text-white' : 'text-gray-900')}>Delivery Status</h4>
+      <div className={cn('p-5 rounded-2xl border', dk ? 'bg-surface-dark-3 border-white/5' : 'bg-surface-light-2 border-surface-light-3')}>
+        <h4 className={cn('font-bold mb-4', dk ? 'text-white' : 'text-text-light')}>Delivery Status</h4>
         <div className="space-y-0">
           {statusSteps.map((s, i) => {
             const done = i <= statusIndex;
@@ -284,16 +284,16 @@ export default function Track() {
               <div key={s.key} className="flex gap-3">
                 <div className="flex flex-col items-center">
                   <div className={cn('w-9 h-9 rounded-full flex items-center justify-center',
-                    done ? 'bg-brand' : dk ? 'bg-surface-dark-2 border border-white/10' : 'bg-white border border-gray-200')}>
-                    <s.icon size={16} className={done ? 'text-white' : dk ? 'text-white/30' : 'text-gray-400'} />
+                    done ? 'bg-brand' : dk ? 'bg-surface-dark-2 border border-white/10' : 'bg-white border border-surface-light-3')}>
+                    <s.icon size={16} className={done ? 'text-white' : dk ? 'text-white/30' : 'text-surface-light-3'} />
                   </div>
                   {i < statusSteps.length - 1 && (
-                    <div className={cn('w-0.5 h-8', done ? 'bg-brand' : dk ? 'bg-white/10' : 'bg-gray-200')} />
+                    <div className={cn('w-0.5 h-8', done ? 'bg-brand' : dk ? 'bg-white/10' : 'bg-surface-light-3')} />
                   )}
                 </div>
                 <div className="pt-1.5">
                   <p className={cn('text-sm font-semibold',
-                    done ? (dk ? 'text-white' : 'text-gray-900') : (dk ? 'text-white/30' : 'text-gray-400'))}>{s.label}</p>
+                    done ? (dk ? 'text-white' : 'text-text-light') : (dk ? 'text-white/30' : 'text-surface-light-3'))}>{s.label}</p>
                 </div>
               </div>
             );
@@ -305,13 +305,13 @@ export default function Track() {
 
   const notFound = (
     <div className="py-10 text-center">
-      <Package size={44} className={cn('mx-auto mb-3', dk ? 'text-white/20' : 'text-gray-300')} />
-      <p className={cn('text-sm font-medium', dk ? 'text-white/40' : 'text-gray-500')}>No order found with that ID</p>
+      <Package size={44} className={cn('mx-auto mb-3', dk ? 'text-white/20' : 'text-surface-light-3')} />
+      <p className={cn('text-sm font-medium', dk ? 'text-white/40' : 'text-text-light-2')}>No order found with that ID</p>
     </div>
   );
 
   const hint = (
-    <p className={cn('text-sm leading-relaxed', dk ? 'text-white/35' : 'text-gray-400')}>
+    <p className={cn('text-sm leading-relaxed', dk ? 'text-white/35' : 'text-surface-light-3')}>
       Enter your order ID above to watch your rider move live on the map.
     </p>
   );
@@ -330,7 +330,7 @@ export default function Track() {
 
       {/* ── Back button — replaces the hidden navbar's own way home. ── */}
       <button onClick={() => navigate('/')}
-        className="absolute z-20 w-11 h-11 rounded-full bg-white shadow-lg flex items-center justify-center text-gray-700"
+        className="absolute z-20 w-11 h-11 rounded-full bg-white shadow-lg flex items-center justify-center text-text-light-2"
         style={{ top: 'calc(env(safe-area-inset-top, 0px) + 12px)', left: 12 }}>
         <ArrowLeft size={20} />
       </button>
@@ -340,12 +340,12 @@ export default function Track() {
         style={{ top: 'calc(env(safe-area-inset-top, 0px) + 80px)' }}>
         <div className={cn(
           'flex-1 min-h-0 rounded-2xl shadow-2xl border flex flex-col overflow-hidden',
-          dk ? 'bg-surface-dark-2/95 border-white/5 glass' : 'bg-white/95 border-gray-200 glass',
+          dk ? 'bg-surface-dark-2/95 border-white/5 glass' : 'bg-white/95 border-surface-light-3 glass',
         )}>
           <div className="flex-1 overflow-y-auto p-5 space-y-4">
             <div className="mb-1">
-              <h1 className={cn('text-xl font-extrabold', dk ? 'text-white' : 'text-gray-900')}>Track Delivery</h1>
-              <p className={cn('text-xs mt-0.5', dk ? 'text-white/40' : 'text-gray-500')}>Live rider location & route</p>
+              <h1 className={cn('text-xl font-extrabold', dk ? 'text-white' : 'text-text-light')}>Track Delivery</h1>
+              <p className={cn('text-xs mt-0.5', dk ? 'text-white/40' : 'text-text-light-2')}>Live rider location & route</p>
             </div>
             {searchForm}
             {order ? orderDetails : searched ? notFound : hint}
@@ -358,7 +358,7 @@ export default function Track() {
         className={cn(
           'lg:hidden fixed left-0 right-0 bottom-0 z-20 flex flex-col',
           'rounded-t-3xl shadow-[0_-8px_40px_rgba(0,0,0,0.25)]',
-          dk ? 'bg-surface-dark-2 border-t border-white/5' : 'bg-white border-t border-gray-200',
+          dk ? 'bg-surface-dark-2 border-t border-white/5' : 'bg-white border-t border-surface-light-3',
         )}
         animate={{
           height: sheetOpen ? `calc(100dvh - ${NAV_HEIGHT_REM}rem)` : `${SHEET_COLLAPSED}px`,
@@ -375,13 +375,13 @@ export default function Track() {
             className="flex-1 flex justify-center py-2 cursor-pointer"
             onClick={() => setSheetOpen(!sheetOpen)}
           >
-            <div className={cn('w-10 h-1 rounded-full', dk ? 'bg-white/20' : 'bg-gray-300')} />
+            <div className={cn('w-10 h-1 rounded-full', dk ? 'bg-white/20' : 'bg-surface-light-3')} />
           </div>
           {sheetOpen ? (
             <button
               onClick={() => setSheetOpen(false)}
               className={cn('w-11 h-11 rounded-xl flex items-center justify-center transition shrink-0',
-                dk ? 'text-white/40 hover:bg-white/5 hover:text-white/70' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600')}
+                dk ? 'text-white/40 hover:bg-white/5 hover:text-white/70' : 'text-surface-light-3 hover:bg-surface-light-2 hover:text-text-light-2')}
             >
               <ChevronDown size={20} />
             </button>
@@ -393,7 +393,7 @@ export default function Track() {
         {/* Collapsed: compact status bar */}
         {!sheetOpen && (
           <button onClick={() => setSheetOpen(true)}
-            className={cn('w-full px-4 pb-3 flex items-center justify-between gap-2', dk ? 'text-white/70' : 'text-gray-700')}>
+            className={cn('w-full px-4 pb-3 flex items-center justify-between gap-2', dk ? 'text-white/70' : 'text-text-light-2')}>
             {order ? (
               <>
                 <span className="flex items-center gap-2 text-sm font-bold min-w-0">
@@ -401,12 +401,12 @@ export default function Track() {
                     order.status === 'delivered' ? 'bg-success' : order.status === 'cancelled' ? 'bg-danger' : 'bg-warning animate-pulse')} />
                   <span className="truncate">{order.displayCode} · {order.status.replace('_', ' ')}</span>
                 </span>
-                <span className={cn('flex items-center gap-1 text-xs font-semibold shrink-0', dk ? 'text-white/40' : 'text-gray-400')}>
+                <span className={cn('flex items-center gap-1 text-xs font-semibold shrink-0', dk ? 'text-white/40' : 'text-surface-light-3')}>
                   Details <ChevronUp size={14} />
                 </span>
               </>
             ) : (
-              <span className={cn('w-full flex items-center justify-center gap-1 py-2 text-xs font-semibold', dk ? 'text-white/40' : 'text-gray-500')}>
+              <span className={cn('w-full flex items-center justify-center gap-1 py-2 text-xs font-semibold', dk ? 'text-white/40' : 'text-text-light-2')}>
                 Track an order <ChevronUp size={14} />
               </span>
             )}
@@ -418,7 +418,7 @@ export default function Track() {
           <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
             <div className="flex-1 px-4 pb-4 space-y-4 overflow-y-auto">
               <div className="mb-1">
-                <h1 className={cn('text-lg font-extrabold', dk ? 'text-white' : 'text-gray-900')}>Track Delivery</h1>
+                <h1 className={cn('text-lg font-extrabold', dk ? 'text-white' : 'text-text-light')}>Track Delivery</h1>
               </div>
               {searchForm}
               {order ? orderDetails : searched ? notFound : hint}

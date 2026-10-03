@@ -82,36 +82,36 @@ function OrderDetailRows({ order, dk, showEarnings }: { order: Order; dk: boolea
       <div className="flex gap-3">
         <MapPin size={16} className="text-success shrink-0 mt-0.5" />
         <div className="min-w-0">
-          <p className={dk ? 'text-white/40' : 'text-gray-500'}>Pickup</p>
-          <p className={cn('font-medium break-words', dk ? 'text-white' : 'text-gray-900')}>{order.pickup.address}</p>
+          <p className={dk ? 'text-white/40' : 'text-text-light-2'}>Pickup</p>
+          <p className={cn('font-medium break-words', dk ? 'text-white' : 'text-text-light')}>{order.pickup.address}</p>
         </div>
       </div>
       <div className="flex gap-3">
         <MapPin size={16} className="text-brand shrink-0 mt-0.5" />
         <div className="min-w-0">
-          <p className={dk ? 'text-white/40' : 'text-gray-500'}>Drop-off</p>
-          <p className={cn('font-medium break-words', dk ? 'text-white' : 'text-gray-900')}>{order.dropoff.address}</p>
+          <p className={dk ? 'text-white/40' : 'text-text-light-2'}>Drop-off</p>
+          <p className={cn('font-medium break-words', dk ? 'text-white' : 'text-text-light')}>{order.dropoff.address}</p>
         </div>
       </div>
       <div className="flex justify-between">
-        <span className={dk ? 'text-white/50' : 'text-gray-500'}>Distance</span>
-        <span className={cn('font-semibold', dk ? 'text-white' : 'text-gray-900')}>{formatDistance(order.distance)}</span>
+        <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Distance</span>
+        <span className={cn('font-semibold', dk ? 'text-white' : 'text-text-light')}>{formatDistance(order.distance)}</span>
       </div>
       <div className="flex justify-between">
-        <span className={dk ? 'text-white/50' : 'text-gray-500'}>Package</span>
-        <span className={cn('font-medium text-right max-w-[60%]', dk ? 'text-white/80' : 'text-gray-700')}>{order.packageDescription || 'N/A'}</span>
+        <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Package</span>
+        <span className={cn('font-medium text-right max-w-[60%]', dk ? 'text-white/80' : 'text-text-light-2')}>{order.packageDescription || 'N/A'}</span>
       </div>
       <div className="flex justify-between">
-        <span className={dk ? 'text-white/50' : 'text-gray-500'}>Customer</span>
-        <span className={cn('font-medium', dk ? 'text-white/80' : 'text-gray-700')}>{order.customerName}</span>
+        <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Customer</span>
+        <span className={cn('font-medium', dk ? 'text-white/80' : 'text-text-light-2')}>{order.customerName}</span>
       </div>
-      <div className={cn('flex justify-between pt-2 border-t', dk ? 'border-white/5' : 'border-gray-100')}>
-        <span className={dk ? 'text-white/50' : 'text-gray-500'}>Fare</span>
+      <div className={cn('flex justify-between pt-2 border-t', dk ? 'border-white/5' : 'border-surface-light-2')}>
+        <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Fare</span>
         <span className="font-bold text-brand text-lg">{formatCurrency(order.price)}</span>
       </div>
       {showEarnings && (
         <div className="flex justify-between text-xs">
-          <span className={dk ? 'text-white/40' : 'text-gray-400'}>Your earnings (75%)</span>
+          <span className={dk ? 'text-white/40' : 'text-surface-light-3'}>Your earnings (75%)</span>
           <span className={cn('font-bold', 'text-success')}>{formatCurrency(order.price * 0.75)}</span>
         </div>
       )}
@@ -137,14 +137,14 @@ function IncomingOrderModal({ order, taken, dk, riderLocation, onAccept, onDecli
         initial={{ scale: 0.9, y: 24 }} animate={{ scale: 1, y: 0 }}
         transition={{ type: 'spring', damping: 22, stiffness: 260 }}
         className={cn('relative w-full max-w-md rounded-3xl p-6 shadow-2xl border max-h-[90dvh] overflow-y-auto',
-          dk ? 'bg-surface-dark-2 border-white/10' : 'bg-white border-gray-200')}>
+          dk ? 'bg-surface-dark-2 border-white/10' : 'bg-white border-surface-light-3')}>
         {taken ? (
           <div className="text-center py-6">
             <div className="w-16 h-16 rounded-full bg-warning/15 flex items-center justify-center mx-auto mb-4">
               <Clock size={28} className="text-warning" />
             </div>
-            <h3 className={cn('text-xl font-extrabold mb-1', dk ? 'text-white' : 'text-gray-900')}>Already taken</h3>
-            <p className={cn('text-sm mb-5', dk ? 'text-white/50' : 'text-gray-500')}>Another rider accepted this order first.</p>
+            <h3 className={cn('text-xl font-extrabold mb-1', dk ? 'text-white' : 'text-text-light')}>Already taken</h3>
+            <p className={cn('text-sm mb-5', dk ? 'text-white/50' : 'text-text-light-2')}>Another rider accepted this order first.</p>
             <button onClick={onDismiss} className="bg-brand text-white px-8 py-3 rounded-xl font-bold hover:bg-brand-dark transition">OK</button>
           </div>
         ) : (
@@ -158,8 +158,8 @@ function IncomingOrderModal({ order, taken, dk, riderLocation, onAccept, onDecli
               </div>
             </div>
             <div className="text-center mb-5">
-              <h3 className={cn('text-2xl font-extrabold', dk ? 'text-white' : 'text-gray-900')}>Incoming Order!</h3>
-              <p className={cn('text-xs mt-1', dk ? 'text-white/40' : 'text-gray-500')}>
+              <h3 className={cn('text-2xl font-extrabold', dk ? 'text-white' : 'text-text-light')}>Incoming Order!</h3>
+              <p className={cn('text-xs mt-1', dk ? 'text-white/40' : 'text-text-light-2')}>
                 {order.displayCode} · accept before another rider takes it
               </p>
             </div>
@@ -192,7 +192,7 @@ function IncomingOrderModal({ order, taken, dk, riderLocation, onAccept, onDecli
             <div className="grid grid-cols-2 gap-3 mt-5">
               <button onClick={onDecline}
                 className={cn('py-4 rounded-2xl font-bold text-base border-2 transition',
-                  dk ? 'border-white/10 text-white/60 hover:bg-white/5' : 'border-gray-200 text-gray-500 hover:bg-gray-50')}>
+                  dk ? 'border-white/10 text-white/60 hover:bg-white/5' : 'border-surface-light-3 text-text-light-2 hover:bg-surface-light-2')}>
                 Decline
               </button>
               <button onClick={onAccept}
@@ -681,24 +681,24 @@ function ActiveDeliveryView({
           <div className="flex items-center gap-1.5">
             {speedLimitKmh !== null && (
               <div className="bg-white rounded-full w-12 h-12 flex flex-col items-center justify-center border-[3px] border-red-600">
-                <span className="font-extrabold text-gray-900 text-base leading-none">{speedLimitKmh}</span>
+                <span className="font-extrabold text-text-light text-base leading-none">{speedLimitKmh}</span>
               </div>
             )}
             {speedKmh !== null && (
               <div className={cn('rounded-2xl shadow-lg w-14 h-14 flex flex-col items-center justify-center border-2',
                 speedLimitKmh !== null && speedKmh > speedLimitKmh + 5
-                  ? 'bg-red-600 border-red-700 animate-pulse' : 'bg-white border-gray-900')}>
+                  ? 'bg-red-600 border-red-700 animate-pulse' : 'bg-white border-text-light')}>
                 <span className={cn('font-extrabold text-lg leading-none',
-                  speedLimitKmh !== null && speedKmh > speedLimitKmh + 5 ? 'text-white' : 'text-gray-900')}>
+                  speedLimitKmh !== null && speedKmh > speedLimitKmh + 5 ? 'text-white' : 'text-text-light')}>
                   {Math.round(speedKmh)}
                 </span>
                 <span className={cn('text-[9px] font-semibold leading-none mt-0.5',
-                  speedLimitKmh !== null && speedKmh > speedLimitKmh + 5 ? 'text-white/80' : 'text-gray-500')}>km/h</span>
+                  speedLimitKmh !== null && speedKmh > speedLimitKmh + 5 ? 'text-white/80' : 'text-text-light-2')}>km/h</span>
               </div>
             )}
           </div>
           <button onClick={onMinimize}
-            className="w-11 h-11 rounded-full bg-white shadow-lg flex items-center justify-center text-gray-700">
+            className="w-11 h-11 rounded-full bg-white shadow-lg flex items-center justify-center text-text-light-2">
             <ChevronDown size={22} />
           </button>
         </div>
@@ -737,7 +737,7 @@ function ActiveDeliveryView({
             className="bg-white rounded-3xl shadow-2xl px-5 pt-2 pb-6 space-y-4">
             <button onClick={() => setDetailsOpen(false)}
               className="w-full flex items-center justify-center py-3 -mt-1 mb-1">
-              <span className="w-10 h-1 bg-gray-300 rounded-full" />
+              <span className="w-10 h-1 bg-surface-light-3 rounded-full" />
             </button>
 
             {/* Trip metrics: arrival time + remaining distance + time
@@ -749,13 +749,13 @@ function ActiveDeliveryView({
                 <div className="flex items-baseline justify-between">
                   <div className="flex items-baseline gap-1.5">
                     <span className={cn('font-extrabold text-xl', etaColorClass)}>{arrivalTime}</span>
-                    <span className="text-xs text-gray-400 font-medium">arrival</span>
+                    <span className="text-xs text-surface-light-3 font-medium">arrival</span>
                   </div>
-                  <div className="text-right text-sm text-gray-500 font-semibold">
+                  <div className="text-right text-sm text-text-light-2 font-semibold">
                     {remainingMin} min · {formatDistance(remainingKm || 0)}
                   </div>
                 </div>
-                <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                <div className="h-1.5 rounded-full bg-surface-light-2 overflow-hidden">
                   <div className="h-full bg-brand rounded-full transition-all duration-700" style={{ width: `${progressPct}%` }} />
                 </div>
               </div>
@@ -763,18 +763,18 @@ function ActiveDeliveryView({
 
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-bold text-gray-900">{order.displayCode}</p>
-                <p className="text-sm text-gray-500">{order.customerName} · {leg.address}</p>
+                <p className="font-bold text-text-light">{order.displayCode}</p>
+                <p className="text-sm text-text-light-2">{order.customerName} · {leg.address}</p>
               </div>
               <span className="text-brand font-extrabold text-lg shrink-0">{formatCurrency(order.price)}</span>
             </div>
             <div className="flex gap-2">
               <a href={`tel:${order.customerPhone}`}
-                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-gray-100 text-gray-700 font-semibold text-sm">
+                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-surface-light-2 text-text-light-2 font-semibold text-sm">
                 <PhoneCall size={16} /> Call
               </a>
               <a href={`sms:${order.customerPhone}`}
-                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-gray-100 text-gray-700 font-semibold text-sm">
+                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-surface-light-2 text-text-light-2 font-semibold text-sm">
                 <MessageSquare size={16} /> Message
               </a>
             </div>
@@ -805,8 +805,8 @@ function ActiveDeliveryView({
             )}
             <div className="flex items-center gap-2">
               <button onClick={() => setDetailsOpen(true)}
-                className="flex-1 bg-white rounded-2xl shadow-xl px-4 py-3.5 flex items-center gap-2 font-semibold text-sm text-gray-900">
-                <ChevronUp size={16} className="text-gray-400" /> {order.displayCode} · {formatCurrency(order.price)}
+                className="flex-1 bg-white rounded-2xl shadow-xl px-4 py-3.5 flex items-center gap-2 font-semibold text-sm text-text-light">
+                <ChevronUp size={16} className="text-surface-light-3" /> {order.displayCode} · {formatCurrency(order.price)}
               </button>
               <button onClick={() => onStatusUpdate(order.id, nextAction.next)}
                 className="bg-brand text-white px-5 py-3.5 rounded-2xl font-bold text-sm shadow-xl shadow-brand/30 whitespace-nowrap">
@@ -845,14 +845,14 @@ function OrderDetailOverlay({ order, dk, onClose, onAccept, onDecline }: {
     <>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className={cn('text-lg font-extrabold', dk ? 'text-white' : 'text-gray-900')}>Trip: {order.displayCode}</h2>
-          <p className={cn('text-xs mt-0.5', dk ? 'text-white/40' : 'text-gray-500')}>
+          <h2 className={cn('text-lg font-extrabold', dk ? 'text-white' : 'text-text-light')}>Trip: {order.displayCode}</h2>
+          <p className={cn('text-xs mt-0.5', dk ? 'text-white/40' : 'text-text-light-2')}>
             {isPending ? 'Waiting for a rider' : `Status: ${order.status.replace('_', ' ')}`} · {timeAgo(order.createdAt)}
           </p>
         </div>
         <button onClick={onClose}
           className={cn('w-11 h-11 rounded-xl flex items-center justify-center transition shrink-0',
-            dk ? 'text-white/40 hover:bg-white/5 hover:text-white/80' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-700')}>
+            dk ? 'text-white/40 hover:bg-white/5 hover:text-white/80' : 'text-surface-light-3 hover:bg-surface-light-2 hover:text-text-light-2')}>
           <X size={18} />
         </button>
       </div>
@@ -861,7 +861,7 @@ function OrderDetailOverlay({ order, dk, onClose, onAccept, onDecline }: {
       <div className="flex gap-2">
         <a href={`tel:${order.customerPhone}`}
           className={cn('flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition border',
-            dk ? 'border-white/10 text-white/70 hover:bg-white/5' : 'border-gray-200 text-gray-700 hover:bg-gray-50')}>
+            dk ? 'border-white/10 text-white/70 hover:bg-white/5' : 'border-surface-light-3 text-text-light-2 hover:bg-surface-light-2')}>
           <PhoneCall size={15} /> Call
         </a>
         <a href={`https://wa.me/${order.customerPhone.replace(/\+/g, '')}`} target="_blank" rel="noopener noreferrer"
@@ -876,7 +876,7 @@ function OrderDetailOverlay({ order, dk, onClose, onAccept, onDecline }: {
     <div className="grid grid-cols-2 gap-3">
       <button onClick={onDecline}
         className={cn('py-4 rounded-2xl font-bold border-2 transition',
-          dk ? 'border-white/10 text-white/60 hover:bg-white/5' : 'border-gray-200 text-gray-500 hover:bg-gray-50')}>
+          dk ? 'border-white/10 text-white/60 hover:bg-white/5' : 'border-surface-light-3 text-text-light-2 hover:bg-surface-light-2')}>
         Decline
       </button>
       <button onClick={onAccept}
@@ -902,10 +902,10 @@ function OrderDetailOverlay({ order, dk, onClose, onAccept, onDecline }: {
       {/* ══ DESKTOP: floating panel ══ */}
       <div className="hidden lg:flex absolute top-20 left-6 bottom-6 z-10 w-[400px] flex-col">
         <div className={cn('flex-1 min-h-0 rounded-2xl shadow-2xl border flex flex-col overflow-hidden',
-          dk ? 'bg-surface-dark-2/95 border-white/5 glass' : 'bg-white/95 border-gray-200 glass')}>
+          dk ? 'bg-surface-dark-2/95 border-white/5 glass' : 'bg-white/95 border-surface-light-3 glass')}>
           <div className="flex-1 overflow-y-auto p-5 space-y-4">{details}</div>
           {actionButtons && (
-            <div className={cn('p-4 border-t shrink-0', dk ? 'border-white/5' : 'border-gray-100')}>{actionButtons}</div>
+            <div className={cn('p-4 border-t shrink-0', dk ? 'border-white/5' : 'border-surface-light-2')}>{actionButtons}</div>
           )}
         </div>
       </div>
@@ -913,23 +913,23 @@ function OrderDetailOverlay({ order, dk, onClose, onAccept, onDecline }: {
       {/* ══ MOBILE: bottom sheet ══ */}
       <motion.div
         className={cn('lg:hidden fixed left-0 right-0 bottom-0 z-20 flex flex-col rounded-t-3xl shadow-[0_-8px_40px_rgba(0,0,0,0.25)]',
-          dk ? 'bg-surface-dark-2 border-t border-white/5' : 'bg-white border-t border-gray-200')}
+          dk ? 'bg-surface-dark-2 border-t border-white/5' : 'bg-white border-t border-surface-light-3')}
         animate={{ height: sheetOpen ? `calc(100dvh - ${NAV_HEIGHT_REM}rem)` : `${SHEET_COLLAPSED}px` }}
         transition={{ type: 'spring', damping: 30, stiffness: 300 }}
       >
         <div ref={handleRef} className="flex items-center justify-between px-4 pt-3 pb-1 shrink-0">
           <button onClick={onClose}
             className={cn('w-11 h-11 rounded-xl flex items-center justify-center transition shrink-0',
-              dk ? 'text-white/40 hover:bg-white/5' : 'text-gray-400 hover:bg-gray-100')}>
+              dk ? 'text-white/40 hover:bg-white/5' : 'text-surface-light-3 hover:bg-surface-light-2')}>
             <X size={18} />
           </button>
           <div className="flex-1 flex justify-center py-2 cursor-pointer" onClick={() => setSheetOpen(!sheetOpen)}>
-            <div className={cn('w-10 h-1 rounded-full', dk ? 'bg-white/20' : 'bg-gray-300')} />
+            <div className={cn('w-10 h-1 rounded-full', dk ? 'bg-white/20' : 'bg-surface-light-3')} />
           </div>
           {sheetOpen ? (
             <button onClick={() => setSheetOpen(false)}
               className={cn('w-11 h-11 rounded-xl flex items-center justify-center transition shrink-0',
-                dk ? 'text-white/40 hover:bg-white/5' : 'text-gray-400 hover:bg-gray-100')}>
+                dk ? 'text-white/40 hover:bg-white/5' : 'text-surface-light-3 hover:bg-surface-light-2')}>
               <ChevronDown size={20} />
             </button>
           ) : <div className="w-11" />}
@@ -938,7 +938,7 @@ function OrderDetailOverlay({ order, dk, onClose, onAccept, onDecline }: {
         {!sheetOpen && (
           <button onClick={() => setSheetOpen(true)}
             className={cn('w-full px-4 pb-3 flex items-center justify-center gap-2 py-2 text-sm font-bold',
-              dk ? 'text-white/70' : 'text-gray-700')}>
+              dk ? 'text-white/70' : 'text-text-light-2')}>
             {order.displayCode} · {formatCurrency(order.price)} <ChevronUp size={14} />
           </button>
         )}
@@ -947,7 +947,7 @@ function OrderDetailOverlay({ order, dk, onClose, onAccept, onDecline }: {
           <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
             <div className="flex-1 px-4 pb-4 space-y-4 overflow-y-auto">{details}</div>
             {actionButtons && (
-              <div className={cn('p-4 border-t shrink-0', dk ? 'border-white/5' : 'border-gray-100')}>{actionButtons}</div>
+              <div className={cn('p-4 border-t shrink-0', dk ? 'border-white/5' : 'border-surface-light-2')}>{actionButtons}</div>
             )}
           </div>
         )}
@@ -1169,7 +1169,7 @@ export default function RiderDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pending.length]);
 
-  if (!rider || rider.role !== 'rider') return <div className="pt-20 min-h-screen flex items-center justify-center"><p className={dk ? 'text-white/50' : 'text-gray-500'}>Please sign in as a rider.</p></div>;
+  if (!rider || rider.role !== 'rider') return <div className="pt-20 min-h-screen flex items-center justify-center"><p className={dk ? 'text-white/50' : 'text-text-light-2'}>Please sign in as a rider.</p></div>;
 
   // ── Accept (first-come-first-served via orderStore guard) ───────
   // Lifecycle notifications (customer + rider) fire inside acceptOrder.
@@ -1213,24 +1213,24 @@ export default function RiderDashboard() {
           this full-screen route, so the rider still has a way back to
           Home/logout without a permanent heavy navbar competing with the
           nav view above it. */}
-      <div className="fixed top-0 left-0 right-0 z-30 flex items-center gap-3 px-4 bg-white border-b border-gray-100"
+      <div className="fixed top-0 left-0 right-0 z-30 flex items-center gap-3 px-4 bg-white border-b border-surface-light-2"
         style={{ paddingTop: 'env(safe-area-inset-top, 0px)', height: 'calc(env(safe-area-inset-top, 0px) + 3.5rem)' }}>
-        <Link to="/" className="w-9 h-9 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-100 shrink-0">
+        <Link to="/" className="w-9 h-9 rounded-full flex items-center justify-center text-text-light-2 hover:bg-surface-light-2 shrink-0">
           <ArrowLeft size={18} />
         </Link>
-        <span className="font-bold text-gray-900 text-sm">Rider Dashboard</span>
+        <span className="font-bold text-text-light text-sm">Rider Dashboard</span>
       </div>
       <section className={cn('py-6', dk ? 'bg-surface-dark' : 'bg-white')}>
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <h1 className={cn('text-2xl font-extrabold', dk ? 'text-white' : 'text-gray-900')}>Rider Dashboard</h1>
-              <p className={cn('text-sm', dk ? 'text-white/50' : 'text-gray-500')}>Welcome, {rider.name}</p>
+              <h1 className={cn('text-2xl font-extrabold', dk ? 'text-white' : 'text-text-light')}>Rider Dashboard</h1>
+              <p className={cn('text-sm', dk ? 'text-white/50' : 'text-text-light-2')}>Welcome, {rider.name}</p>
               {rider.status === 'pending' && <span className="inline-block mt-2 px-3 py-1 rounded-full bg-warning/10 text-warning text-xs font-bold">Pending Approval</span>}
             </div>
             <button onClick={() => setRiderAvailability(rider.availability === 'online' ? 'offline' : 'online')}
               className={cn('flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition',
-                rider.availability === 'online' ? 'bg-success text-white' : dk ? 'bg-surface-dark-3 text-white/50' : 'bg-gray-200 text-gray-600')}>
+                rider.availability === 'online' ? 'bg-success text-white' : dk ? 'bg-surface-dark-3 text-white/50' : 'bg-surface-light-3 text-text-light-2')}>
               {rider.availability === 'online' ? <><Power size={16} /> Online</> : <><PowerOff size={16} /> Go Online</>}
             </button>
           </div>
@@ -1243,24 +1243,24 @@ export default function RiderDashboard() {
               { icon: DollarSign, label: 'Earnings', value: formatCurrency(rider.earnings) },
               { icon: Clock, label: 'Active', value: activeOrder ? 'Yes' : 'No' },
             ].map(s => (
-              <div key={s.label} className={cn('p-4 rounded-xl border', dk ? 'bg-surface-dark-2 border-white/5' : 'bg-gray-50 border-gray-200')}>
+              <div key={s.label} className={cn('p-4 rounded-xl border', dk ? 'bg-surface-dark-2 border-white/5' : 'bg-surface-light-2 border-surface-light-3')}>
                 <s.icon size={18} className="text-brand mb-2" />
-                <p className={cn('text-2xl font-extrabold', dk ? 'text-white' : 'text-gray-900')}>{s.value}</p>
-                <p className={cn('text-xs', dk ? 'text-white/40' : 'text-gray-500')}>{s.label}</p>
+                <p className={cn('text-2xl font-extrabold', dk ? 'text-white' : 'text-text-light')}>{s.value}</p>
+                <p className={cn('text-xs', dk ? 'text-white/40' : 'text-text-light-2')}>{s.label}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      <section className={cn('py-6', dk ? 'bg-surface-dark-2' : 'bg-gray-50')}>
+      <section className={cn('py-6', dk ? 'bg-surface-dark-2' : 'bg-surface-light-2')}>
         <div className="max-w-7xl mx-auto px-6">
           {/* Tabs */}
-          <div className={cn('flex rounded-xl p-1 mb-6 max-w-md', dk ? 'bg-surface-dark-3' : 'bg-gray-200')}>
+          <div className={cn('flex rounded-xl p-1 mb-6 max-w-md', dk ? 'bg-surface-dark-3' : 'bg-surface-light-3')}>
             {(['available', 'my'] as const).map(t => (
               <button key={t} onClick={() => setTab(t)}
                 className={cn('flex-1 py-2.5 rounded-lg text-sm font-semibold transition capitalize',
-                  tab === t ? 'bg-brand text-white shadow' : dk ? 'text-white/50' : 'text-gray-500')}>
+                  tab === t ? 'bg-brand text-white shadow' : dk ? 'text-white/50' : 'text-text-light-2')}>
                 {t === 'available' ? `Available (${pending.length})` : `My Orders (${myOrders.length})`}
               </button>
             ))}
@@ -1268,32 +1268,32 @@ export default function RiderDashboard() {
 
           {tab === 'available' ? (
             <div className="space-y-4">
-              {pending.length === 0 && <div className="text-center py-16"><Package size={48} className={cn('mx-auto mb-4', dk ? 'text-white/20' : 'text-gray-300')} /><p className={dk ? 'text-white/40' : 'text-gray-500'}>No available orders right now</p></div>}
+              {pending.length === 0 && <div className="text-center py-16"><Package size={48} className={cn('mx-auto mb-4', dk ? 'text-white/20' : 'text-surface-light-3')} /><p className={dk ? 'text-white/40' : 'text-text-light-2'}>No available orders right now</p></div>}
               {pending.map(o => {
                 const scheduled = (o.orderType || 'instant') === 'scheduled';
                 return (
                   <motion.div key={o.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
                     onClick={() => setDetailOrder(o)}
                     className={cn('p-5 rounded-xl border flex flex-col sm:flex-row sm:items-center gap-4 cursor-pointer transition',
-                      dk ? 'bg-surface-dark-3 border-white/5 hover:border-brand/30' : 'bg-white border-gray-200 hover:border-brand/40 hover:shadow-md')}>
+                      dk ? 'bg-surface-dark-3 border-white/5 hover:border-brand/30' : 'bg-white border-surface-light-3 hover:border-brand/40 hover:shadow-md')}>
                     <div className="flex-1">
                       <div className="flex flex-wrap items-center gap-2 mb-2">
-                        <span className={cn('font-bold', dk ? 'text-white' : 'text-gray-900')}>{o.displayCode}</span>
+                        <span className={cn('font-bold', dk ? 'text-white' : 'text-text-light')}>{o.displayCode}</span>
                         <span className="text-xs text-brand font-semibold">{formatDistance(o.distance)}</span>
                         {scheduled ? (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-500">
                             <Calendar size={10} /> Scheduled{o.scheduledFor ? ` · ${formatDate(o.scheduledFor)}` : ''}
                           </span>
                         ) : (
-                          <span className={cn('text-xs', dk ? 'text-white/30' : 'text-gray-400')}>{timeAgo(o.createdAt)}</span>
+                          <span className={cn('text-xs', dk ? 'text-white/30' : 'text-surface-light-3')}>{timeAgo(o.createdAt)}</span>
                         )}
                       </div>
-                      <p className={cn('text-sm', dk ? 'text-white/50' : 'text-gray-500')}>{o.pickup.address} → {o.dropoff.address}</p>
+                      <p className={cn('text-sm', dk ? 'text-white/50' : 'text-text-light-2')}>{o.pickup.address} → {o.dropoff.address}</p>
                       <p className="text-brand font-bold mt-1">{formatCurrency(o.price)}</p>
                     </div>
                     <div className="flex gap-2">
                       <button onClick={(e) => { e.stopPropagation(); setDetailOrder(o); }}
-                        className={cn('px-4 py-2 rounded-lg text-sm font-semibold transition', dk ? 'bg-surface-dark-2 text-white/70 hover:bg-white/5' : 'bg-gray-100 text-gray-700 hover:bg-gray-200')}>
+                        className={cn('px-4 py-2 rounded-lg text-sm font-semibold transition', dk ? 'bg-surface-dark-2 text-white/70 hover:bg-white/5' : 'bg-surface-light-2 text-text-light-2 hover:bg-surface-light-3')}>
                         <Eye size={14} className="inline mr-1" /> View
                       </button>
                       <button onClick={(e) => { e.stopPropagation(); handleAccept(o); }}
@@ -1305,18 +1305,18 @@ export default function RiderDashboard() {
             </div>
           ) : (
             <div className="space-y-4">
-              {myOrders.length === 0 && <div className="text-center py-16"><Package size={48} className={cn('mx-auto mb-4', dk ? 'text-white/20' : 'text-gray-300')} /><p className={dk ? 'text-white/40' : 'text-gray-500'}>No orders yet</p></div>}
+              {myOrders.length === 0 && <div className="text-center py-16"><Package size={48} className={cn('mx-auto mb-4', dk ? 'text-white/20' : 'text-surface-light-3')} /><p className={dk ? 'text-white/40' : 'text-text-light-2'}>No orders yet</p></div>}
               {myOrders.map(o => (
-                <div key={o.id} className={cn('p-5 rounded-xl border', dk ? 'bg-surface-dark-3 border-white/5' : 'bg-white border-gray-200')}>
+                <div key={o.id} className={cn('p-5 rounded-xl border', dk ? 'bg-surface-dark-3 border-white/5' : 'bg-white border-surface-light-3')}>
                   <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
                     <div>
-                      <span className={cn('font-bold', dk ? 'text-white' : 'text-gray-900')}>{o.displayCode}</span>
+                      <span className={cn('font-bold', dk ? 'text-white' : 'text-text-light')}>{o.displayCode}</span>
                       <span className={cn('ml-2 px-2 py-0.5 rounded-full text-xs font-bold capitalize',
                         o.status === 'delivered' ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning')}>{o.status.replace('_', ' ')}</span>
                     </div>
                     <span className="text-brand font-bold">{formatCurrency(o.price)}</span>
                   </div>
-                  <p className={cn('text-sm mb-3', dk ? 'text-white/50' : 'text-gray-500')}>{o.pickup.address} → {o.dropoff.address}</p>
+                  <p className={cn('text-sm mb-3', dk ? 'text-white/50' : 'text-text-light-2')}>{o.pickup.address} → {o.dropoff.address}</p>
                   {o.status === 'accepted' && <button onClick={() => handleStatusUpdate(o.id, 'picked_up')} className="bg-brand text-white px-4 py-2 rounded-lg text-sm font-bold">Mark Picked Up</button>}
                   {o.status === 'picked_up' && <button onClick={() => handleStatusUpdate(o.id, 'in_transit')} className="bg-brand text-white px-4 py-2 rounded-lg text-sm font-bold">Start Delivery</button>}
                   {o.status === 'in_transit' && <button onClick={() => handleStatusUpdate(o.id, 'delivered')} className="bg-success text-white px-4 py-2 rounded-lg text-sm font-bold">Mark Delivered</button>}

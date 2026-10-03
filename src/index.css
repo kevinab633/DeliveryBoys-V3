@@ -26,7 +26,11 @@
 }
 
 html { scroll-behavior: smooth; overflow-x: hidden; }
-body { font-family: var(--font-sans); transition: background-color 0.3s, color 0.3s; overflow-x: hidden; }
+body { font-family: var(--font-sans); transition: background-color 0.3s, color 0.3s; overflow-x: hidden; overscroll-behavior-y: contain; }
+/* Prevents an accidental pull-to-refresh while panning/dragging the map
+   — most disruptive on the rider's nav screen, where losing your place
+   mid-drag would mean losing live tracking state. */
+.maplibregl-canvas-container, .leaflet-container { overscroll-behavior: contain; touch-action: none; }
 /* Belt-and-suspenders for the homepage's decorative glow/blob elements
    (absolute + negative inset + blur), which can bleed past their section
    and widen the page's scrollable area on some viewport widths, showing
