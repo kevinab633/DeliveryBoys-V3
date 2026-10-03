@@ -851,7 +851,7 @@ function OrderDetailOverlay({ order, dk, onClose, onAccept, onDecline }: {
           </p>
         </div>
         <button onClick={onClose}
-          className={cn('w-9 h-9 rounded-xl flex items-center justify-center transition shrink-0',
+          className={cn('w-11 h-11 rounded-xl flex items-center justify-center transition shrink-0',
             dk ? 'text-white/40 hover:bg-white/5 hover:text-white/80' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-700')}>
           <X size={18} />
         </button>
@@ -919,7 +919,7 @@ function OrderDetailOverlay({ order, dk, onClose, onAccept, onDecline }: {
       >
         <div ref={handleRef} className="flex items-center justify-between px-4 pt-3 pb-1 shrink-0">
           <button onClick={onClose}
-            className={cn('w-9 h-9 rounded-xl flex items-center justify-center transition shrink-0',
+            className={cn('w-11 h-11 rounded-xl flex items-center justify-center transition shrink-0',
               dk ? 'text-white/40 hover:bg-white/5' : 'text-gray-400 hover:bg-gray-100')}>
             <X size={18} />
           </button>
@@ -928,11 +928,11 @@ function OrderDetailOverlay({ order, dk, onClose, onAccept, onDecline }: {
           </div>
           {sheetOpen ? (
             <button onClick={() => setSheetOpen(false)}
-              className={cn('w-9 h-9 rounded-xl flex items-center justify-center transition shrink-0',
+              className={cn('w-11 h-11 rounded-xl flex items-center justify-center transition shrink-0',
                 dk ? 'text-white/40 hover:bg-white/5' : 'text-gray-400 hover:bg-gray-100')}>
               <ChevronDown size={20} />
             </button>
-          ) : <div className="w-9" />}
+          ) : <div className="w-11" />}
         </div>
 
         {!sheetOpen && (

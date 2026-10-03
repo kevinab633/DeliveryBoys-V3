@@ -811,7 +811,7 @@ export default function Book() {
           {sheetOpen ? (
             <button
               onClick={() => setSheetOpen(false)}
-              className={cn('w-9 h-9 rounded-xl flex items-center justify-center transition shrink-0',
+              className={cn('w-11 h-11 rounded-xl flex items-center justify-center transition shrink-0',
                 dk ? 'text-white/40 hover:bg-white/5 hover:text-white/70' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600')}
             >
               <ChevronDown size={20} />

@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, MotionConfig } from 'framer-motion';
 import { useEffect } from 'react';
 import { useThemeStore } from './stores/themeStore';
 import { useOrderStore } from './stores/orderStore';
@@ -172,10 +172,20 @@ function AppContent() {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <DebugErrorBoundary>
-        <AppContent />
-      </DebugErrorBoundary>
-    </BrowserRouter>
+    // reducedMotion="user" makes every motion.* component and
+    // AnimatePresence transition in the app automatically respect the
+    // OS-level "reduce motion" accessibility setting — transforms and
+    // opacity fades are kept (so content still appears/disappears
+    // correctly), but the animated motion itself is skipped for anyone
+    // who has that preference turned on. This covers every page-
+    // transition, panel-swap, and nav-screen animation added this
+    // session in one place, rather than needing a per-component check.
+    <MotionConfig reducedMotion="user">
+      <BrowserRouter>
+        <DebugErrorBoundary>
+          <AppContent />
+        </DebugErrorBoundary>
+      </BrowserRouter>
+    </MotionConfig>
   );
 }
