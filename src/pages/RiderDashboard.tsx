@@ -1057,6 +1057,7 @@ export default function RiderDashboard() {
     }
 
     let lastSentAt = 0;
+    const lastLocalUpdateRef = { current: 0 };
     let lastSentLat: number | null = null;
     let lastSentLng: number | null = null;
 
@@ -1091,12 +1092,24 @@ export default function RiderDashboard() {
         // updateRiderLocation() drives the LOCAL map/camera/arrow and
         // should reflect every GPS fix the device gives us — gating it
         // behind a 10m/4s threshold (meant only to limit how often we
-        // write to Supabase) is exactly why walking tests and slow
-        // driving felt laggy: real fixes were being thrown away before
-        // ever reaching the screen. The network broadcast keeps its own,
-        // separate throttle below, since that one genuinely does cost a
-        // database write per call.
-        updateRiderLocation(lat, lng);
+        // write to Supabase) was making walking tests and slow driving
+        // feel laggy, since real fixes were being thrown away before
+        // ever reaching the screen. BUT with no cap at all, some Android
+        // devices fire GPS callbacks several times per second with
+        // enableHighAccuracy — each one was triggering a full Zustand
+        // store update (which rebuilds the whole allUsers array) and a
+        // full React re-render cascade through the entire nav screen:
+        // heading/speed math, route re-matching, camera easeTo, puck
+        // animation setup, all running far more often than the screen
+        // can usefully redraw. That's what was making the whole page
+        // feel glitchy rather than just the route line. Cap the actual
+        // store update to roughly screen-refresh pace (~10/sec) — GPS
+        // ticks between updates are simply skipped for this purpose,
+        // not queued or delayed, since a fresher one is always coming.
+        if (now - lastLocalUpdateRef.current >= 100) {
+          lastLocalUpdateRef.current = now;
+          updateRiderLocation(lat, lng);
+        }
 
         const movedEnough = lastSentLat === null || metersBetween(lastSentLat, lastSentLng!, lat, lng) >= 10;
         const timeEnough = now - lastSentAt >= 4000;

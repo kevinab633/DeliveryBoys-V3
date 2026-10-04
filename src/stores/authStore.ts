@@ -337,10 +337,18 @@ export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
     set(s2 => {
       if (!s2.user || s2.user.role !== 'rider') return s2;
       const updated = { ...s2.user, location: { lat, lng } } as RiderProfile;
-      return {
-        user: updated,
-        allUsers: s2.allUsers.map(u => u.id === updated.id ? updated : u),
-      };
+      // Only rebuild allUsers when this rider's entry actually needs to
+      // change within it — on the live nav screen this fires frequently
+      // (even at the capped ~10/sec rate above), and remapping the
+      // whole array every time is needless extra work on top of an
+      // already-frequent update.
+      const idx = s2.allUsers.findIndex(u => u.id === updated.id);
+      const allUsers = idx === -1 ? s2.allUsers : [
+        ...s2.allUsers.slice(0, idx),
+        updated,
+        ...s2.allUsers.slice(idx + 1),
+      ];
+      return { user: updated, allUsers };
     });
   },
 
