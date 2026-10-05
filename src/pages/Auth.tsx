@@ -42,10 +42,10 @@ export function LoginPage() {
         </div>
 
         {/* Role Tabs */}
-        <div className={cn('flex rounded-xl p-1 mb-6', dk ? 'bg-surface-dark-3' : 'bg-gray-100')}>
+        <div className={cn('flex rounded-full p-1 mb-6', dk ? 'bg-surface-dark-3' : 'bg-gray-100')}>
           {(['customer', 'rider'] as const).map(r => (
             <button key={r} onClick={() => setRole(r)}
-              className={cn('flex-1 py-2.5 rounded-lg text-sm font-semibold transition capitalize flex items-center justify-center gap-2',
+              className={cn('flex-1 py-2.5 rounded-full text-sm font-semibold transition capitalize flex items-center justify-center gap-2',
                 role === r ? 'bg-brand text-white shadow' : dk ? 'text-white/50 hover:text-white' : 'text-gray-500 hover:text-gray-700')}>
               {r === 'rider' ? <Bike size={16} /> : <User size={16} />} {r}
             </button>
@@ -61,7 +61,7 @@ export function LoginPage() {
               placeholder="Email or phone number" className={inp} />
           </div>
           {error && <p className="text-red-400 text-sm text-center">{error}</p>}
-          <button type="submit" className="w-full bg-brand text-white py-3.5 rounded-xl font-bold hover:bg-brand-dark transition flex items-center justify-center gap-2">
+          <button type="submit" className="w-full bg-brand text-white py-3.5 rounded-full font-bold hover:bg-brand-dark transition flex items-center justify-center gap-2">
             Sign In <ArrowRight size={18} />
           </button>
           <p className={cn('text-center text-sm', dk ? 'text-white/40' : 'text-gray-500')}>
@@ -113,10 +113,10 @@ export function SignupPage() {
           <h1 className={cn('text-2xl font-extrabold', dk ? 'text-white' : 'text-gray-900')}>Create Account</h1>
         </div>
 
-        <div className={cn('flex rounded-xl p-1 mb-6', dk ? 'bg-surface-dark-3' : 'bg-gray-100')}>
+        <div className={cn('flex rounded-full p-1 mb-6', dk ? 'bg-surface-dark-3' : 'bg-gray-100')}>
           {(['customer', 'rider'] as const).map(r => (
             <button key={r} onClick={() => setRole(r)}
-              className={cn('flex-1 py-2.5 rounded-lg text-sm font-semibold transition capitalize flex items-center justify-center gap-2',
+              className={cn('flex-1 py-2.5 rounded-full text-sm font-semibold transition capitalize flex items-center justify-center gap-2',
                 role === r ? 'bg-brand text-white shadow' : dk ? 'text-white/50 hover:text-white' : 'text-gray-500 hover:text-gray-700')}>
               {r === 'rider' ? <Bike size={16} /> : <User size={16} />} {r}
             </button>
@@ -144,7 +144,7 @@ export function SignupPage() {
             </>
           )}
           {error && <p className="text-red-400 text-sm text-center">{error}</p>}
-          <button type="submit" className="w-full bg-brand text-white py-3.5 rounded-xl font-bold hover:bg-brand-dark transition flex items-center justify-center gap-2">
+          <button type="submit" className="w-full bg-brand text-white py-3.5 rounded-full font-bold hover:bg-brand-dark transition flex items-center justify-center gap-2">
             {role === 'rider' ? 'Apply as Rider' : 'Create Account'} <ArrowRight size={18} />
           </button>
           <p className={cn('text-center text-sm', dk ? 'text-white/40' : 'text-gray-500')}>
@@ -188,7 +188,7 @@ export function ManagerLoginPage() {
         <form onSubmit={handleSignIn} className="space-y-4">
           <input type="text" value={contact} onChange={e => setContact(e.target.value)} placeholder="Manager email or phone" className={inp} />
           {error && <p className="text-red-400 text-sm text-center">{error}</p>}
-          <button type="submit" className="w-full bg-brand text-white py-3.5 rounded-xl font-bold hover:bg-brand-dark transition">Sign In</button>
+          <button type="submit" className="w-full bg-brand text-white py-3.5 rounded-full font-bold hover:bg-brand-dark transition">Sign In</button>
         </form>
       </motion.div>
     </div>

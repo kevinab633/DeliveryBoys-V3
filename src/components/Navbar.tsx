@@ -49,7 +49,7 @@ export default function Navbar() {
           <div className="hidden lg:flex items-center gap-0.5">
             {publicLinks.map(l => (
               <Link key={l.path} to={l.path}
-                className={cn('px-3 py-2 text-[13px] font-semibold rounded-lg transition',
+                className={cn('px-3 py-2 text-[13px] font-semibold rounded-full transition',
                   location.pathname === l.path
                     ? 'text-brand bg-brand/8'
                     : dk ? 'text-white/55 hover:text-white hover:bg-white/5' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
@@ -127,7 +127,7 @@ export default function Navbar() {
                   dk ? 'text-white/65 hover:bg-white/5' : 'text-gray-600 hover:bg-gray-100')}>
                   Sign In
                 </Link>
-                <Link to="/auth/signup" className="px-4 py-2 text-sm font-bold rounded-xl bg-brand text-white hover:bg-brand-dark transition shadow-md shadow-brand/20">
+                <Link to="/auth/signup" className="px-4 py-2 text-sm font-bold rounded-full bg-brand text-white hover:bg-brand-dark transition shadow-md shadow-brand/20">
                   Sign Up
                 </Link>
               </div>
@@ -149,21 +149,21 @@ export default function Navbar() {
                 .filter(l => user && user.role !== 'customer' ? !customerOnlyPaths.includes(l.path) : true)
                 .map(l => (
                 <Link key={l.path} to={l.path} onClick={() => setOpen(false)}
-                  className={cn('block px-3 py-2.5 rounded-xl text-sm font-semibold transition',
+                  className={cn('block px-3 py-2.5 rounded-full text-sm font-semibold transition',
                     location.pathname === l.path ? 'text-brand bg-brand/8' : dk ? 'text-white/55 hover:bg-white/5' : 'text-gray-500 hover:bg-gray-50')}>
                   {l.name}
                 </Link>
               ))}
               {user && user.role === 'rider' && (
                 <Link to="/rider/dashboard" onClick={() => setOpen(false)}
-                  className={cn('block px-3 py-2.5 rounded-xl text-sm font-semibold transition',
+                  className={cn('block px-3 py-2.5 rounded-full text-sm font-semibold transition',
                     location.pathname === '/rider/dashboard' ? 'text-brand bg-brand/8' : dk ? 'text-white/55 hover:bg-white/5' : 'text-gray-500 hover:bg-gray-50')}>
                   Rider Dashboard
                 </Link>
               )}
               {user && user.role === 'manager' && (
                 <Link to="/manager" onClick={() => setOpen(false)}
-                  className={cn('block px-3 py-2.5 rounded-xl text-sm font-semibold transition',
+                  className={cn('block px-3 py-2.5 rounded-full text-sm font-semibold transition',
                     location.pathname === '/manager' ? 'text-brand bg-brand/8' : dk ? 'text-white/55 hover:bg-white/5' : 'text-gray-500 hover:bg-gray-50')}>
                   Manager Panel
                 </Link>
@@ -172,7 +172,7 @@ export default function Navbar() {
                 <div className="flex gap-2 pt-2">
                   <Link to="/auth/login" onClick={() => setOpen(false)} className={cn('flex-1 text-center px-4 py-2.5 rounded-xl text-sm font-semibold border',
                     dk ? 'border-white/10 text-white/70' : 'border-gray-200 text-gray-600')}>Sign In</Link>
-                  <Link to="/auth/signup" onClick={() => setOpen(false)} className="flex-1 text-center px-4 py-2.5 rounded-xl text-sm font-bold bg-brand text-white">Sign Up</Link>
+                  <Link to="/auth/signup" onClick={() => setOpen(false)} className="flex-1 text-center px-4 py-2.5 rounded-full text-sm font-bold bg-brand text-white">Sign Up</Link>
                 </div>
               )}
             </div>

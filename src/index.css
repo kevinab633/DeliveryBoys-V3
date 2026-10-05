@@ -4,6 +4,26 @@
 
 @theme {
   --color-brand: #C41E1E;
+
+  /* ── Material 3 Expressive tokens, adapted to the brand red ──────────
+     Structure (radii, state-layer approach, container roles) follows
+     Google's Material 3 spec; the color VALUES are swapped from MD3's
+     default violet to this app's red, so the result reads as a real,
+     intentional native-feeling design system rather than a generic
+     webpage — not a copy of Google's actual palette. */
+  --m3-primary: var(--color-brand);
+  --m3-on-primary: #FFFFFF;
+  --m3-secondary-container: #FBE4E4;      /* soft red-tinted container, mirrors MD3's tonal-container role */
+  --m3-on-secondary-container: #410002;
+  --m3-tertiary: #7D5260;                 /* MD3's muted accent role — left as-is, used sparingly for variety */
+  --m3-surface: #FFFBFE;
+  --m3-surface-container: #F7EDED;        /* warm-tinted surface instead of MD3's neutral violet-grey */
+  --m3-on-surface: #1C1B1F;
+  --m3-outline: #847474;
+  --m3-radius-pill: 999px;                /* all primary CTAs are pill-shaped per MD3 */
+  --m3-radius-container: 20px;            /* cards/sheets use a large, soft container radius, not sharp corners */
+  --m3-state-layer-opacity: 0.12;         /* pressed/hover overlays use this instead of ad-hoc opacity values */
+  --m3-easing-emphasized: cubic-bezier(0.2, 0, 0, 1);
   --color-brand-dark: #9A1515;
   --color-brand-light: #E53535;
   --color-surface-dark: #0A0A0B;
@@ -24,6 +44,27 @@
   --font-sans: 'Outfit', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 }
+
+/* Material 3 "state layer" press feedback — an overlay tint instead of
+   changing opacity/scale on the whole element, which is what MD3 itself
+   specifies for pressed/hover states. Apply alongside existing classes:
+   className="... md3-pressable" on any tappable surface. */
+.md3-pressable {
+  position: relative;
+  transition: transform 150ms var(--m3-easing-emphasized, ease);
+}
+.md3-pressable::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: currentColor;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+.md3-pressable:active::after { opacity: var(--m3-state-layer-opacity); }
+.md3-pressable:active { transform: scale(0.97); }
 
 html { scroll-behavior: smooth; overflow-x: hidden; }
 body { font-family: var(--font-sans); transition: background-color 0.3s, color 0.3s; overflow-x: hidden; overscroll-behavior-y: contain; }

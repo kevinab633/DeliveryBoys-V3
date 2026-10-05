@@ -36,7 +36,7 @@ export default function Profile() {
                 {editing ? (
                   <div className="flex gap-2">
                     <input value={name} onChange={e => setName(e.target.value)} className={inp} />
-                    <button onClick={() => { updateProfile({ name }); setEditing(false); }} className="bg-brand text-white px-4 py-2 rounded-xl text-sm font-bold">Save</button>
+                    <button onClick={() => { updateProfile({ name }); setEditing(false); }} className="bg-brand text-white px-4 py-2 rounded-full text-sm font-bold">Save</button>
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
@@ -61,7 +61,7 @@ export default function Profile() {
                   ) : addingEmail ? (
                     <div className="flex gap-2">
                       <input value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="your@email.com" className={cn(inp, 'w-48')} />
-                      <button onClick={() => { addContact('email', newEmail); setAddingEmail(false); }} className="bg-brand text-white px-3 py-1.5 rounded-lg text-xs font-bold">Add</button>
+                      <button onClick={() => { addContact('email', newEmail); setAddingEmail(false); }} className="bg-brand text-white px-3 py-1.5 rounded-full text-xs font-bold">Add</button>
                     </div>
                   ) : (
                     <button onClick={() => setAddingEmail(true)} className="flex items-center gap-1 text-brand text-sm font-bold"><Plus size={14} /> Add</button>
@@ -81,7 +81,7 @@ export default function Profile() {
                   ) : addingPhone ? (
                     <div className="flex gap-2">
                       <input value={newPhone} onChange={e => setNewPhone(e.target.value)} placeholder="0544188778" className={cn(inp, 'w-48')} />
-                      <button onClick={() => { addContact('phone', newPhone); setAddingPhone(false); }} className="bg-brand text-white px-3 py-1.5 rounded-lg text-xs font-bold">Add</button>
+                      <button onClick={() => { addContact('phone', newPhone); setAddingPhone(false); }} className="bg-brand text-white px-3 py-1.5 rounded-full text-xs font-bold">Add</button>
                     </div>
                   ) : (
                     <button onClick={() => setAddingPhone(true)} className="flex items-center gap-1 text-brand text-sm font-bold"><Plus size={14} /> Add</button>

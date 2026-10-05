@@ -210,7 +210,7 @@ export default function Track() {
           className={cn('w-full pl-9 pr-3 py-3 rounded-xl text-sm border',
             dk ? 'bg-surface-dark-3 border-white/10 text-white placeholder:text-white/30' : 'bg-surface-light-2 border-surface-light-3 text-text-light placeholder:text-surface-light-3')} />
       </div>
-      <button type="submit" className="bg-brand text-white px-5 py-3 rounded-xl font-bold hover:bg-brand-dark transition">Track</button>
+      <button type="submit" className="bg-brand text-white px-5 py-3 rounded-full font-bold hover:bg-brand-dark transition">Track</button>
     </form>
   );
 

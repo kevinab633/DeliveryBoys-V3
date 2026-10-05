@@ -36,7 +36,7 @@ export default function MyOrders() {
             <div className="text-center py-16">
               <Package size={48} className={cn('mx-auto mb-4', dk ? 'text-white/20' : 'text-gray-300')} />
               <p className={cn('text-lg mb-4', dk ? 'text-white/40' : 'text-gray-500')}>No orders yet</p>
-              <Link to="/book" className="bg-brand text-white px-6 py-3 rounded-xl font-bold">Book Your First Delivery</Link>
+              <Link to="/book" className="bg-brand text-white px-6 py-3 rounded-full font-bold">Book Your First Delivery</Link>
             </div>
           )}
           {myOrders.map(o => (

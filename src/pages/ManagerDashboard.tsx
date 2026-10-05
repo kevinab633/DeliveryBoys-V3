@@ -69,7 +69,7 @@ export default function ManagerDashboard() {
           <div className="flex gap-2 overflow-x-auto pb-2">
             {tabs.map(t => (
               <button key={t.key} onClick={() => setTab(t.key)}
-                className={cn('flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition',
+                className={cn('flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-semibold whitespace-nowrap transition',
                   tab === t.key ? 'bg-brand text-white' : dk ? 'bg-surface-dark-2 text-white/50 hover:text-white' : 'bg-gray-100 text-gray-500 hover:text-gray-700')}>
                 <t.icon size={16} /> {t.label}
               </button>
@@ -195,7 +195,7 @@ export default function ManagerDashboard() {
                 <div className="flex gap-3">
                   {(['auto', 'manual', 'hybrid'] as const).map(m => (
                     <button key={m} onClick={() => setPricingMode(m)}
-                      className={cn('px-4 py-2 rounded-xl text-sm font-semibold capitalize transition',
+                      className={cn('px-4 py-2 rounded-full text-sm font-semibold capitalize transition',
                         pricingMode === m ? 'bg-brand text-white' : dk ? 'bg-surface-dark-3 text-white/50' : 'bg-gray-100 text-gray-500')}>
                       {m}
                     </button>
@@ -235,7 +235,7 @@ export default function ManagerDashboard() {
                   <div className="flex gap-3 mb-4">
                     <input value={newOverrideKey} onChange={e => setNewOverrideKey(e.target.value)} placeholder="Key (e.g. motorcycle-5)" className={inp} />
                     <input type="number" value={newOverridePrice} onChange={e => setNewOverridePrice(e.target.value)} placeholder="Price (GHS)" className={cn(inp, 'w-32')} />
-                    <button onClick={() => { if (newOverrideKey && newOverridePrice) { setManualOverride(newOverrideKey, +newOverridePrice); setNewOverrideKey(''); setNewOverridePrice(''); } }} className="bg-brand text-white px-4 py-2 rounded-xl text-sm font-bold shrink-0">Add</button>
+                    <button onClick={() => { if (newOverrideKey && newOverridePrice) { setManualOverride(newOverrideKey, +newOverridePrice); setNewOverrideKey(''); setNewOverridePrice(''); } }} className="bg-brand text-white px-4 py-2 rounded-full text-sm font-bold shrink-0">Add</button>
                   </div>
                   {Object.entries(manualOverrides).map(([k, v]) => (
                     <div key={k} className={cn('flex items-center justify-between py-2 border-b', dk ? 'border-white/5' : 'border-gray-100')}>

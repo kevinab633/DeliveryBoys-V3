@@ -109,7 +109,7 @@ function RiderHomePage() {
             {/* Online/Offline toggle — same store action as the dashboard */}
             <div className="flex flex-col sm:flex-row gap-3 mb-10">
               <button onClick={() => setRiderAvailability(rider.availability === 'online' ? 'offline' : 'online')}
-                className={cn('inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-bold text-lg transition shadow-xl',
+                className={cn('inline-flex items-center justify-center gap-2 px-8 py-4 rounded-full font-bold text-lg transition shadow-xl',
                   rider.availability === 'online'
                     ? 'bg-success text-white hover:brightness-110 shadow-success/25'
                     : 'bg-brand text-white hover:bg-brand-dark shadow-brand/25')}>
@@ -272,7 +272,7 @@ function CustomerHomePage() {
               {/* Primary CTAs */}
               <div className="flex flex-col sm:flex-row gap-3 mb-6">
                 <Link to={user ? '/book' : '/auth/login'}
-                  className="inline-flex items-center justify-center gap-2 bg-brand text-white px-8 py-4 rounded-2xl font-bold text-lg hover:bg-brand-dark transition shadow-xl shadow-brand/25 group">
+                  className="inline-flex items-center justify-center gap-2 bg-brand text-white px-8 py-4 rounded-full font-bold text-lg hover:bg-brand-dark transition shadow-xl shadow-brand/25 group">
                   <Package size={22} />
                   {getContent('home.cta.primary', 'Book a Delivery')}
                   <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />

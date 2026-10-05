@@ -121,7 +121,7 @@ export default function LocationSearch({
           )}
           {hasPin && (
             <button onClick={onPinClick} title="Drop pin on map"
-              className={cn('w-7 h-7 rounded-lg flex items-center justify-center transition',
+              className={cn('w-7 h-7 rounded-full flex items-center justify-center transition',
                 pinActive
                   ? 'bg-brand text-white shadow-sm'
                   : dk ? 'text-white/30 hover:bg-white/5 hover:text-white/60' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'
@@ -134,7 +134,7 @@ export default function LocationSearch({
 
       {/* Dropdown */}
       {hasAnyDropdown && (
-        <div className={cn('absolute z-30 top-full mt-1 w-full rounded-xl shadow-xl border max-h-72 overflow-y-auto',
+        <div className={cn('absolute z-30 top-full mt-1 w-full rounded-3xl shadow-xl border max-h-72 overflow-y-auto',
           dk ? 'bg-surface-dark-2 border-white/10' : 'bg-white border-gray-200')}>
 
           {/* Empty panel: Your Location + recents */}
@@ -145,7 +145,7 @@ export default function LocationSearch({
                   onClick={() => { onUseCurrentLocation(); setShow(false); setFocused(false); }}
                   className={cn('w-full px-4 py-3 flex items-center gap-3 text-left transition border-b',
                     dk ? 'hover:bg-white/5 border-white/5' : 'hover:bg-gray-50 border-gray-100')}>
-                  <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
+                  <div className={cn('w-8 h-8 rounded-full flex items-center justify-center shrink-0',
                     dk ? 'bg-info/10' : 'bg-blue-50')}>
                     <LocateFixed size={16} className="text-info" />
                   </div>

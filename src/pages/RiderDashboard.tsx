@@ -145,7 +145,7 @@ function IncomingOrderModal({ order, taken, dk, riderLocation, onAccept, onDecli
             </div>
             <h3 className={cn('text-xl font-extrabold mb-1', dk ? 'text-white' : 'text-text-light')}>Already taken</h3>
             <p className={cn('text-sm mb-5', dk ? 'text-white/50' : 'text-text-light-2')}>Another rider accepted this order first.</p>
-            <button onClick={onDismiss} className="bg-brand text-white px-8 py-3 rounded-xl font-bold hover:bg-brand-dark transition">OK</button>
+            <button onClick={onDismiss} className="bg-brand text-white px-8 py-3 rounded-full font-bold hover:bg-brand-dark transition">OK</button>
           </div>
         ) : (
           <>
@@ -804,16 +804,16 @@ function ActiveDeliveryView({
             </div>
             <div className="flex gap-2">
               <a href={`tel:${order.customerPhone}`}
-                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-surface-light-2 text-text-light-2 font-semibold text-sm">
+                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-full bg-surface-light-2 text-text-light-2 font-semibold text-sm">
                 <PhoneCall size={16} /> Call
               </a>
               <a href={`sms:${order.customerPhone}`}
-                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-surface-light-2 text-text-light-2 font-semibold text-sm">
+                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-full bg-surface-light-2 text-text-light-2 font-semibold text-sm">
                 <MessageSquare size={16} /> Message
               </a>
             </div>
             <button onClick={() => onStatusUpdate(order.id, nextAction.next)}
-              className="w-full bg-brand text-white py-4 rounded-2xl font-bold text-base hover:bg-brand-dark transition shadow-lg shadow-brand/25">
+              className="w-full bg-brand text-white py-4 rounded-full font-bold text-base hover:bg-brand-dark transition shadow-lg shadow-brand/25">
               {nextAction.label}
             </button>
           </motion.div>
@@ -839,11 +839,11 @@ function ActiveDeliveryView({
             )}
             <div className="flex items-center gap-2">
               <button onClick={() => setDetailsOpen(true)}
-                className="flex-1 bg-white rounded-2xl shadow-xl px-4 py-3.5 flex items-center gap-2 font-semibold text-sm text-text-light">
+                className="flex-1 bg-white rounded-full shadow-xl px-4 py-3.5 flex items-center gap-2 font-semibold text-sm text-text-light">
                 <ChevronUp size={16} className="text-surface-light-3" /> {order.displayCode} · {formatCurrency(order.price)}
               </button>
               <button onClick={() => onStatusUpdate(order.id, nextAction.next)}
-                className="bg-brand text-white px-5 py-3.5 rounded-2xl font-bold text-sm shadow-xl shadow-brand/30 whitespace-nowrap">
+                className="bg-brand text-white px-5 py-3.5 rounded-full font-bold text-sm shadow-xl shadow-brand/30 whitespace-nowrap">
                 {nextAction.label}
               </button>
             </div>
@@ -914,7 +914,7 @@ function OrderDetailOverlay({ order, dk, onClose, onAccept, onDecline }: {
         Decline
       </button>
       <button onClick={onAccept}
-        className="py-4 rounded-2xl font-bold bg-brand text-white hover:bg-brand-dark transition shadow-lg shadow-brand/25">
+        className="py-4 rounded-full font-bold bg-brand text-white hover:bg-brand-dark transition shadow-lg shadow-brand/25">
         Accept Order
       </button>
     </div>
@@ -1303,10 +1303,10 @@ export default function RiderDashboard() {
       <section className={cn('py-6', dk ? 'bg-surface-dark-2' : 'bg-surface-light-2')}>
         <div className="max-w-7xl mx-auto px-6">
           {/* Tabs */}
-          <div className={cn('flex rounded-xl p-1 mb-6 max-w-md', dk ? 'bg-surface-dark-3' : 'bg-surface-light-3')}>
+          <div className={cn('flex rounded-full p-1 mb-6 max-w-md', dk ? 'bg-surface-dark-3' : 'bg-surface-light-3')}>
             {(['available', 'my'] as const).map(t => (
               <button key={t} onClick={() => setTab(t)}
-                className={cn('flex-1 py-2.5 rounded-lg text-sm font-semibold transition capitalize',
+                className={cn('flex-1 py-2.5 rounded-full text-sm font-semibold transition capitalize',
                   tab === t ? 'bg-brand text-white shadow' : dk ? 'text-white/50' : 'text-text-light-2')}>
                 {t === 'available' ? `Available (${pending.length})` : `My Orders (${myOrders.length})`}
               </button>
@@ -1344,7 +1344,7 @@ export default function RiderDashboard() {
                         <Eye size={14} className="inline mr-1" /> View
                       </button>
                       <button onClick={(e) => { e.stopPropagation(); handleAccept(o); }}
-                        className="px-4 py-2 rounded-lg text-sm font-bold bg-brand text-white hover:bg-brand-dark transition">Accept</button>
+                        className="px-4 py-2 rounded-full text-sm font-bold bg-brand text-white hover:bg-brand-dark transition">Accept</button>
                     </div>
                   </motion.div>
                 );
@@ -1364,8 +1364,8 @@ export default function RiderDashboard() {
                     <span className="text-brand font-bold">{formatCurrency(o.price)}</span>
                   </div>
                   <p className={cn('text-sm mb-3', dk ? 'text-white/50' : 'text-text-light-2')}>{o.pickup.address} → {o.dropoff.address}</p>
-                  {o.status === 'accepted' && <button onClick={() => handleStatusUpdate(o.id, 'picked_up')} className="bg-brand text-white px-4 py-2 rounded-lg text-sm font-bold">Mark Picked Up</button>}
-                  {o.status === 'picked_up' && <button onClick={() => handleStatusUpdate(o.id, 'in_transit')} className="bg-brand text-white px-4 py-2 rounded-lg text-sm font-bold">Start Delivery</button>}
+                  {o.status === 'accepted' && <button onClick={() => handleStatusUpdate(o.id, 'picked_up')} className="bg-brand text-white px-4 py-2 rounded-full text-sm font-bold">Mark Picked Up</button>}
+                  {o.status === 'picked_up' && <button onClick={() => handleStatusUpdate(o.id, 'in_transit')} className="bg-brand text-white px-4 py-2 rounded-full text-sm font-bold">Start Delivery</button>}
                   {o.status === 'in_transit' && <button onClick={() => handleStatusUpdate(o.id, 'delivered')} className="bg-success text-white px-4 py-2 rounded-lg text-sm font-bold">Mark Delivered</button>}
                 </div>
               ))}

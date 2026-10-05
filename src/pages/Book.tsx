@@ -332,12 +332,12 @@ export default function Book() {
       {/* Book Now / Schedule for Later toggle */}
       <div className={cn('grid grid-cols-2 gap-1 p-1 rounded-xl', dk ? 'bg-surface-dark-3' : 'bg-surface-light-2')}>
         <button type="button" onClick={() => setOrderType('instant')}
-          className={cn('flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-bold transition',
+          className={cn('flex items-center justify-center gap-1.5 py-2.5 rounded-full text-sm font-bold transition',
             orderType === 'instant' ? 'bg-brand text-white shadow' : dk ? 'text-white/50 hover:text-white/80' : 'text-text-light-2 hover:text-text-light')}>
           <Zap size={15} /> Book Now
         </button>
         <button type="button" onClick={() => setOrderType('scheduled')}
-          className={cn('flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-bold transition',
+          className={cn('flex items-center justify-center gap-1.5 py-2.5 rounded-full text-sm font-bold transition',
             orderType === 'scheduled' ? 'bg-brand text-white shadow' : dk ? 'text-white/50 hover:text-white/80' : 'text-text-light-2 hover:text-text-light')}>
           <Calendar size={15} /> Schedule for Later
         </button>
@@ -384,13 +384,13 @@ export default function Book() {
             return (
               <button key={v.type} onClick={() => setVehicle(v.type)}
                 className={cn(
-                  'w-full flex items-center gap-3 p-3 rounded-xl border transition text-left',
+                  'w-full flex items-center gap-3 p-3 rounded-2xl border transition text-left',
                   selected
                     ? 'border-brand bg-brand/8'
                     : dk ? 'border-white/5 bg-surface-dark-3/50 hover:border-white/10' : 'border-surface-light-3 bg-white hover:border-surface-light-3',
                 )}>
                 <div className={cn(
-                  'w-10 h-10 rounded-xl flex items-center justify-center shrink-0',
+                  'w-10 h-10 rounded-full flex items-center justify-center shrink-0',
                   selected ? 'bg-brand/15' : dk ? 'bg-white/5' : 'bg-surface-light-2',
                 )}>
                   <v.icon size={20} className={selected ? 'text-brand' : dk ? 'text-white/40' : 'text-surface-light-3'} />
@@ -459,7 +459,7 @@ export default function Book() {
   const confirmButton = (
     <button onClick={handleBook} disabled={!pickup || !dropoff}
       className={cn(
-        'w-full py-4 rounded-2xl font-bold text-base transition flex items-center justify-center gap-2',
+        'w-full py-4 rounded-full font-bold text-base transition flex items-center justify-center gap-2',
         pickup && dropoff
           ? 'bg-brand text-white hover:bg-brand-dark shadow-lg shadow-brand/25'
           : dk ? 'bg-surface-dark-3 text-white/20 cursor-not-allowed' : 'bg-surface-light-3 text-surface-light-3 cursor-not-allowed',
@@ -545,7 +545,7 @@ export default function Book() {
         </div>
       )}
       <button onClick={() => navigate('/track?id=' + orderId)}
-        className="w-full bg-brand text-white py-4 rounded-2xl font-bold hover:bg-brand-dark transition shadow-lg shadow-brand/25 flex items-center justify-center gap-2">
+        className="w-full bg-brand text-white py-4 rounded-full font-bold hover:bg-brand-dark transition shadow-lg shadow-brand/25 flex items-center justify-center gap-2">
         View Full Tracking <ArrowRight size={18} />
       </button>
     </div>
@@ -570,7 +570,7 @@ export default function Book() {
       </div>
       <div className="flex flex-col gap-2">
         <button onClick={resetForm}
-          className="w-full bg-brand text-white py-3.5 rounded-2xl font-bold hover:bg-brand-dark transition shadow-lg shadow-brand/25">
+          className="w-full bg-brand text-white py-3.5 rounded-full font-bold hover:bg-brand-dark transition shadow-lg shadow-brand/25">
           Book Another Delivery
         </button>
         <button onClick={() => navigate('/my-orders')}
@@ -597,7 +597,7 @@ export default function Book() {
         </p>
       </div>
       <button onClick={resetForm}
-        className="w-full bg-brand text-white py-4 rounded-2xl font-bold hover:bg-brand-dark transition shadow-lg shadow-brand/25 flex items-center justify-center gap-2">
+        className="w-full bg-brand text-white py-4 rounded-full font-bold hover:bg-brand-dark transition shadow-lg shadow-brand/25 flex items-center justify-center gap-2">
         Try Booking Again <ArrowRight size={18} />
       </button>
     </div>
@@ -618,7 +618,7 @@ export default function Book() {
         </p>
       </div>
       <button onClick={resetForm}
-        className="w-full bg-brand text-white py-4 rounded-2xl font-bold hover:bg-brand-dark transition shadow-lg shadow-brand/25 flex items-center justify-center gap-2">
+        className="w-full bg-brand text-white py-4 rounded-full font-bold hover:bg-brand-dark transition shadow-lg shadow-brand/25 flex items-center justify-center gap-2">
         Book Another Delivery <ArrowRight size={18} />
       </button>
     </div>
@@ -752,7 +752,7 @@ export default function Book() {
           </div>
           <div className="absolute z-20 left-4 right-4" style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)' }}>
             <button onClick={() => setPinMode(null)}
-              className="w-full bg-brand text-white py-4 rounded-2xl font-bold text-base shadow-xl shadow-brand/30">
+              className="w-full bg-brand text-white py-4 rounded-full font-bold text-base shadow-xl shadow-brand/30">
               Done
             </button>
           </div>
