@@ -67,11 +67,16 @@
 .md3-pressable:active { transform: scale(0.97); }
 
 html { scroll-behavior: smooth; overflow-x: hidden; }
-body { font-family: var(--font-sans); transition: background-color 0.3s, color 0.3s; overflow-x: hidden; overscroll-behavior-y: contain; }
+body { font-family: var(--font-sans); transition: background-color 0.3s, color 0.3s; overflow-x: hidden; }
 /* Prevents an accidental pull-to-refresh while panning/dragging the map
    — most disruptive on the rider's nav screen, where losing your place
-   mid-drag would mean losing live tracking state. */
-.maplibregl-canvas-container, .leaflet-container { overscroll-behavior: contain; touch-action: none; }
+   mid-drag would mean losing live tracking state. Scoped to the map's
+   own canvas only (not touch-action:none, which was too broad and could
+   interfere with scrollable content layered near/over the map, like the
+   rider nav screen's bottom sheet) — overscroll-behavior alone is enough
+   to stop the pull-to-refresh gesture without blocking normal scrolling
+   elsewhere on the page. */
+.maplibregl-canvas-container, .leaflet-container { overscroll-behavior: contain; }
 /* Belt-and-suspenders for the homepage's decorative glow/blob elements
    (absolute + negative inset + blur), which can bleed past their section
    and widen the page's scrollable area on some viewport widths, showing
