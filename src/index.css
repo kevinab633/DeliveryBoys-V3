@@ -304,31 +304,20 @@ p { text-wrap: pretty; }
 .liquid-glass-menu {
   position: relative;
   isolation: isolate;
-  overflow: hidden;
-  border: 1px solid rgba(255,255,255,.34);
-  background: rgba(255,255,255,.46);
-  box-shadow: 0 10px 24px rgba(15,23,42,.12), inset 0 1px 0 rgba(255,255,255,.68), inset 0 -1px 0 rgba(255,255,255,.14);
+  border: 1px solid rgba(255,255,255,.24);
+  background: rgba(255,255,255,.38);
+  box-shadow: 0 10px 24px rgba(15,23,42,.12);
   backdrop-filter: blur(26px) saturate(180%);
   -webkit-backdrop-filter: blur(26px) saturate(180%);
   transition: transform 180ms var(--m3-easing-emphasized, ease), box-shadow 180ms ease, background-color 180ms ease;
 }
-.liquid-glass-mark::before,
-.liquid-glass-menu::before {
-  content: '';
-  position: absolute;
-  inset: 1px;
-  z-index: -1;
-  border-radius: inherit;
-  background: radial-gradient(ellipse at 30% 0%, rgba(255,255,255,.30), transparent 58%);
-  pointer-events: none;
-}
 .liquid-glass-mark { padding: .35rem .9rem .35rem .35rem; border-radius: 999px; }
-.liquid-glass-mark:hover, .liquid-glass-menu:hover { transform: translateY(-1px); background: rgba(255,255,255,.56); box-shadow: 0 14px 30px rgba(15,23,42,.16), inset 0 1px 0 rgba(255,255,255,.78); }
+.liquid-glass-mark:hover, .liquid-glass-menu:hover { transform: translateY(-1px); background: rgba(255,255,255,.48); box-shadow: 0 14px 30px rgba(15,23,42,.16); }
 .liquid-glass-mark:active, .liquid-glass-menu:active { transform: scale(.97); }
 .theme-dark .liquid-glass-mark, .theme-dark .liquid-glass-menu {
-  border-color: rgba(255,255,255,.18);
+  border-color: rgba(255,255,255,.14);
   background: rgba(27,27,34,.48);
-  box-shadow: 0 12px 28px rgba(0,0,0,.30), inset 0 1px 0 rgba(255,255,255,.16), inset 0 -1px 0 rgba(0,0,0,.18);
+  box-shadow: 0 12px 28px rgba(0,0,0,.30);
 }
 .theme-dark .liquid-glass-mark:hover, .theme-dark .liquid-glass-menu:hover { background: rgba(39,39,48,.58); }
 @media (max-width: 640px) and (pointer: coarse) {
