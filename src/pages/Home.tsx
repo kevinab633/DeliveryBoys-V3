@@ -16,7 +16,7 @@ const services = [
   { icon: ShoppingCart, name: 'Grocery Delivery', desc: 'Fresh groceries to your doorstep.', color: '#10B981' },
   { icon: FileText, name: 'Document Delivery', desc: 'Confidential document courier services.', color: '#3B82F6' },
   { icon: Building2, name: 'Corporate Deliveries', desc: 'Tailored solutions for businesses.', color: '#8B5CF6' },
-  { icon: Zap, name: 'Express Delivery', desc: 'Same-day guaranteed delivery.', color: '#EC4899' },
+  { icon: Zap, name: 'Express Delivery', desc: 'Fast delivery options when available.', color: '#EC4899' },
 ];
 
 

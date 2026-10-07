@@ -39,7 +39,7 @@ export function LoginPage() {
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
         className={cn('relative z-10 w-full max-w-md p-8 rounded-2xl border', dk ? 'bg-surface-dark-2 border-white/5' : 'bg-white border-gray-200 shadow-xl')}>
         <div className="text-center mb-8">
-          <img src="/images/logo.jpeg" alt="DB" className="w-16 h-16 rounded-full mx-auto mb-4 object-cover" />
+          <img src="/images/logo.jpeg" alt="Delivery Boys logo" className="w-16 h-16 rounded-full mx-auto mb-4 object-cover" />
           <h1 className={cn('text-2xl font-extrabold', dk ? 'text-white' : 'text-gray-900')}>Welcome Back</h1>
           <p className={cn('text-sm mt-1', dk ? 'text-white/50' : 'text-gray-500')}>Sign in to your account</p>
         </div>
@@ -85,6 +85,7 @@ export function SignupPage() {
   const [role, setRole] = useState<'customer' | 'rider'>(roleParam || 'customer');
   const [step, setStep] = useState<'method' | 'details'>('method');
   const [error, setError] = useState('');
+  const [agreed, setAgreed] = useState(false);
   const [form, setForm] = useState({ name: '', email: '', phone: '', vehicleType: 'motorcycle' as VehicleType, vehiclePlate: '' });
 
   useEffect(() => {
@@ -126,6 +127,10 @@ export function SignupPage() {
       setError('Please enter your full name.');
       return;
     }
+    if (!agreed) {
+      setError('Please accept the Terms & Conditions and Privacy Policy to continue.');
+      return;
+    }
     if (role === 'rider') {
       await signupRiderDirect({ name: form.name, email: form.email, phone: form.phone || undefined, vehicleType: form.vehicleType, vehiclePlate: form.vehiclePlate, nationalIdUrl: '', photoUrl: '' });
       navigate('/rider/verification');
@@ -143,7 +148,7 @@ export function SignupPage() {
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
         className={cn('relative z-10 w-full max-w-md p-8 rounded-2xl border', dk ? 'bg-surface-dark-2 border-white/5' : 'bg-white border-gray-200 shadow-xl')}>
         <div className="text-center mb-8">
-          <img src="/images/logo.jpeg" alt="DB" className="w-16 h-16 rounded-full mx-auto mb-4 object-cover" />
+          <img src="/images/logo.jpeg" alt="Delivery Boys logo" className="w-16 h-16 rounded-full mx-auto mb-4 object-cover" />
           <h1 className={cn('text-2xl font-extrabold', dk ? 'text-white' : 'text-gray-900')}>Create Account</h1>
           <p className={cn('text-sm mt-1', dk ? 'text-white/50' : 'text-gray-500')}>{step === 'method' ? 'Start with your email or Google' : 'Tell us a little more about you'}</p>
         </div>
@@ -188,6 +193,10 @@ export function SignupPage() {
                   <p className={cn('rounded-xl border px-4 py-3 text-sm', dk ? 'border-white/10 text-white/55' : 'border-gray-200 text-gray-500')}>Document and photo verification happens after signup. You’ll be guided through camera capture and image quality checks next.</p>
                 </>
               )}
+              <label className={cn('flex items-start gap-2 text-xs leading-relaxed', dk ? 'text-white/55' : 'text-gray-500')}>
+                <input type="checkbox" checked={agreed} onChange={e => setAgreed(e.target.checked)} className="mt-0.5 accent-brand" />
+                <span>I agree to the <Link to="/terms" className="font-semibold text-brand">Terms & Conditions</Link> and <Link to="/privacy" className="font-semibold text-brand">Privacy Policy</Link>.</span>
+              </label>
               {error && <p className="text-red-400 text-sm text-center">{error}</p>}
               <button type="submit" className="w-full bg-brand text-white py-3.5 rounded-full font-bold hover:bg-brand-dark transition flex items-center justify-center gap-2">
                 {role === 'rider' ? 'Continue as Rider' : 'Create Account'} <ArrowRight size={18} />

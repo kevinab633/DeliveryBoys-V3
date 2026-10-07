@@ -45,7 +45,7 @@ export default function Navbar() {
         <div className="flex items-center justify-between h-16">
           <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}>
             <Link to="/" className={cn('liquid-glass-mark pointer-events-auto flex items-center gap-2.5 shrink-0', dk ? 'text-white' : 'text-gray-900')}>
-              <img src="/images/logo.jpeg" alt="DB" className="h-10 w-10 rounded-full object-cover ring-2 ring-brand/20" />
+              <img src="/images/logo.jpeg" alt="Delivery Boys logo" className="h-10 w-10 rounded-full object-cover ring-2 ring-brand/20" />
               <div className="flex items-baseline gap-0.5 leading-none">
                 <span className={cn('font-black text-[1.05rem] tracking-[0.055em]', dk ? 'text-white' : 'text-gray-950')}>Delivery</span>
                 <span className="font-black text-[1.05rem] tracking-[0.055em] text-brand">Boys</span>

@@ -10,6 +10,7 @@ import { syncService } from './lib/syncService';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import ToastContainer from './components/Toast';
+import CookieConsent from './components/CookieConsent';
 import { DebugErrorBoundary } from './components/DebugBanner';
 import { PageSkeleton } from './components/Skeleton';
 import Home from './pages/Home';
@@ -24,6 +25,7 @@ import ManagerDashboard from './pages/ManagerDashboard';
 import Profile from './pages/Profile';
 import MyOrders from './pages/MyOrders';
 import VerificationPage from './pages/Verification';
+import LegalPage from './pages/Legal';
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -171,12 +173,17 @@ function AppContent() {
           <Route path="/profile" element={<Profile />} />
           <Route path="/my-orders" element={<MyOrders />} />
           <Route path="/rider/verification" element={<VerificationPage />} />
+          <Route path="/privacy" element={<LegalPage kind="privacy" />} />
+          <Route path="/terms" element={<LegalPage kind="terms" />} />
+          <Route path="/refunds" element={<LegalPage kind="refund" />} />
+          <Route path="/cookies" element={<LegalPage kind="cookies" />} />
         </Routes>
           </motion.div>
         </AnimatePresence>
       </main>
       {!isFullScreen && !MINIMAL_ROUTES.some(route => pathname.startsWith(route)) && <Footer />}
       <ToastContainer />
+      <CookieConsent />
     </div>
   );
 }
