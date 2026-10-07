@@ -97,7 +97,8 @@ export default function Book() {
   // ── Live order + rider data (reactive — refreshes on any change) ─
   const activeOrder = orders.find(o => o.id === orderId);
   const riders = getRiders();
-  const onlineRiders = riders.filter(r => r.availability === 'online' && r.location);
+  const onlineRiders = riders.filter(r => r.status === 'approved' && r.availability === 'online' && r.location);
+  const availableVehicleTypes = Array.from(new Set(onlineRiders.map(r => r.vehicleType)));
   const assignedRider = activeOrder?.riderId
     ? riders.find(r => r.id === activeOrder.riderId)
     : undefined;
@@ -178,6 +179,12 @@ export default function Book() {
   const distance = pickup && dropoff ? calculateDistance(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng) : 0;
   const pricing = distance > 0 ? calculatePrice(distance, vehicle, priceRules, manualOverrides, pricingMode) : null;
   const fuelEst = distance > 0 ? estimateFuelCost(distance, vehicle) : 0;
+
+  useEffect(() => {
+    if (availableVehicleTypes.length > 0 && !availableVehicleTypes.includes(vehicle)) {
+      setVehicle(availableVehicleTypes[0]);
+    }
+  }, [availableVehicleTypes.join('|'), vehicle]);
 
   const priceForVehicle = useCallback((vt: VehicleType) => {
     if (distance <= 0) return null;
@@ -397,7 +404,12 @@ export default function Book() {
       <div>
         <label className={cn('text-sm font-semibold mb-2 block', dk ? 'text-white/70' : 'text-text-light-2')}>Vehicle Type</label>
         <div className="space-y-2">
-          {vehicles.map(v => {
+          {availableVehicleTypes.length === 0 && (
+            <p className={cn('rounded-2xl border px-4 py-3 text-sm', dk ? 'border-white/10 text-white/50' : 'border-surface-light-3 text-text-light-2')}>
+              No approved riders are online right now. Vehicle options will appear when a rider becomes available.
+            </p>
+          )}
+          {vehicles.filter(v => availableVehicleTypes.includes(v.type)).map(v => {
             const vPrice = priceForVehicle(v.type);
             const selected = vehicle === v.type;
             return (

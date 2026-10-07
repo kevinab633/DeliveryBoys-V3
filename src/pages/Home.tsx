@@ -87,13 +87,6 @@ function RiderHomePage() {
 
         <div className="relative max-w-7xl mx-auto px-6 py-32 lg:py-40 w-full">
           <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8 }} className="max-w-2xl">
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-brand/10 border border-brand/20 mb-6">
-              <span className={cn('w-2 h-2 rounded-full animate-pulse', rider.availability === 'online' ? 'bg-success' : 'bg-brand')} />
-              <span className="text-brand text-sm font-semibold">
-                {rider.availability === 'online' ? 'You are online — receiving orders' : 'You are offline'}
-              </span>
-            </div>
-
             <h1 className={cn('text-5xl sm:text-6xl md:text-7xl font-black leading-[1.05] tracking-tight mb-3', dk ? 'text-white' : 'text-gray-900')}>
               Welcome back, {rider.name.split(' ')[0]}
             </h1>
