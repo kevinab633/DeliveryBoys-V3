@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Menu, X, Sun, Moon, User, LogOut, ChevronDown, Settings, Package, Bike } from 'lucide-react';
+import { Menu, X, Sun, Moon, LogOut } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useThemeStore } from '../stores/themeStore';
 import { useAuthStore } from '../stores/authStore';
@@ -16,35 +16,47 @@ const publicLinks = [
   { name: 'Contact', path: '/contact' },
 ];
 
+// Customer-only actions inside publicLinks — hidden from the mobile
+// hamburger menu for logged-in riders/managers, who have their own
+// role-specific destinations (Rider Dashboard / Manager Panel) instead.
+const customerOnlyPaths = ['/book', '/track'];
+const managerLinks = [
+  { name: 'Overview', path: '/manager?tab=overview' },
+  { name: 'Active & Available Orders', path: '/manager?tab=orders' },
+  { name: 'Riders & Verification', path: '/manager?tab=riders' },
+  { name: 'Live Map', path: '/manager?tab=map' },
+  { name: 'Pricing', path: '/manager?tab=pricing' },
+  { name: 'Content', path: '/manager?tab=content' },
+];
+
 export default function Navbar() {
   const [open, setOpen] = useState(false);
-  const [userMenu, setUserMenu] = useState(false);
   const { theme, toggle } = useThemeStore();
   const { user, logout } = useAuthStore();
   const location = useLocation();
   const navigate = useNavigate();
   const dk = theme === 'dark';
 
-  const handleLogout = () => { logout(); setUserMenu(false); navigate('/'); };
+  const handleLogout = () => { logout(); navigate('/'); setOpen(false); };
 
   return (
-    <nav className={cn('fixed top-0 left-0 right-0 z-50 glass border-b transition-colors',
-      dk ? 'bg-surface-dark/80 border-white/5' : 'bg-white/80 border-black/5'
-    )}>
-      <div className="max-w-7xl mx-auto px-4 lg:px-6">
+    <nav className="app-navbar fixed top-0 left-0 right-0 z-50 pointer-events-none">
+      <div className="max-w-7xl mx-auto px-4 lg:px-6 pointer-events-none">
         <div className="flex items-center justify-between h-16">
-          <Link to="/" className="flex items-center gap-2.5 shrink-0">
-            <img src="/images/logo.jpeg" alt="DB" className="h-10 w-10 rounded-full object-cover ring-2 ring-brand/20" />
-            <div className="hidden sm:flex items-baseline gap-0.5">
-              <span className={cn('font-extrabold text-lg tracking-tight', dk ? 'text-white' : 'text-gray-900')}>Delivery</span>
-              <span className="font-extrabold text-lg tracking-tight text-brand">Boys</span>
-            </div>
-          </Link>
+          <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}>
+            <Link to="/" className={cn('liquid-glass-mark pointer-events-auto flex items-center gap-2.5 shrink-0', dk ? 'text-white' : 'text-gray-900')}>
+              <img src="/images/logo.jpeg" alt="DB" className="h-10 w-10 rounded-full object-cover ring-2 ring-brand/20" />
+              <div className="flex items-baseline gap-0.5 leading-none">
+                <span className={cn('font-black text-[1.05rem] tracking-[0.055em]', dk ? 'text-white' : 'text-gray-950')}>Delivery</span>
+                <span className="font-black text-[1.05rem] tracking-[0.055em] text-brand">Boys</span>
+              </div>
+            </Link>
+          </motion.div>
 
-          <div className="hidden lg:flex items-center gap-0.5">
+          <div className="hidden items-center gap-0.5">
             {publicLinks.map(l => (
               <Link key={l.path} to={l.path}
-                className={cn('px-3 py-2 text-[13px] font-semibold rounded-lg transition',
+                className={cn('px-3 py-2 text-[13px] font-semibold rounded-full transition',
                   location.pathname === l.path
                     ? 'text-brand bg-brand/8'
                     : dk ? 'text-white/55 hover:text-white hover:bg-white/5' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
@@ -54,107 +66,82 @@ export default function Navbar() {
             ))}
           </div>
 
-          <div className="flex items-center gap-1.5">
-            <button onClick={toggle} className={cn('p-2 rounded-xl transition', dk ? 'text-white/50 hover:bg-white/5' : 'text-gray-400 hover:bg-gray-100')}>
-              {dk ? <Sun size={18} /> : <Moon size={18} />}
-            </button>
-
-            {user ? (
-              <>
-                <NotificationPanel />
-                <div className="relative">
-                  <button onClick={() => setUserMenu(!userMenu)} className={cn('flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-xl transition',
-                    dk ? 'hover:bg-white/5' : 'hover:bg-gray-100')}>
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-brand to-brand-dark flex items-center justify-center text-white text-xs font-bold shadow-lg shadow-brand/20">
-                      {user.name[0]}
-                    </div>
-                    <span className={cn('text-sm font-semibold hidden sm:block', dk ? 'text-white' : 'text-gray-900')}>{user.name.split(' ')[0]}</span>
-                    <ChevronDown size={14} className={cn('transition', userMenu ? 'rotate-180' : '', dk ? 'text-white/30' : 'text-gray-400')} />
-                  </button>
-                  <AnimatePresence>
-                    {userMenu && (
-                      <>
-                        <div className="fixed inset-0 z-40" onClick={() => setUserMenu(false)} />
-                        <motion.div initial={{ opacity: 0, y: 8, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8, scale: 0.95 }}
-                          className={cn('absolute right-0 top-full mt-2 w-60 rounded-2xl shadow-2xl border p-1.5 z-50',
-                            dk ? 'bg-surface-dark-2 border-white/10' : 'bg-white border-gray-200')}>
-                          <div className={cn('px-3 py-2.5 mb-1 border-b rounded-xl', dk ? 'border-white/5 bg-surface-dark-3' : 'border-gray-100 bg-gray-50')}>
-                            <p className={cn('text-sm font-bold', dk ? 'text-white' : 'text-gray-900')}>{user.name}</p>
-                            <p className={cn('text-[11px] truncate', dk ? 'text-white/35' : 'text-gray-400')}>{user.email || user.phone}</p>
-                            <span className="inline-block mt-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold bg-brand/10 text-brand capitalize">{user.role}</span>
-                          </div>
-                          <Link to="/profile" onClick={() => setUserMenu(false)} className={cn('flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm transition',
-                            dk ? 'text-white/65 hover:bg-white/5' : 'text-gray-600 hover:bg-gray-50')}>
-                            <User size={16} /> Profile
-                          </Link>
-                          {user.role === 'customer' && (
-                            <Link to="/my-orders" onClick={() => setUserMenu(false)} className={cn('flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm transition',
-                              dk ? 'text-white/65 hover:bg-white/5' : 'text-gray-600 hover:bg-gray-50')}>
-                              <Package size={16} /> My Orders
-                            </Link>
-                          )}
-                          {user.role === 'rider' && (
-                            <Link to="/rider/dashboard" onClick={() => setUserMenu(false)} className={cn('flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm transition',
-                              dk ? 'text-white/65 hover:bg-white/5' : 'text-gray-600 hover:bg-gray-50')}>
-                              <Bike size={16} /> Rider Dashboard
-                            </Link>
-                          )}
-                          {user.role === 'manager' && (
-                            <Link to="/manager" onClick={() => setUserMenu(false)} className={cn('flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm transition',
-                              dk ? 'text-white/65 hover:bg-white/5' : 'text-gray-600 hover:bg-gray-50')}>
-                              <Settings size={16} /> Manager Panel
-                            </Link>
-                          )}
-                          <div className={cn('mt-1 pt-1 border-t', dk ? 'border-white/5' : 'border-gray-100')}>
-                            <button onClick={handleLogout} className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm w-full transition text-danger hover:bg-danger/8">
-                              <LogOut size={16} /> Sign Out
-                            </button>
-                          </div>
-                        </motion.div>
-                      </>
-                    )}
-                  </AnimatePresence>
-                </div>
-              </>
-            ) : (
-              <div className="flex items-center gap-2">
-                <Link to="/auth/login" className={cn('px-4 py-2 text-sm font-semibold rounded-xl transition',
-                  dk ? 'text-white/65 hover:bg-white/5' : 'text-gray-600 hover:bg-gray-100')}>
-                  Sign In
-                </Link>
-                <Link to="/auth/signup" className="px-4 py-2 text-sm font-bold rounded-xl bg-brand text-white hover:bg-brand-dark transition shadow-md shadow-brand/20">
-                  Sign Up
-                </Link>
-              </div>
-            )}
-
-            <button onClick={() => setOpen(!open)} className={cn('lg:hidden p-2 rounded-xl', dk ? 'text-white/50' : 'text-gray-500')}>
-              {open ? <X size={22} /> : <Menu size={22} />}
-            </button>
+          <div className="navbar-utility-cluster pointer-events-auto flex items-center">
+            <motion.button type="button" aria-label={open ? 'Close navigation menu' : 'Open navigation menu'} aria-expanded={open} onClick={() => setOpen(!open)} whileTap={{ scale: 0.92 }} transition={{ type: 'spring', stiffness: 420, damping: 26 }} className={cn('liquid-glass-menu pointer-events-auto rounded-full p-3', dk ? 'text-white/75' : 'text-gray-700')}>
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.span key={open ? 'close' : 'menu'} initial={{ opacity: 0, rotate: -45, scale: 0.7 }} animate={{ opacity: 1, rotate: 0, scale: 1 }} exit={{ opacity: 0, rotate: 45, scale: 0.7 }} transition={{ duration: 0.16 }} className="flex">
+                  {open ? <X size={22} /> : <Menu size={22} />}
+                </motion.span>
+              </AnimatePresence>
+            </motion.button>
           </div>
         </div>
       </div>
 
       <AnimatePresence>
         {open && (
-          <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }}
-            className={cn('lg:hidden overflow-hidden border-t', dk ? 'bg-surface-dark-2 border-white/5' : 'bg-white border-gray-100')}>
-            <div className="px-4 py-3 space-y-1">
-              {publicLinks.map(l => (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] bg-black/45 pointer-events-auto" onClick={() => setOpen(false)}>
+            <motion.aside onClick={(event) => event.stopPropagation()} initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: 'spring', duration: 0.38, bounce: 0 }}
+              className={cn('absolute right-0 top-0 flex h-full w-[min(88vw,360px)] flex-col border-l p-5 pt-[calc(env(safe-area-inset-top,0px)+1rem)] shadow-2xl', dk ? 'bg-surface-dark-2 border-white/10' : 'bg-white border-gray-200')}>
+              <div className="mb-5 flex items-center justify-between">
+                <span className={cn('text-lg font-extrabold tracking-tight', dk ? 'text-white' : 'text-gray-900')}>Menu</span>
+                <button type="button" aria-label="Close navigation menu" onClick={() => setOpen(false)} className={cn('rounded-xl p-2', dk ? 'text-white/65 hover:bg-white/5' : 'text-gray-500 hover:bg-gray-100')}><X size={21} /></button>
+              </div>
+              <div className="flex-1 space-y-1 overflow-y-auto overscroll-contain">
+              <div className="mb-4 grid grid-cols-2 gap-2">
+                <button type="button" onClick={toggle} className={cn('flex items-center justify-center gap-2 rounded-2xl px-3 py-3 text-sm font-semibold transition', dk ? 'bg-white/5 text-white/70 hover:bg-white/10' : 'bg-gray-100 text-gray-700 hover:bg-gray-200')}>
+                  {dk ? <Sun size={17} /> : <Moon size={17} />} {dk ? 'Light mode' : 'Dark mode'}
+                </button>
+                {user && <div className={cn('flex items-center justify-center rounded-2xl px-3 py-3', dk ? 'bg-white/5' : 'bg-gray-100')}><NotificationPanel /></div>}
+              </div>
+              <div className="space-y-1">
+              {(user?.role === 'manager' ? managerLinks : publicLinks
+                .filter(l => l.path === '/track' && !user ? false : user && user.role !== 'customer' ? !customerOnlyPaths.includes(l.path) : true))
+                .map(l => (
                 <Link key={l.path} to={l.path} onClick={() => setOpen(false)}
-                  className={cn('block px-3 py-2.5 rounded-xl text-sm font-semibold transition',
-                    location.pathname === l.path ? 'text-brand bg-brand/8' : dk ? 'text-white/55 hover:bg-white/5' : 'text-gray-500 hover:bg-gray-50')}>
+                  className={cn('block px-3 py-2.5 rounded-full text-sm font-semibold transition',
+                    location.pathname === l.path.split('?')[0] && (l.path.includes('?') ? new URLSearchParams(location.search).get('tab') === l.path.split('=')[1] : true)
+                      ? 'text-brand bg-brand/8' : dk ? 'text-white/55 hover:bg-white/5' : 'text-gray-500 hover:bg-gray-50')}>
                   {l.name}
                 </Link>
               ))}
+              {user && user.role === 'rider' && (
+                <Link to="/rider/dashboard" onClick={() => setOpen(false)}
+                  className={cn('block px-3 py-2.5 rounded-full text-sm font-semibold transition',
+                    location.pathname === '/rider/dashboard' ? 'text-brand bg-brand/8' : dk ? 'text-white/55 hover:bg-white/5' : 'text-gray-500 hover:bg-gray-50')}>
+                  Rider Dashboard
+                </Link>
+              )}
+              {user && user.role === 'manager' && (
+                <Link to="/manager" onClick={() => setOpen(false)}
+                  className={cn('block px-3 py-2.5 rounded-full text-sm font-semibold transition',
+                    location.pathname === '/manager' ? 'text-brand bg-brand/8' : dk ? 'text-white/55 hover:bg-white/5' : 'text-gray-500 hover:bg-gray-50')}>
+                  Manager Panel
+                </Link>
+              )}
+              {user && (
+                <div className={cn('mt-4 border-t pt-4', dk ? 'border-white/10' : 'border-gray-200')}>
+                  <div className={cn('mb-2 rounded-2xl px-3 py-3', dk ? 'bg-white/5' : 'bg-gray-50')}>
+                    <p className={cn('text-sm font-bold', dk ? 'text-white' : 'text-gray-900')}>{user.name}</p>
+                    <p className={cn('truncate text-[11px]', dk ? 'text-white/40' : 'text-gray-400')}>{user.email || user.phone}</p>
+                    <span className="mt-1 inline-block rounded-md bg-brand/10 px-2 py-0.5 text-[10px] font-bold capitalize text-brand">{user.role}</span>
+                  </div>
+                  <Link to="/profile" onClick={() => setOpen(false)} className={cn('block rounded-full px-3 py-2.5 text-sm font-semibold transition', dk ? 'text-white/65 hover:bg-white/5' : 'text-gray-600 hover:bg-gray-50')}>Profile & account</Link>
+                  {user.role === 'customer' && <Link to="/my-orders" onClick={() => setOpen(false)} className={cn('block rounded-full px-3 py-2.5 text-sm font-semibold transition', dk ? 'text-white/65 hover:bg-white/5' : 'text-gray-600 hover:bg-gray-50')}>My Orders</Link>}
+                  <button onClick={handleLogout} className="mt-1 flex w-full items-center rounded-full px-3 py-2.5 text-left text-sm font-semibold text-danger transition hover:bg-danger/8"><LogOut size={16} className="mr-2" /> Sign Out</button>
+                </div>
+              )}
               {!user && (
                 <div className="flex gap-2 pt-2">
                   <Link to="/auth/login" onClick={() => setOpen(false)} className={cn('flex-1 text-center px-4 py-2.5 rounded-xl text-sm font-semibold border',
                     dk ? 'border-white/10 text-white/70' : 'border-gray-200 text-gray-600')}>Sign In</Link>
-                  <Link to="/auth/signup" onClick={() => setOpen(false)} className="flex-1 text-center px-4 py-2.5 rounded-xl text-sm font-bold bg-brand text-white">Sign Up</Link>
+                  <Link to="/auth/signup" onClick={() => setOpen(false)} className="flex-1 text-center px-4 py-2.5 rounded-full text-sm font-bold bg-brand text-white">Sign Up</Link>
                 </div>
               )}
-            </div>
+              </div>
+              </div>
+            </motion.aside>
           </motion.div>
         )}
       </AnimatePresence>

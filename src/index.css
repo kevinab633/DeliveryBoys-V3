@@ -4,6 +4,41 @@
 
 @theme {
   --color-brand: #C41E1E;
+
+  /* ── Material 3 Expressive tokens, adapted to the brand red ──────────
+     Structure (radii, state-layer approach, container roles) follows
+     Google's Material 3 spec; the color VALUES are swapped from MD3's
+     default violet to this app's red, so the result reads as a real,
+     intentional native-feeling design system rather than a generic
+     webpage — not a copy of Google's actual palette. */
+  --m3-primary: var(--color-brand);
+  --m3-on-primary: #FFFFFF;
+  --m3-secondary-container: #FBE4E4;      /* soft red-tinted container, mirrors MD3's tonal-container role */
+  --m3-on-secondary-container: #410002;
+  --m3-tertiary: #7D5260;                 /* MD3's muted accent role — left as-is, used sparingly for variety */
+  --m3-surface: #FFFBFE;
+  --m3-surface-container: #F7EDED;        /* warm-tinted surface instead of MD3's neutral violet-grey */
+  --m3-on-surface: #1C1B1F;
+  --m3-outline: #847474;
+  --m3-radius-pill: 999px;                /* all primary CTAs are pill-shaped per MD3 */
+  --m3-radius-container: 20px;            /* cards/sheets use a large, soft container radius, not sharp corners */
+  --m3-state-layer-opacity: 0.12;         /* pressed/hover overlays use this instead of ad-hoc opacity values */
+  --m3-easing-emphasized: cubic-bezier(0.2, 0, 0, 1);
+
+  /* Semantic roles: components should communicate meaning through these
+     roles, not by choosing arbitrary reds, greens, or grays locally. */
+  --semantic-action: #C41E1E;
+  --semantic-action-hover: #9A1515;
+  --semantic-success: #16865B;
+  --semantic-success-surface: #E8F6EF;
+  --semantic-warning: #A76500;
+  --semantic-warning-surface: #FFF3D8;
+  --semantic-danger: #B42318;
+  --semantic-danger-surface: #FDECEA;
+  --semantic-info: #1769AA;
+  --semantic-info-surface: #E8F1FB;
+  --semantic-neutral: #5F6368;
+  --semantic-neutral-surface: #F1F3F4;
   --color-brand-dark: #9A1515;
   --color-brand-light: #E53535;
   --color-surface-dark: #0A0A0B;
@@ -25,11 +60,144 @@
   --font-mono: 'JetBrains Mono', monospace;
 }
 
-html { scroll-behavior: smooth; }
-body { font-family: var(--font-sans); transition: background-color 0.3s, color 0.3s; }
+/* Material 3 "state layer" press feedback — an overlay tint instead of
+   changing opacity/scale on the whole element, which is what MD3 itself
+   specifies for pressed/hover states. Apply alongside existing classes:
+   className="... md3-pressable" on any tappable surface. */
+.md3-pressable {
+  position: relative;
+  transition: transform 150ms var(--m3-easing-emphasized, ease);
+}
+.md3-pressable::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: currentColor;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+.md3-pressable:active::after { opacity: var(--m3-state-layer-opacity); }
+.md3-pressable:active { transform: scale(0.97); }
 
-.theme-dark { background-color: var(--color-surface-dark); color: var(--color-text-dark); }
+html { scroll-behavior: smooth; overflow-x: hidden; }
+body {
+  font-family: var(--font-sans);
+  transition: background-color 0.3s, color 0.3s;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Loading surfaces: quiet, structured placeholders instead of blank screens
+   or spinner-only waits. Motion is disabled automatically for users who
+   prefer reduced motion. */
+.db-skeleton {
+  background: linear-gradient(105deg, rgba(127,127,127,0.10) 20%, rgba(127,127,127,0.20) 38%, rgba(127,127,127,0.10) 56%);
+  background-size: 220% 100%;
+  animation: db-skeleton-shimmer 1.35s linear infinite;
+}
+.db-skeleton-sm { border-radius: 6px; }
+.db-skeleton-md { border-radius: 10px; }
+.db-skeleton-lg { border-radius: 18px; }
+.db-skeleton-pill { border-radius: 999px; }
+.db-map-skeleton { min-height: 220px; background: var(--color-surface-light-2); }
+.theme-dark .db-map-skeleton { background: var(--color-surface-dark-2); }
+.db-map-grid {
+  opacity: .42;
+  background-image: linear-gradient(28deg, transparent 46%, rgba(127,127,127,.16) 47%, rgba(127,127,127,.16) 49%, transparent 50%), linear-gradient(112deg, transparent 46%, rgba(127,127,127,.12) 47%, rgba(127,127,127,.12) 49%, transparent 50%);
+  background-size: 92px 76px, 124px 98px;
+}
+.micro-slats-backdrop {
+  z-index: 0;
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 62%, rgba(0,0,0,.72) 78%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 62%, rgba(0,0,0,.72) 78%, transparent 100%);
+}
+.micro-slats-backdrop > .micro-slate { width: 100%; height: 100%; }
+/* On WebGL2 devices the animated field becomes the sole hero background;
+   legacy browsers keep the original image layer. */
+.legacy-hero-layer {
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 64%, rgba(0,0,0,.72) 78%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 64%, rgba(0,0,0,.72) 78%, transparent 100%);
+}
+.legacy-hero-layer.webgl-hero-hidden,
+.legacy-hero-layer:has(+ .micro-slats-backdrop canvas) { visibility: hidden; }
+@keyframes db-skeleton-shimmer { to { background-position: -220% 0; } }
+.db-drop-pin { animation: db-pin-idle 2.4s ease-in-out infinite; transform-origin: 50% 88%; }
+.db-drop-pin:active { animation: db-pin-lift 700ms ease-out both; }
+@keyframes db-pin-idle { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-5px) rotate(0.8deg); } }
+@keyframes db-pin-lift { from { transform: translateY(0) scale(1); } to { transform: translateY(-13px) scale(1.05); } }
+@media (prefers-reduced-motion: reduce) { .db-skeleton { animation: none; } }
+
+/* Shared product surfaces: deliberate elevation instead of the repeated
+   default Tailwind card treatment. Keep the map and full-screen navigation
+   surfaces untouched. */
+.app-card {
+  background: var(--m3-surface, #fff);
+  border: 1px solid color-mix(in srgb, var(--m3-outline, #847474) 18%, transparent);
+  border-radius: 18px;
+  box-shadow: 0 1px 2px rgba(20, 16, 16, 0.04), 0 8px 24px rgba(20, 16, 16, 0.06);
+}
+.theme-dark .app-card {
+  background: var(--color-surface-dark-2);
+  border-color: rgba(255,255,255,0.08);
+  box-shadow: 0 12px 28px rgba(0,0,0,0.20);
+}
+.app-card-interactive { transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease; }
+.app-card-interactive:hover { border-color: rgba(196,30,30,0.28); box-shadow: 0 10px 28px rgba(20,16,16,0.10); transform: translateY(-2px); }
+button, a { -webkit-tap-highlight-color: transparent; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 3px solid rgba(196,30,30,0.30);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
+}
+/* Prevents an accidental pull-to-refresh while panning/dragging the map
+   — most disruptive on the rider's nav screen, where losing your place
+   mid-drag would mean losing live tracking state. Scoped to the map's
+   own canvas only (not touch-action:none, which was too broad and could
+   interfere with scrollable content layered near/over the map, like the
+   rider nav screen's bottom sheet) — overscroll-behavior alone is enough
+   to stop the pull-to-refresh gesture without blocking normal scrolling
+   elsewhere on the page. */
+.maplibregl-canvas-container, .leaflet-container { overscroll-behavior: contain; }
+/* Belt-and-suspenders for the homepage's decorative glow/blob elements
+   (absolute + negative inset + blur), which can bleed past their section
+   and widen the page's scrollable area on some viewport widths, showing
+   as stray white space on the right. Clipping at the document root fixes
+   it regardless of which element is the culprit, without touching the
+   section-by-section layout logic. */
+#root { overflow-x: clip; }
+
+.theme-dark {
+  background-color: var(--color-surface-dark);
+  color: var(--color-text-dark);
+  --semantic-success: #55D69A;
+  --semantic-success-surface: rgba(22,134,91,.18);
+  --semantic-warning: #F6C667;
+  --semantic-warning-surface: rgba(167,101,0,.20);
+  --semantic-danger: #FF8A80;
+  --semantic-danger-surface: rgba(180,35,24,.20);
+  --semantic-info: #8DC7FF;
+  --semantic-info-surface: rgba(23,105,170,.20);
+  --semantic-neutral: #B8BDC3;
+  --semantic-neutral-surface: rgba(184,189,195,.12);
+}
 .theme-light { background-color: var(--color-surface-light); color: var(--color-text-light); }
+
+/* Semantic status utilities. These keep status meaning consistent across
+   orders, rider availability, verification, notifications, and dashboards. */
+.semantic-success { color: var(--semantic-success); }
+.semantic-success-surface { background: var(--semantic-success-surface); color: var(--semantic-success); }
+.semantic-warning { color: var(--semantic-warning); }
+.semantic-warning-surface { background: var(--semantic-warning-surface); color: var(--semantic-warning); }
+.semantic-danger { color: var(--semantic-danger); }
+.semantic-danger-surface { background: var(--semantic-danger-surface); color: var(--semantic-danger); }
+.semantic-info { color: var(--semantic-info); }
+.semantic-info-surface { background: var(--semantic-info-surface); color: var(--semantic-info); }
+.semantic-neutral-surface { background: var(--semantic-neutral-surface); color: var(--semantic-neutral); }
 
 /* MapLibre GL — popup styling (matches the app theme) */
 .maplibregl-popup-content { border-radius: 12px !important; box-shadow: 0 8px 30px rgba(0,0,0,0.2) !important; padding: 6px 10px !important; }
@@ -40,8 +208,16 @@ body { font-family: var(--font-sans); transition: background-color 0.3s, color 0
 /* Simulated dark-mode basemap: the filter applies ONLY to the MapLibre
    canvas, so markers, pickup/dropoff pins, and the SVG route overlay
    (a separate layer above the canvas) keep their true colors. */
-.map-dark-tiles .maplibregl-canvas { filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%); }
-.map-dark-tiles .leaflet-tile-pane { filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%); }
+.map-dark-tiles .maplibregl-canvas,
+.map-dark-tiles .leaflet-tile-pane {
+  /* Tuned invert-based dark mode — there's no real dark Mapbox style for
+     this app's custom style, so dark mode inverts the light tiles. Plain
+     invert(100%) + hue-rotate(180deg) alone looks muddy and low-contrast;
+     this adds saturate + a stronger contrast/brightness curve so roads,
+     water, and green space stay visually distinct instead of collapsing
+     toward the same washed-out grey. */
+  filter: invert(94%) hue-rotate(180deg) brightness(85%) contrast(115%) saturate(115%);
+}
 .db-zoom-wrap {
   display: flex; flex-direction: column; gap: 6px;
   margin-bottom: 8px !important; margin-right: 4px !important;
@@ -104,3 +280,61 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--c
 
 /* Map — when used as full-bleed background, strip border-radius */
 .db-map-no-radius .maplibregl-map { border-radius: 0 !important; }
+
+/* Typography refinement: tighter display rhythm, calmer body copy, and
+   tabular numerals for prices, order codes, and dashboard metrics. */
+h1, h2, h3, h4 {
+  font-family: var(--font-sans);
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+}
+h1 { line-height: 1.02; }
+h2 { line-height: 1.08; }
+p { text-wrap: pretty; }
+.font-mono, code, .otp-input { font-variant-numeric: tabular-nums; }
+@media (max-width: 640px) {
+  h1 { letter-spacing: -0.025em; }
+  h2 { letter-spacing: -0.02em; }
+}
+
+/* Floating navigation chrome: the brand and menu remain visible without
+   recreating the old full-width navigation bar. */
+.app-navbar { pointer-events: none; }
+.liquid-glass-mark,
+.liquid-glass-menu {
+  position: relative;
+  isolation: isolate;
+  border: 1px solid rgba(255,255,255,.24);
+  background: rgba(255,255,255,.38);
+  box-shadow: 0 10px 24px rgba(15,23,42,.12);
+  backdrop-filter: blur(26px) saturate(180%);
+  -webkit-backdrop-filter: blur(26px) saturate(180%);
+  transition: transform 180ms var(--m3-easing-emphasized, ease), box-shadow 180ms ease, background-color 180ms ease;
+}
+.liquid-glass-mark { padding: .35rem .9rem .35rem .35rem; border-radius: 999px; }
+.liquid-glass-mark:hover, .liquid-glass-menu:hover { transform: translateY(-1px); background: rgba(255,255,255,.48); box-shadow: 0 14px 30px rgba(15,23,42,.16); }
+.liquid-glass-mark:active, .liquid-glass-menu:active { transform: scale(.97); }
+.theme-dark .liquid-glass-mark, .theme-dark .liquid-glass-menu {
+  border-color: rgba(255,255,255,.14);
+  background: rgba(27,27,34,.48);
+  box-shadow: 0 12px 28px rgba(0,0,0,.30);
+}
+.theme-dark .liquid-glass-mark:hover, .theme-dark .liquid-glass-menu:hover { background: rgba(39,39,48,.58); }
+@media (max-width: 640px) and (pointer: coarse) {
+  .liquid-glass-mark, .liquid-glass-menu { backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+}
+@media (prefers-reduced-motion: reduce) { .liquid-glass-mark, .liquid-glass-menu { transition: none; } }
+
+.hero-typewriter { display: inline; }
+.hero-typewriter-cursor {
+  display: inline-block;
+  width: .08em;
+  height: .82em;
+  margin-left: .12em;
+  vertical-align: -.04em;
+  border-radius: 999px;
+  background: var(--color-brand);
+  animation: typewriter-caret 750ms steps(1, end) infinite;
+}
+@keyframes typewriter-caret { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .hero-typewriter-cursor { animation: none; } }

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
 import { Order, OrderStatus, OrderType, VehicleType, Location, RiderProfile } from '../lib/types';
-import { formatDate } from '../lib/utils';
+import { formatDate, generateOrderCode } from '../lib/utils';
 import { syncService } from '../lib/syncService';
 import { calculatePrice, calculateDistance } from '../lib/pricing';
 import { getDefaultRules } from '../lib/pricing';
@@ -113,6 +113,9 @@ interface OrderStore {
   applyRemoteStatus: (orderId: string, status: OrderStatus, timestamp?: number) => void;
   /** A rider's live GPS position arrived from their device. */
   applyRemoteRiderLocation: (orderId: string, lat: number, lng: number) => void;
+  /** A rider opened (or closed out of) an order's ringing/detail view on
+   *  another device — riderId undefined means they backed out. */
+  applyRemoteRiderResponding: (orderId: string, riderId?: string) => void;
   /** An order was cancelled on another device. */
   applyRemoteCancel: (orderId: string, cancelReason?: string) => void;
   /** The dispatch window was widened on another device. */
@@ -132,7 +135,7 @@ interface OrderStore {
 
 const DEMO_ORDERS: Order[] = [
   {
-    id: 'ORD-001', customerId: 'cust-1', customerName: 'Nana Yaa', customerPhone: '+233201111111',
+    id: 'ORD-001', displayCode: 'DB-A001', customerId: 'cust-1', customerName: 'Nana Yaa', customerPhone: '+233201111111',
     pickup: { lat: 5.6037, lng: -0.1870, address: 'University of Ghana, Legon' },
     dropoff: { lat: 5.5560, lng: -0.1824, address: 'Osu Oxford Street' },
     distance: 7.2, price: 28.50, status: 'delivered', vehicleType: 'motorcycle',
@@ -141,7 +144,7 @@ const DEMO_ORDERS: Order[] = [
     orderType: 'instant',
   },
   {
-    id: 'ORD-002', customerId: 'cust-2', customerName: 'Kofi Brew', customerPhone: '+233202222222',
+    id: 'ORD-002', displayCode: 'DB-A002', customerId: 'cust-2', customerName: 'Kofi Brew', customerPhone: '+233202222222',
     pickup: { lat: 5.6245, lng: -0.1674, address: 'Accra Mall' },
     dropoff: { lat: 5.5650, lng: -0.2350, address: 'Kaneshie Market' },
     distance: 9.8, price: 35.20, status: 'delivered', vehicleType: 'motorcycle',
@@ -150,7 +153,7 @@ const DEMO_ORDERS: Order[] = [
     orderType: 'instant',
   },
   {
-    id: 'ORD-003', customerId: 'cust-3', customerName: 'Esi Mensah', customerPhone: '+233203333333',
+    id: 'ORD-003', displayCode: 'DB-A003', customerId: 'cust-3', customerName: 'Esi Mensah', customerPhone: '+233203333333',
     pickup: { lat: 5.5710, lng: -0.2200, address: 'Kwame Nkrumah Circle' },
     dropoff: { lat: 5.6350, lng: -0.1580, address: 'East Legon' },
     distance: 11.5, price: 42.00, status: 'pending', vehicleType: 'car',
@@ -158,7 +161,7 @@ const DEMO_ORDERS: Order[] = [
     orderType: 'instant',
   },
   {
-    id: 'ORD-004', customerId: 'cust-1', customerName: 'Nana Yaa', customerPhone: '+233201111111',
+    id: 'ORD-004', displayCode: 'DB-A004', customerId: 'cust-1', customerName: 'Nana Yaa', customerPhone: '+233201111111',
     pickup: { lat: 5.6052, lng: -0.1718, address: 'Kotoka International Airport' },
     dropoff: { lat: 5.6700, lng: -0.1700, address: 'Madina' },
     distance: 8.3, price: 31.50, status: 'pending', vehicleType: 'motorcycle',
@@ -178,6 +181,7 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
       // NOTE: the Supabase `orders.id` column is a real `uuid` — a
       // human-style "ORD-XXXXXX" string is rejected by Postgres on insert.
       id: uuidv4(),
+      displayCode: generateOrderCode(),
       customerId: data.customerId,
       customerName: data.customerName,
       customerPhone: data.customerPhone,
@@ -205,6 +209,13 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
     // Optimistic local update first (instant UX, works offline)…
     set(s => ({ orders: [order, ...s.orders] }));
 
+    // Push each dispatched rider — this is what makes a new order ring
+    // their phone even if the tab isn't open/focused (the in-app "Incoming
+    // Order!" alert already covers the tab-open case).
+    dispatchedTo.forEach((riderId) => {
+      pushNotify(riderId, 'New Order Available!', `A new delivery near you is ready to accept — ${order.pickup.address} → ${order.dropoff.address}.`);
+    });
+
     // …then fan out: broadcast to every other device/tab instantly AND
     // persist to Supabase in the background.
     try {
@@ -221,11 +232,11 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
 
     // Lifecycle notification: order created
     if (orderType === 'scheduled') {
-      pushNotify(data.customerId, 'Order Scheduled!', `Order ${order.id} is scheduled for ${formatDate(order.scheduledFor!)}.`);
-      fireBrowserNotification('Order Scheduled', `Order ${order.id} is scheduled for ${formatDate(order.scheduledFor!)}.`);
+      pushNotify(data.customerId, 'Order Scheduled!', `Order ${order.displayCode} is scheduled for ${formatDate(order.scheduledFor!)}.`);
+      fireBrowserNotification('Order Scheduled', `Order ${order.displayCode} is scheduled for ${formatDate(order.scheduledFor!)}.`);
     } else {
-      pushNotify(data.customerId, 'Order Placed!', `Order ${order.id} has been placed. Waiting for a rider.`);
-      fireBrowserNotification('Order Placed', `Order ${order.id} has been placed. Waiting for a rider.`);
+      pushNotify(data.customerId, 'Order Placed!', `Order ${order.displayCode} has been placed. Waiting for a rider.`);
+      fireBrowserNotification('Order Placed', `Order ${order.displayCode} has been placed. Waiting for a rider.`);
     }
     return order;
   },
@@ -256,9 +267,9 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
     } catch (err) {
       console.warn('[orderStore] broadcastOrderAccepted failed:', err);
     }
-    pushNotify(order.customerId, 'Rider Assigned!', `A rider is on the way to pickup — ${riderName} accepted your order ${orderId}.${phone}`);
-    pushNotify(riderId, 'Order Accepted', `You accepted order ${orderId}. Head to the pickup point.`);
-    fireBrowserNotification('Rider Assigned', `${riderName} accepted order ${orderId} — on the way to pickup.`);
+    pushNotify(order.customerId, 'Rider Assigned!', `A rider is on the way to pickup — ${riderName} accepted your order ${order.displayCode}.${phone}`);
+    pushNotify(riderId, 'Order Accepted', `You accepted order ${order.displayCode}. Head to the pickup point.`);
+    fireBrowserNotification('Rider Assigned', `${riderName} accepted order ${order.displayCode} — on the way to pickup.`);
     return true;
   },
 
@@ -276,11 +287,11 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
         console.warn('[orderStore] broadcastOrderCancelled failed:', err);
       }
       // Lifecycle notification: manual cancellation
-      pushNotify(order.customerId, 'Order Cancelled', `Your order ${orderId} was cancelled.`);
+      pushNotify(order.customerId, 'Order Cancelled', `Your order ${order.displayCode} was cancelled.`);
       if (order.riderId) {
-        pushNotify(order.riderId, 'Order Cancelled', `Order ${orderId} was cancelled by the customer.`);
+        pushNotify(order.riderId, 'Order Cancelled', `Order ${order.displayCode} was cancelled by the customer.`);
       }
-      fireBrowserNotification('Order Cancelled', `Order ${orderId} was cancelled.`);
+      fireBrowserNotification('Order Cancelled', `Order ${order.displayCode} was cancelled.`);
     }
   },
 
@@ -310,21 +321,28 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
 
     // Lifecycle notifications per status (customer + rider)
     if (status === 'picked_up') {
-      pushNotify(order.customerId, 'Package Picked Up', `Your order ${orderId} has been picked up and is on its way.`);
-      if (order.riderId) pushNotify(order.riderId, 'Picked Up', `You picked up order ${orderId}. Safe travels!`);
-      fireBrowserNotification('Package Picked Up', `Order ${orderId} has been picked up.`);
+      pushNotify(order.customerId, 'Package Picked Up', `Your order ${order.displayCode} has been picked up and is on its way.`);
+      if (order.riderId) pushNotify(order.riderId, 'Picked Up', `You picked up order ${order.displayCode}. Safe travels!`);
+      fireBrowserNotification('Package Picked Up', `Order ${order.displayCode} has been picked up.`);
     } else if (status === 'in_transit') {
-      pushNotify(order.customerId, 'In Transit', `Your order ${orderId} is in transit — track it live on the map.`);
-      if (order.riderId) pushNotify(order.riderId, 'Delivery Started', `Order ${orderId} is in transit to the drop-off.`);
-      fireBrowserNotification('In Transit', `Order ${orderId} is on its way.`);
+      pushNotify(order.customerId, 'In Transit', `Your order ${order.displayCode} is in transit — track it live on the map.`);
+      if (order.riderId) pushNotify(order.riderId, 'Delivery Started', `Order ${order.displayCode} is in transit to the drop-off.`);
+      fireBrowserNotification('In Transit', `Order ${order.displayCode} is on its way.`);
     } else if (status === 'delivered') {
-      pushNotify(order.customerId, 'Delivered 🎉', `Your order ${orderId} has been delivered. Thank you for using Delivery Boys!`);
-      if (order.riderId) pushNotify(order.riderId, 'Delivered', `Order ${orderId} delivered. Great job!`);
-      fireBrowserNotification('Delivered 🎉', `Order ${orderId} has been delivered.`);
+      pushNotify(order.customerId, 'Delivered 🎉', `Your order ${order.displayCode} has been delivered. Thank you for using Delivery Boys!`);
+      if (order.riderId) {
+        pushNotify(order.riderId, 'Delivered', `Order ${order.displayCode} delivered. Great job!`);
+        // Persist the completed delivery against the rider's own record —
+        // without this, the dashboard's delivery/earnings counters only
+        // ever reflected orders still held in local session state, so
+        // they reset on reload and never actually accumulated.
+        useAuthStore.getState().recordDelivery(order.riderId, order.price * 0.75);
+      }
+      fireBrowserNotification('Delivered 🎉', `Order ${order.displayCode} has been delivered.`);
     } else if (status === 'cancelled') {
-      pushNotify(order.customerId, 'Order Cancelled', `Your order ${orderId} was cancelled.`);
-      if (order.riderId) pushNotify(order.riderId, 'Order Cancelled', `Order ${orderId} was cancelled.`);
-      fireBrowserNotification('Order Cancelled', `Order ${orderId} was cancelled.`);
+      pushNotify(order.customerId, 'Order Cancelled', `Your order ${order.displayCode} was cancelled.`);
+      if (order.riderId) pushNotify(order.riderId, 'Order Cancelled', `Order ${order.displayCode} was cancelled.`);
+      fireBrowserNotification('Order Cancelled', `Order ${order.displayCode} was cancelled.`);
     }
   },
 
@@ -367,7 +385,12 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
       if (!current) {
         byId.set(ro.id, ro);
       } else if ((rank[ro.status] || 0) >= (rank[current.status] || 0)) {
-        byId.set(ro.id, { ...current, ...ro });
+        // respondingRiderId is intentionally broadcast-only, never
+        // persisted to Supabase — a periodic DB re-fetch (used to catch
+        // up on things like cancellations while backgrounded) must not
+        // wipe it back to undefined just because the fetched row doesn't
+        // carry it. Keep whatever the local broadcast already has.
+        byId.set(ro.id, { ...current, ...ro, respondingRiderId: current.respondingRiderId });
       }
     }
     return { orders: Array.from(byId.values()).sort((a, b) => b.createdAt - a.createdAt) };
@@ -392,8 +415,8 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
     }));
     if (current) {
       const phone = riderPhone ? ` Rider phone: ${riderPhone}.` : '';
-      pushNotify(current.customerId, 'Rider Assigned!', `A rider is on the way to pickup — ${riderName} accepted your order ${orderId}.${phone}`);
-      fireBrowserNotification('Rider Assigned', `${riderName} accepted order ${orderId} — on the way to pickup.`);
+      pushNotify(current.customerId, 'Rider Assigned!', `A rider is on the way to pickup — ${riderName} accepted your order ${current.displayCode}.${phone}`);
+      fireBrowserNotification('Rider Assigned', `${riderName} accepted order ${current.displayCode} — on the way to pickup.`);
     }
   },
 
@@ -411,19 +434,23 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
     }));
     if (!order) return;
     if (status === 'picked_up') {
-      pushNotify(order.customerId, 'Package Picked Up', `Your order ${orderId} has been picked up and is on its way.`);
-      fireBrowserNotification('Package Picked Up', `Order ${orderId} has been picked up.`);
+      pushNotify(order.customerId, 'Package Picked Up', `Your order ${order.displayCode} has been picked up and is on its way.`);
+      fireBrowserNotification('Package Picked Up', `Order ${order.displayCode} has been picked up.`);
     } else if (status === 'in_transit') {
-      pushNotify(order.customerId, 'In Transit', `Your order ${orderId} is in transit — track it live on the map.`);
-      fireBrowserNotification('In Transit', `Order ${orderId} is on its way.`);
+      pushNotify(order.customerId, 'In Transit', `Your order ${order.displayCode} is in transit — track it live on the map.`);
+      fireBrowserNotification('In Transit', `Order ${order.displayCode} is on its way.`);
     } else if (status === 'delivered') {
-      pushNotify(order.customerId, 'Delivered 🎉', `Your order ${orderId} has been delivered. Thank you for using Delivery Boys!`);
-      fireBrowserNotification('Delivered 🎉', `Order ${orderId} has been delivered.`);
+      pushNotify(order.customerId, 'Delivered 🎉', `Your order ${order.displayCode} has been delivered. Thank you for using Delivery Boys!`);
+      fireBrowserNotification('Delivered 🎉', `Order ${order.displayCode} has been delivered.`);
     }
   },
 
   applyRemoteRiderLocation: (orderId, lat, lng) => set(s => ({
     orders: s.orders.map(o => o.id === orderId ? { ...o, riderLocation: { lat, lng } } : o),
+  })),
+
+  applyRemoteRiderResponding: (orderId, riderId) => set(s => ({
+    orders: s.orders.map(o => o.id === orderId ? { ...o, respondingRiderId: riderId } : o),
   })),
 
   applyRemoteCancel: (orderId, cancelReason) => set(s => ({
@@ -469,6 +496,14 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
         return fresh.length > 0 ? { ...o, dispatchedTo: [...existing, ...fresh] } : o;
       }),
     }));
+    // Push the newly-added riders too, same as the initial dispatch —
+    // otherwise only the first rider ever gets a push, and everyone the
+    // window later widens to only sees the in-app alert if their tab happens
+    // to be open.
+    candidates.forEach((riderId) => {
+      pushNotify(riderId, 'New Order Available!', `A new delivery near you is ready to accept — ${order.pickup.address} → ${order.dropoff.address}.`);
+    });
+
     // Tell the other devices about the widened window so the newly-included
     // riders start ringing too.
     const updated = get().orders.find(o => o.id === orderId);
@@ -491,7 +526,7 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
   sweepExpiredOrders: () => {
     const now = Date.now();
     const ordersNow = get().orders;
-    const toCancel: { id: string; customerId: string; reason: string; scheduled: boolean }[] = [];
+    const toCancel: { id: string; displayCode: string; customerId: string; reason: string; scheduled: boolean }[] = [];
 
     for (const o of ordersNow) {
       if (o.status !== 'pending') continue;
@@ -499,7 +534,7 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
 
       if (!scheduled) {
         if (now - o.createdAt > AUTO_CANCEL_MS) {
-          toCancel.push({ id: o.id, customerId: o.customerId, reason: 'no_riders_available', scheduled: false });
+          toCancel.push({ id: o.id, displayCode: o.displayCode, customerId: o.customerId, reason: 'no_riders_available', scheduled: false });
         }
         continue;
       }
@@ -522,15 +557,15 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
             u => u.role === 'rider' && (u as { availability?: string }).availability === 'online',
           );
           onlineRiders.forEach(r => {
-            pushNotify(r.id, 'Scheduled Delivery Coming Up', `Order ${o.id} is due at ${formatDate(when)} — ${o.pickup.address} → ${o.dropoff.address}.`);
+            pushNotify(r.id, 'Scheduled Delivery Coming Up', `Order ${o.displayCode} is due at ${formatDate(when)} — ${o.pickup.address} → ${o.dropoff.address}.`);
           });
-          fireBrowserNotification('Scheduled Delivery Coming Up', `Order ${o.id} is due at ${formatDate(when)}.`);
+          fireBrowserNotification('Scheduled Delivery Coming Up', `Order ${o.displayCode} is due at ${formatDate(when)}.`);
         }
       }
 
       // 3) Missed the scheduled window entirely
       if (now > when + SCHEDULED_GRACE_MS) {
-        toCancel.push({ id: o.id, customerId: o.customerId, reason: 'no_riders_available_scheduled', scheduled: true });
+        toCancel.push({ id: o.id, displayCode: o.displayCode, customerId: o.customerId, reason: 'no_riders_available_scheduled', scheduled: true });
       }
     }
 
@@ -549,8 +584,8 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
     toCancel.forEach(c => {
       const title = c.scheduled ? 'Scheduled Delivery Unfilled' : 'No Riders Available';
       const msg = c.scheduled
-        ? `We couldn't find a rider for your scheduled delivery ${c.id} — please rebook or try again.`
-        : `No riders were available for order ${c.id}. Please try again shortly.`;
+        ? `We couldn't find a rider for your scheduled delivery ${c.displayCode} — please rebook or try again.`
+        : `No riders were available for order ${c.displayCode}. Please try again shortly.`;
       pushNotify(c.customerId, title, msg);
       fireBrowserNotification(title, msg);
     });

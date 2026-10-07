@@ -1,7 +1,7 @@
 {
   "name": "Delivery Boys",
   "short_name": "DeliveryBoys",
-  "description": "Ghana's most trusted delivery service",
+  "description": "Book and track parcel, food, grocery, and document deliveries across Ghana.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0F0F0F",
@@ -9,10 +9,31 @@
   "orientation": "any",
   "icons": [
     {
-      "src": "/favicon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "src": "/icons/delivery-boys-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/delivery-boys-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/delivery-boys-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/delivery-boys-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
-  ]
+  ],
+  "id": "/",
+  "scope": "/",
+  "prefer_related_applications": false
 }

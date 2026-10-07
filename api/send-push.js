@@ -42,6 +42,17 @@ export default async function handler(req, res) {
         webpush.sendNotification(
           { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
           payload,
+          {
+            // Tells the browser's push service (FCM on Android/Chrome) to
+            // wake the device and deliver immediately instead of batching
+            // it with other low-priority traffic — this is what was
+            // causing the multi-minute delay while the app was closed.
+            // TTL is also kept short: an order dispatch is time-sensitive,
+            // so there's no value in a push service holding it for hours
+            // if the device is briefly unreachable.
+            urgency: 'high',
+            TTL: 60,
+          },
         ),
       ),
     );
@@ -50,11 +61,14 @@ export default async function handler(req, res) {
     // (browser data cleared, permission revoked, etc.) — clean it up so
     // future sends don't keep failing against it.
     const deadIds = [];
+    const failures = [];
     results.forEach((r, i) => {
       if (r.status === 'rejected') {
         const statusCode = r.reason?.statusCode;
+        const detail = r.reason?.body || r.reason?.message || String(r.reason);
         if (statusCode === 404 || statusCode === 410) deadIds.push(subs[i].id);
-        else console.error('[send-push] send failed:', r.reason?.body || r.reason?.message || r.reason);
+        console.error('[send-push] send failed:', statusCode, detail);
+        failures.push({ statusCode: statusCode || null, detail });
       }
     });
     if (deadIds.length > 0) {
@@ -62,7 +76,28 @@ export default async function handler(req, res) {
     }
 
     const sent = results.filter((r) => r.status === 'fulfilled').length;
-    return res.status(200).json({ sent, total: subs.length, pruned: deadIds.length });
+
+    // Also log this attempt into a plain table so it can be checked from
+    // Supabase's Table Editor on a phone — no dev tools or scrolling
+    // through Vercel's log UI required, just open the table and read it.
+    try {
+      await supabase.from('push_send_log').insert({
+        user_id: userId,
+        sent,
+        total: subs.length,
+        pruned: deadIds.length,
+        failures: failures.length > 0 ? JSON.stringify(failures) : null,
+      });
+    } catch (logErr) {
+      // Don't let logging itself break the actual send response.
+      console.error('[send-push] failed to write push_send_log:', logErr.message);
+    }
+
+    // Failures are surfaced in the response body itself (not just server
+    // logs) so a quick look at the Vercel request log — even collapsed —
+    // shows exactly why a send didn't land, instead of a bare 200 that
+    // looks identical whether 0 or all subscriptions were actually reached.
+    return res.status(200).json({ sent, total: subs.length, pruned: deadIds.length, failures });
   } catch (err) {
     console.error('[send-push] error:', err);
     return res.status(500).json({ error: err.message });
