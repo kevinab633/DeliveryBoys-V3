@@ -299,7 +299,13 @@ p { text-wrap: pretty; }
 
 /* Floating navigation chrome: the brand and menu remain visible without
    recreating the old full-width navigation bar. */
-.app-navbar { pointer-events: none; }
+.app-navbar {
+  pointer-events: none;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+.app-navbar::before, .app-navbar::after { display: none !important; }
 .liquid-glass-mark,
 .liquid-glass-menu {
   position: relative;
