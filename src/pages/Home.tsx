@@ -1,12 +1,14 @@
 import { Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Package, UtensilsCrossed, ShoppingCart, FileText, Building2, Zap, Bike, ArrowRight, Shield, Clock, MapPin, TrendingUp, TrendingDown, Minus, Star, LogIn, UserPlus, ChevronRight, Phone, Power, PowerOff, DollarSign, CheckCircle2, Wallet } from 'lucide-react';
+import { Package, UtensilsCrossed, ShoppingCart, FileText, Building2, Zap, Bike, ArrowRight, Shield, Clock, MapPin, TrendingUp, TrendingDown, Minus, Star, ChevronRight, Power, PowerOff, DollarSign, CheckCircle2, Wallet } from 'lucide-react';
 import { useThemeStore } from '../stores/themeStore';
 import { useContentStore } from '../stores/contentStore';
 import { useAuthStore } from '../stores/authStore';
 import { useOrderStore } from '../stores/orderStore';
 import { cn, formatCurrency } from '../lib/utils';
 import { RiderProfile } from '../lib/types';
+import MicroSlatsBackdrop from '../components/MicroSlatsBackdrop';
 
 const services = [
   { icon: Package, name: 'Parcel Delivery', desc: 'Safe and secure parcel delivery across town.', color: '#C41E1E' },
@@ -17,12 +19,7 @@ const services = [
   { icon: Zap, name: 'Express Delivery', desc: 'Same-day guaranteed delivery.', color: '#EC4899' },
 ];
 
-const stats = [
-  { value: '10K+', label: 'Deliveries Completed' },
-  { value: '500+', label: 'Happy Customers' },
-  { value: '50+', label: 'Active Riders' },
-  { value: '99%', label: 'On-Time Rate' },
-];
+
 
 const steps = [
   { n: '01', title: 'Book Online', desc: 'Enter pickup & drop-off. Search locations or drop a pin on the map.', icon: MapPin },
@@ -73,7 +70,7 @@ function RiderHomePage() {
     ? Math.abs(Math.round(((weekEarnings - prevWeekEarnings) / prevWeekEarnings) * 100))
     : null;
 
-  const card = cn('p-5 rounded-2xl border', dk ? 'bg-surface-dark-2 border-white/5' : 'bg-white border-gray-200');
+  const card = cn('app-card p-5', dk ? '' : 'bg-white');
 
   return (
     <div>
@@ -109,7 +106,7 @@ function RiderHomePage() {
             {/* Online/Offline toggle — same store action as the dashboard */}
             <div className="flex flex-col sm:flex-row gap-3 mb-10">
               <button onClick={() => setRiderAvailability(rider.availability === 'online' ? 'offline' : 'online')}
-                className={cn('inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-bold text-lg transition shadow-xl',
+                className={cn('inline-flex items-center justify-center gap-2 px-8 py-4 rounded-full font-bold text-lg transition shadow-xl',
                   rider.availability === 'online'
                     ? 'bg-success text-white hover:brightness-110 shadow-success/25'
                     : 'bg-brand text-white hover:bg-brand-dark shadow-brand/25')}>
@@ -136,7 +133,7 @@ function RiderHomePage() {
               </div>
               <div className={card}>
                 <Star size={18} className="text-yellow-400 mb-2" />
-                <p className={cn('text-2xl font-extrabold', dk ? 'text-white' : 'text-gray-900')}>{rider.rating > 0 ? rider.rating.toFixed(1) : 'N/A'}</p>
+                <p className={cn('text-2xl font-extrabold', dk ? 'text-white' : 'text-gray-900')}>{rider.rating > 0 ? rider.rating.toFixed(1) : 'No ratings'}</p>
                 <p className={cn('text-xs', dk ? 'text-white/40' : 'text-gray-500')}>Current rating</p>
               </div>
             </div>
@@ -236,18 +233,33 @@ function CustomerHomePage() {
   const dk = useThemeStore(s => s.theme === 'dark');
   const { getContent } = useContentStore();
   const { user } = useAuthStore();
+  const [legacyHeroOpacity, setLegacyHeroOpacity] = useState(1);
+  const [supportsWebgl2] = useState(() => {
+    if (typeof document === 'undefined') return false;
+    return Boolean(document.createElement('canvas').getContext('webgl2'));
+  });
+
+  useEffect(() => {
+    const updateFade = () => {
+      const distance = Math.max(window.innerHeight * 0.7, 1);
+      setLegacyHeroOpacity(Math.max(0, 1 - window.scrollY / distance));
+    };
+    updateFade();
+    window.addEventListener('scroll', updateFade, { passive: true });
+    return () => window.removeEventListener('scroll', updateFade);
+  }, []);
 
   return (
     <div>
       {/* ===== HERO ===== */}
       <section className="relative min-h-[100vh] flex items-center overflow-hidden">
-        <div className="absolute inset-0">
-          <img src="/images/hero-rider.jpg" alt="" className="w-full h-full object-cover" />
+        <div className={cn('legacy-hero-layer absolute inset-0 z-0', supportsWebgl2 && 'webgl-hero-hidden')} style={{ opacity: legacyHeroOpacity }}>
+          <img src="/images/hero-rider.jpg" alt="" className="h-full w-full object-cover" />
           <div className={cn('absolute inset-0',
             dk ? 'bg-gradient-to-br from-black/97 via-black/85 to-brand/15' : 'bg-gradient-to-br from-white/97 via-white/90 to-brand/8'
           )} />
         </div>
-        {/* Decorative */}
+        <MicroSlatsBackdrop />
         <div className="absolute top-20 right-10 w-72 h-72 bg-brand/10 rounded-full blur-[120px]" />
         <div className="absolute bottom-20 left-10 w-96 h-96 bg-brand/5 rounded-full blur-[150px]" />
 
@@ -255,26 +267,18 @@ function CustomerHomePage() {
           <div className="grid lg:grid-cols-2 gap-16 items-center">
             {/* Left - Text */}
             <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8 }}>
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-brand/10 border border-brand/20 mb-6">
-                <span className="w-2 h-2 rounded-full bg-brand animate-pulse" />
-                <span className="text-brand text-sm font-semibold">Fast & Reliable Delivery in Ghana</span>
-              </div>
               <h1 className={cn('text-5xl sm:text-6xl md:text-7xl font-black leading-[1.05] tracking-tight mb-3', dk ? 'text-white' : 'text-gray-900')}>
                 {getContent('home.hero.title', 'Delivery Boys')}
               </h1>
               <p className="text-xl md:text-2xl font-bold text-brand mb-5">
                 {getContent('home.hero.subtitle', 'We Go The Extra Mile For You!')}
               </p>
-              <p className={cn('text-base md:text-lg mb-10 max-w-lg leading-relaxed', dk ? 'text-white/55' : 'text-gray-600')}>
-                {getContent('home.hero.description', "Ghana's most trusted delivery service. Book in seconds, track live on the map, pay fair distance-based prices.")}
-              </p>
-
               {/* Primary CTAs */}
               <div className="flex flex-col sm:flex-row gap-3 mb-6">
-                <Link to={user ? '/book' : '/auth/login'}
-                  className="inline-flex items-center justify-center gap-2 bg-brand text-white px-8 py-4 rounded-2xl font-bold text-lg hover:bg-brand-dark transition shadow-xl shadow-brand/25 group">
+                <Link to={user ? '/book' : '/auth/signup'}
+                  className="inline-flex items-center justify-center gap-2 bg-brand text-white px-8 py-4 rounded-full font-bold text-lg hover:bg-brand-dark transition shadow-xl shadow-brand/25 group">
                   <Package size={22} />
-                  {getContent('home.cta.primary', 'Book a Delivery')}
+                  {user ? getContent('home.cta.primary', 'Book a Delivery') : 'Get Started'}
                   <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
                 </Link>
                 {user?.role === 'customer' ? (
@@ -294,25 +298,6 @@ function CustomerHomePage() {
                 )}
               </div>
 
-              {/* Secondary links */}
-              <div className="flex flex-wrap gap-4">
-                {!user && (
-                  <>
-                    <Link to="/auth/login?role=rider" className={cn('inline-flex items-center gap-1.5 text-sm font-semibold transition',
-                      dk ? 'text-white/40 hover:text-brand' : 'text-gray-400 hover:text-brand')}>
-                      <LogIn size={15} /> Rider Login <ChevronRight size={14} />
-                    </Link>
-                    <Link to="/auth/login" className={cn('inline-flex items-center gap-1.5 text-sm font-semibold transition',
-                      dk ? 'text-white/40 hover:text-brand' : 'text-gray-400 hover:text-brand')}>
-                      <LogIn size={15} /> Customer Login <ChevronRight size={14} />
-                    </Link>
-                  </>
-                )}
-                <a href="tel:+233544188778" className={cn('inline-flex items-center gap-1.5 text-sm font-semibold transition',
-                  dk ? 'text-white/40 hover:text-brand' : 'text-gray-400 hover:text-brand')}>
-                  <Phone size={15} /> +233 544 188 778
-                </a>
-              </div>
             </motion.div>
 
             {/* Right - Logo & Quick Action Cards */}
@@ -349,21 +334,6 @@ function CustomerHomePage() {
               </div>
             </motion.div>
           </div>
-        </div>
-      </section>
-
-      {/* ===== STATS ===== */}
-      <section className="relative z-10 -mt-14">
-        <div className="max-w-5xl mx-auto px-6">
-          <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
-            className="bg-gradient-to-r from-brand to-brand-dark rounded-3xl p-8 grid grid-cols-2 md:grid-cols-4 gap-6 shadow-2xl shadow-brand/20">
-            {stats.map(s => (
-              <div key={s.label} className="text-center">
-                <div className="text-3xl md:text-4xl font-black text-white">{s.value}</div>
-                <div className="text-white/65 text-sm mt-1 font-medium">{s.label}</div>
-              </div>
-            ))}
-          </motion.div>
         </div>
       </section>
 

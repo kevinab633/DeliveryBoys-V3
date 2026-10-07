@@ -16,6 +16,11 @@ const publicLinks = [
   { name: 'Contact', path: '/contact' },
 ];
 
+// Customer-only actions inside publicLinks — hidden from the mobile
+// hamburger menu for logged-in riders/managers, who have their own
+// role-specific destinations (Rider Dashboard / Manager Panel) instead.
+const customerOnlyPaths = ['/book', '/track'];
+
 export default function Navbar() {
   const [open, setOpen] = useState(false);
   const [userMenu, setUserMenu] = useState(false);
@@ -41,10 +46,10 @@ export default function Navbar() {
             </div>
           </Link>
 
-          <div className="hidden lg:flex items-center gap-0.5">
+          <div className="hidden items-center gap-0.5">
             {publicLinks.map(l => (
               <Link key={l.path} to={l.path}
-                className={cn('px-3 py-2 text-[13px] font-semibold rounded-lg transition',
+                className={cn('px-3 py-2 text-[13px] font-semibold rounded-full transition',
                   location.pathname === l.path
                     ? 'text-brand bg-brand/8'
                     : dk ? 'text-white/55 hover:text-white hover:bg-white/5' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
@@ -55,7 +60,7 @@ export default function Navbar() {
           </div>
 
           <div className="flex items-center gap-1.5">
-            <button onClick={toggle} className={cn('p-2 rounded-xl transition', dk ? 'text-white/50 hover:bg-white/5' : 'text-gray-400 hover:bg-gray-100')}>
+            <button type="button" aria-label={dk ? 'Switch to light mode' : 'Switch to dark mode'} onClick={toggle} className={cn('p-2 rounded-xl transition', dk ? 'text-white/50 hover:bg-white/5' : 'text-gray-400 hover:bg-gray-100')}>
               {dk ? <Sun size={18} /> : <Moon size={18} />}
             </button>
 
@@ -63,7 +68,7 @@ export default function Navbar() {
               <>
                 <NotificationPanel />
                 <div className="relative">
-                  <button onClick={() => setUserMenu(!userMenu)} className={cn('flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-xl transition',
+                  <button type="button" aria-label="Open account menu" aria-expanded={userMenu} onClick={() => setUserMenu(!userMenu)} className={cn('flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-xl transition',
                     dk ? 'hover:bg-white/5' : 'hover:bg-gray-100')}>
                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-brand to-brand-dark flex items-center justify-center text-white text-xs font-bold shadow-lg shadow-brand/20">
                       {user.name[0]}
@@ -117,18 +122,18 @@ export default function Navbar() {
                 </div>
               </>
             ) : (
-              <div className="flex items-center gap-2">
+              <div className="hidden">
                 <Link to="/auth/login" className={cn('px-4 py-2 text-sm font-semibold rounded-xl transition',
                   dk ? 'text-white/65 hover:bg-white/5' : 'text-gray-600 hover:bg-gray-100')}>
                   Sign In
                 </Link>
-                <Link to="/auth/signup" className="px-4 py-2 text-sm font-bold rounded-xl bg-brand text-white hover:bg-brand-dark transition shadow-md shadow-brand/20">
+                <Link to="/auth/signup" className="px-4 py-2 text-sm font-bold rounded-full bg-brand text-white hover:bg-brand-dark transition shadow-md shadow-brand/20">
                   Sign Up
                 </Link>
               </div>
             )}
 
-            <button onClick={() => setOpen(!open)} className={cn('lg:hidden p-2 rounded-xl', dk ? 'text-white/50' : 'text-gray-500')}>
+            <button type="button" aria-label={open ? 'Close navigation menu' : 'Open navigation menu'} aria-expanded={open} onClick={() => setOpen(!open)} className={cn('p-2 rounded-xl', dk ? 'text-white/50' : 'text-gray-500')}>
               {open ? <X size={22} /> : <Menu size={22} />}
             </button>
           </div>
@@ -137,24 +142,49 @@ export default function Navbar() {
 
       <AnimatePresence>
         {open && (
-          <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }}
-            className={cn('lg:hidden overflow-hidden border-t', dk ? 'bg-surface-dark-2 border-white/5' : 'bg-white border-gray-100')}>
-            <div className="px-4 py-3 space-y-1">
-              {publicLinks.map(l => (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] bg-black/45">
+            <motion.aside initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: 'spring', duration: 0.38, bounce: 0 }}
+              className={cn('absolute right-0 top-0 flex h-full w-[min(88vw,360px)] flex-col border-l p-5 pt-[calc(env(safe-area-inset-top,0px)+1rem)] shadow-2xl', dk ? 'bg-surface-dark-2 border-white/10' : 'bg-white border-gray-200')}>
+              <div className="mb-5 flex items-center justify-between">
+                <span className={cn('text-lg font-extrabold tracking-tight', dk ? 'text-white' : 'text-gray-900')}>Menu</span>
+                <button type="button" aria-label="Close navigation menu" onClick={() => setOpen(false)} className={cn('rounded-xl p-2', dk ? 'text-white/65 hover:bg-white/5' : 'text-gray-500 hover:bg-gray-100')}><X size={21} /></button>
+              </div>
+              <div className="flex-1 space-y-1 overflow-y-auto overscroll-contain">
+              <div className="space-y-1">
+              {publicLinks
+                .filter(l => user && user.role !== 'customer' ? !customerOnlyPaths.includes(l.path) : true)
+                .map(l => (
                 <Link key={l.path} to={l.path} onClick={() => setOpen(false)}
-                  className={cn('block px-3 py-2.5 rounded-xl text-sm font-semibold transition',
+                  className={cn('block px-3 py-2.5 rounded-full text-sm font-semibold transition',
                     location.pathname === l.path ? 'text-brand bg-brand/8' : dk ? 'text-white/55 hover:bg-white/5' : 'text-gray-500 hover:bg-gray-50')}>
                   {l.name}
                 </Link>
               ))}
+              {user && user.role === 'rider' && (
+                <Link to="/rider/dashboard" onClick={() => setOpen(false)}
+                  className={cn('block px-3 py-2.5 rounded-full text-sm font-semibold transition',
+                    location.pathname === '/rider/dashboard' ? 'text-brand bg-brand/8' : dk ? 'text-white/55 hover:bg-white/5' : 'text-gray-500 hover:bg-gray-50')}>
+                  Rider Dashboard
+                </Link>
+              )}
+              {user && user.role === 'manager' && (
+                <Link to="/manager" onClick={() => setOpen(false)}
+                  className={cn('block px-3 py-2.5 rounded-full text-sm font-semibold transition',
+                    location.pathname === '/manager' ? 'text-brand bg-brand/8' : dk ? 'text-white/55 hover:bg-white/5' : 'text-gray-500 hover:bg-gray-50')}>
+                  Manager Panel
+                </Link>
+              )}
               {!user && (
                 <div className="flex gap-2 pt-2">
                   <Link to="/auth/login" onClick={() => setOpen(false)} className={cn('flex-1 text-center px-4 py-2.5 rounded-xl text-sm font-semibold border',
                     dk ? 'border-white/10 text-white/70' : 'border-gray-200 text-gray-600')}>Sign In</Link>
-                  <Link to="/auth/signup" onClick={() => setOpen(false)} className="flex-1 text-center px-4 py-2.5 rounded-xl text-sm font-bold bg-brand text-white">Sign Up</Link>
+                  <Link to="/auth/signup" onClick={() => setOpen(false)} className="flex-1 text-center px-4 py-2.5 rounded-full text-sm font-bold bg-brand text-white">Sign Up</Link>
                 </div>
               )}
-            </div>
+              </div>
+              </div>
+            </motion.aside>
           </motion.div>
         )}
       </AnimatePresence>
