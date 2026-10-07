@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Package, UtensilsCrossed, ShoppingCart, FileText, Building2, Zap, Bike, ArrowRight, Shield, Clock, MapPin, TrendingUp, TrendingDown, Minus, Star, ChevronRight, Power, PowerOff, DollarSign, CheckCircle2, Wallet } from 'lucide-react';
@@ -469,5 +469,6 @@ function CustomerHomePage() {
 export default function Home() {
   const { user } = useAuthStore();
   if (user?.role === 'rider') return <RiderHomePage />;
+  if (user?.role === 'manager') return <Navigate to="/manager?tab=overview" replace />;
   return <CustomerHomePage />;
 }

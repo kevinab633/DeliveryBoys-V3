@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
+import { useSearchParams } from 'react-router-dom';
 import { BarChart3, Users, Package, DollarSign, MapPin, CheckCircle2, XCircle, Eye, Settings, Edit3, Bike, Shield, AlertTriangle, Sliders } from 'lucide-react';
 import { useThemeStore } from '../stores/themeStore';
 import { useAuthStore } from '../stores/authStore';
@@ -16,11 +17,22 @@ export default function ManagerDashboard() {
   const { user, getRiders, getCustomers, approveRider, rejectRider, suspendRider } = useAuthStore();
   const { orders, getTotalRevenue } = useOrderStore();
   const { content, updateContent, priceRules, updatePriceRule, pricingMode, setPricingMode, manualOverrides, setManualOverride, removeManualOverride } = useContentStore();
-  const [tab, setTab] = useState<Tab>('overview');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab') as Tab | null;
+  const [tab, setTab] = useState<Tab>(requestedTab && ['overview', 'orders', 'riders', 'map', 'pricing', 'content'].includes(requestedTab) ? requestedTab : 'overview');
   const [editKey, setEditKey] = useState<string | null>(null);
   const [editVal, setEditVal] = useState('');
   const [newOverrideKey, setNewOverrideKey] = useState('');
   const [newOverridePrice, setNewOverridePrice] = useState('');
+
+  useEffect(() => {
+    if (requestedTab && ['overview', 'orders', 'riders', 'map', 'pricing', 'content'].includes(requestedTab)) setTab(requestedTab);
+  }, [requestedTab]);
+
+  const selectTab = (nextTab: Tab) => {
+    setTab(nextTab);
+    setSearchParams({ tab: nextTab });
+  };
 
   if (!user || user.role !== 'manager') return <div className="pt-20 min-h-screen flex items-center justify-center"><p className={dk?'text-white/50':'text-gray-500'}>Access denied. Manager login required.</p></div>;
 
@@ -73,7 +85,7 @@ export default function ManagerDashboard() {
           </div>
           <div className="flex gap-2 overflow-x-auto pb-2">
             {tabs.map(t => (
-              <button key={t.key} onClick={() => setTab(t.key)}
+              <button key={t.key} onClick={() => selectTab(t.key)}
                 className={cn('flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-semibold whitespace-nowrap transition',
                   tab === t.key ? 'bg-brand text-white' : dk ? 'bg-surface-dark-2 text-white/50 hover:text-white' : 'bg-gray-100 text-gray-500 hover:text-gray-700')}>
                 <t.icon size={16} /> {t.label}
@@ -105,7 +117,7 @@ export default function ManagerDashboard() {
                 <div className={cn('p-4 rounded-xl border mb-6 flex items-center gap-3', 'border-warning/30 bg-warning/5')}>
                   <AlertTriangle size={20} className="text-warning" />
                   <span className={cn('text-sm font-semibold', dk ? 'text-white' : 'text-gray-900')}>{pendingRiders.length} rider(s) pending approval</span>
-                  <button onClick={() => setTab('riders')} className="ml-auto text-brand text-sm font-bold">Review</button>
+                  <button onClick={() => selectTab('riders')} className="ml-auto text-brand text-sm font-bold">Review</button>
                 </div>
               )}
               <h3 className={cn('font-bold mb-4', dk ? 'text-white' : 'text-gray-900')}>Recent Orders</h3>

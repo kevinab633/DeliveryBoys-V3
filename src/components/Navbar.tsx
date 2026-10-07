@@ -20,6 +20,14 @@ const publicLinks = [
 // hamburger menu for logged-in riders/managers, who have their own
 // role-specific destinations (Rider Dashboard / Manager Panel) instead.
 const customerOnlyPaths = ['/book', '/track'];
+const managerLinks = [
+  { name: 'Overview', path: '/manager?tab=overview' },
+  { name: 'Active & Available Orders', path: '/manager?tab=orders' },
+  { name: 'Riders & Verification', path: '/manager?tab=riders' },
+  { name: 'Live Map', path: '/manager?tab=map' },
+  { name: 'Pricing', path: '/manager?tab=pricing' },
+  { name: 'Content', path: '/manager?tab=content' },
+];
 
 export default function Navbar() {
   const [open, setOpen] = useState(false);
@@ -88,12 +96,13 @@ export default function Navbar() {
                 {user && <div className={cn('flex items-center justify-center rounded-2xl px-3 py-3', dk ? 'bg-white/5' : 'bg-gray-100')}><NotificationPanel /></div>}
               </div>
               <div className="space-y-1">
-              {publicLinks
-                .filter(l => user && user.role !== 'customer' ? !customerOnlyPaths.includes(l.path) : true)
+              {(user?.role === 'manager' ? managerLinks : publicLinks
+                .filter(l => l.path === '/track' && !user ? false : user && user.role !== 'customer' ? !customerOnlyPaths.includes(l.path) : true))
                 .map(l => (
                 <Link key={l.path} to={l.path} onClick={() => setOpen(false)}
                   className={cn('block px-3 py-2.5 rounded-full text-sm font-semibold transition',
-                    location.pathname === l.path ? 'text-brand bg-brand/8' : dk ? 'text-white/55 hover:bg-white/5' : 'text-gray-500 hover:bg-gray-50')}>
+                    location.pathname === l.path.split('?')[0] && (l.path.includes('?') ? new URLSearchParams(location.search).get('tab') === l.path.split('=')[1] : true)
+                      ? 'text-brand bg-brand/8' : dk ? 'text-white/55 hover:bg-white/5' : 'text-gray-500 hover:bg-gray-50')}>
                   {l.name}
                 </Link>
               ))}

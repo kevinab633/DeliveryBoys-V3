@@ -33,7 +33,7 @@ function ScrollToTop() {
 
 // Routes where the map is full-screen — hide Footer & WhatsApp FAB
 const FULL_SCREEN_ROUTES = ['/book', '/track', '/rider/dashboard'];
-const MINIMAL_ROUTES = ['/auth/login', '/auth/signup', '/manager/login', '/rider/verification'];
+const MINIMAL_ROUTES = ['/auth/login', '/auth/signup', '/manager/login', '/manager', '/rider/verification'];
 
 function AppContent() {
   const theme = useThemeStore(s => s.theme);
