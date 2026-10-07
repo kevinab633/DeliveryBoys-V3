@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useSearchParams } from 'react-router-dom';
-import { BarChart3, Users, Package, DollarSign, MapPin, CheckCircle2, XCircle, Eye, Settings, Edit3, Bike, Shield, AlertTriangle, Sliders, ChevronDown, ArrowLeft } from 'lucide-react';
+import { Users, Package, DollarSign, CheckCircle2, XCircle, Edit3, Bike, Shield, AlertTriangle, ChevronDown, ArrowLeft } from 'lucide-react';
 import { useThemeStore } from '../stores/themeStore';
 import { useAuthStore } from '../stores/authStore';
 import { useOrderStore } from '../stores/orderStore';
@@ -54,7 +54,6 @@ export default function ManagerDashboard() {
   const customers = getCustomers();
   const totalRevenue = getTotalRevenue();
   const deliveredOrders = orders.filter(o => o.status === 'delivered');
-  const activeOrders = orders.filter(o => ['accepted', 'picked_up', 'in_transit'].includes(o.status));
   const pendingRiders = riders.filter(r => r.status === 'pending');
   const onlineRiders = riders.filter(r => r.availability === 'online' && r.status === 'approved');
 
@@ -71,11 +70,6 @@ export default function ManagerDashboard() {
       color: r.availability === 'online' ? '#22C55E' : r.availability === 'busy' ? '#F59E0B' : '#666',
       popup: `${r.name} (${r.availability})`,
     }));
-
-  const activeOrderMarkers = activeOrders.flatMap(o => ([
-    { lat: o.pickup.lat, lng: o.pickup.lng, color: '#10B981', popup: `Pickup · ${o.displayCode || o.id.slice(0, 8).toUpperCase()}`, icon: 'pickup' as const },
-    { lat: o.dropoff.lat, lng: o.dropoff.lng, color: '#C41E1E', popup: `Drop-off · ${o.displayCode || o.id.slice(0, 8).toUpperCase()}`, icon: 'dropoff' as const },
-  ]));
 
   return (
     <div className={tab === 'map' ? 'min-h-screen' : 'pt-20 min-h-screen'}>
@@ -199,15 +193,7 @@ export default function ManagerDashboard() {
 
           {tab === 'map' && (
             <div className="relative h-full">
-              <div className={cn('absolute left-4 top-4 z-10 flex items-center gap-4 rounded-2xl px-4 py-3 shadow-lg backdrop-blur', dk ? 'bg-surface-dark-2/90' : 'bg-white/90')}>
-                <h3 className={cn('font-bold', dk ? 'text-white' : 'text-gray-900')}>Live Rider Map</h3>
-                <div className="flex gap-3 text-xs">
-                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-success" /> Online ({onlineRiders.length})</span>
-                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-warning" /> Busy</span>
-                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-gray-500" /> Offline</span>
-                </div>
-              </div>
-              <MapView markers={[...riderMarkers, ...activeOrderMarkers]} className="h-full w-full rounded-none" zoom={12} />
+              <MapView markers={riderMarkers} className="h-full w-full rounded-none" zoom={12} />
             </div>
           )}
 
