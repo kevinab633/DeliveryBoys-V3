@@ -349,7 +349,7 @@ function CustomerHomePage() {
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
             {services.map((s, i) => (
               <motion.div key={s.name} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.07 }}>
-                <Link to="/book"
+                <Link to={user ? '/book' : '/auth/login?role=customer'}
                   className={cn('block p-6 rounded-2xl border transition hover:-translate-y-1 group',
                     dk ? 'bg-surface-dark-2 border-white/5 hover:border-brand/25 hover:shadow-lg hover:shadow-brand/5' : 'bg-gray-50/50 border-gray-100 hover:border-brand/25 hover:shadow-xl hover:shadow-brand/5')}>
                   <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-4" style={{ background: `${s.color}15` }}>

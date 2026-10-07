@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { Package, UtensilsCrossed, ShoppingCart, FileText, Building2, Zap, Bike, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useThemeStore } from '../stores/themeStore';
+import { useAuthStore } from '../stores/authStore';
 import { cn } from '../lib/utils';
 
 const services = [
@@ -16,6 +17,8 @@ const services = [
 
 export default function Services() {
   const dk = useThemeStore(s => s.theme === 'dark');
+  const user = useAuthStore(s => s.user);
+  const bookingPath = user?.role === 'customer' ? '/book' : '/auth/login?role=customer';
   return (
     <div className="pt-20">
       <section className={cn('py-16', dk ? 'bg-surface-dark' : 'bg-white')}>
@@ -45,7 +48,7 @@ export default function Services() {
                     </li>
                   ))}
                 </ul>
-                <Link to="/book" className="inline-flex items-center gap-2 bg-brand text-white px-6 py-3 rounded-full font-bold text-sm hover:bg-brand-dark transition">
+                <Link to={bookingPath} className="inline-flex items-center gap-2 bg-brand text-white px-6 py-3 rounded-full font-bold text-sm hover:bg-brand-dark transition">
                   Book This Service <ArrowRight size={16} />
                 </Link>
               </div>

@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence, MotionConfig } from 'framer-motion';
 import { useEffect } from 'react';
 import { useThemeStore } from './stores/themeStore';
@@ -36,6 +36,11 @@ function ScrollToTop() {
 // Routes where the map is full-screen — hide Footer & WhatsApp FAB
 const FULL_SCREEN_ROUTES = ['/book', '/track', '/rider/dashboard'];
 const MINIMAL_ROUTES = ['/auth/login', '/auth/signup', '/manager/login', '/manager', '/rider/verification'];
+
+function CustomerOnly({ children }: { children: React.ReactNode }) {
+  const user = useAuthStore(s => s.user);
+  return user?.role === 'customer' ? <>{children}</> : <Navigate to="/auth/login?role=customer" replace />;
+}
 
 function AppContent() {
   const theme = useThemeStore(s => s.theme);
@@ -161,8 +166,8 @@ function AppContent() {
         <Routes location={location}>
           <Route path="/" element={<Home />} />
           <Route path="/services" element={<Services />} />
-          <Route path="/book" element={<Book />} />
-          <Route path="/track" element={<Track />} />
+          <Route path="/book" element={<CustomerOnly><Book /></CustomerOnly>} />
+          <Route path="/track" element={<CustomerOnly><Track /></CustomerOnly>} />
           <Route path="/about" element={<About />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/auth/login" element={<LoginPage />} />
@@ -171,7 +176,7 @@ function AppContent() {
           <Route path="/rider/dashboard" element={<RiderDashboard />} />
           <Route path="/manager" element={<ManagerDashboard />} />
           <Route path="/profile" element={<Profile />} />
-          <Route path="/my-orders" element={<MyOrders />} />
+          <Route path="/my-orders" element={<CustomerOnly><MyOrders /></CustomerOnly>} />
           <Route path="/rider/verification" element={<VerificationPage />} />
           <Route path="/privacy" element={<LegalPage kind="privacy" />} />
           <Route path="/terms" element={<LegalPage kind="terms" />} />

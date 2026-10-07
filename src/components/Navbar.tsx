@@ -55,7 +55,7 @@ export default function Navbar() {
 
           <div className="hidden items-center gap-0.5">
             {publicLinks.map(l => (
-              <Link key={l.path} to={l.path}
+              <Link key={l.path} to={!user && l.path === '/book' ? '/auth/login?role=customer' : l.path}
                 className={cn('px-3 py-2 text-[13px] font-semibold rounded-full transition',
                   location.pathname === l.path
                     ? 'text-brand bg-brand/8'
@@ -99,7 +99,7 @@ export default function Navbar() {
               {(user?.role === 'manager' ? managerLinks : publicLinks
                 .filter(l => l.path === '/track' && !user ? false : user && user.role !== 'customer' ? !customerOnlyPaths.includes(l.path) : true))
                 .map(l => (
-                <Link key={l.path} to={l.path} onClick={() => setOpen(false)}
+                <Link key={l.path} to={!user && l.path === '/book' ? '/auth/login?role=customer' : l.path} onClick={() => setOpen(false)}
                   className={cn('block px-3 py-2.5 rounded-full text-sm font-semibold transition',
                     location.pathname === l.path.split('?')[0] && (l.path.includes('?') ? new URLSearchParams(location.search).get('tab') === l.path.split('=')[1] : true)
                       ? 'text-brand bg-brand/8' : dk ? 'text-white/55 hover:bg-white/5' : 'text-gray-500 hover:bg-gray-50')}>
