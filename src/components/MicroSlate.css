@@ -1,0 +1,17 @@
+.micro-slate {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.micro-slate canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Older PCs render the original hero layer behind this transparent fallback. */
+.micro-slate-fallback {
+  background: transparent;
+}

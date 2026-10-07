@@ -19,7 +19,7 @@ export default function NotificationPanel() {
 
   return (
     <div className="relative">
-      <button onClick={() => setOpen(!open)} className={cn('p-2 rounded-xl transition relative', dk ? 'text-white/60 hover:bg-white/5' : 'text-gray-500 hover:bg-gray-100')}>
+      <button type="button" aria-label={`Notifications${unread.length ? `, ${unread.length} unread` : ''}`} aria-expanded={open} onClick={() => setOpen(!open)} className={cn('p-2 rounded-xl transition relative', dk ? 'text-white/60 hover:bg-white/5' : 'text-gray-500 hover:bg-gray-100')}>
         <Bell size={20} />
         {unread.length > 0 && (
           <span className="absolute -top-0.5 -right-0.5 w-5 h-5 rounded-full bg-brand text-white text-[10px] flex items-center justify-center font-bold animate-pulse">
@@ -36,7 +36,7 @@ export default function NotificationPanel() {
               initial={{ opacity: 0, y: 8, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 8, scale: 0.95 }}
-              className={cn('absolute right-0 top-full mt-2 w-80 sm:w-96 rounded-2xl shadow-2xl border z-50 overflow-hidden',
+              className={cn('fixed sm:absolute left-2 right-2 sm:left-auto sm:right-0 top-16 sm:top-full mt-0 sm:mt-2 sm:w-96 max-w-[calc(100vw-1rem)] rounded-2xl shadow-2xl border z-50 overflow-hidden',
                 dk ? 'bg-surface-dark-2 border-white/10' : 'bg-white border-gray-200')}
             >
               <div className={cn('px-4 py-3 flex items-center justify-between border-b', dk ? 'border-white/5' : 'border-gray-100')}>
@@ -47,7 +47,7 @@ export default function NotificationPanel() {
                       <CheckCheck size={14} /> Mark all read
                     </button>
                   )}
-                  <button onClick={() => setOpen(false)} className={dk ? 'text-white/30' : 'text-gray-400'}><X size={18} /></button>
+                  <button type="button" aria-label="Close notifications" onClick={() => setOpen(false)} className={dk ? 'text-white/30' : 'text-gray-400'}><X size={18} /></button>
                 </div>
               </div>
               <div className="max-h-80 overflow-y-auto">

@@ -57,7 +57,7 @@ export default function Contact() {
                 <option>General Inquiry</option><option>Delivery Issue</option><option>Partnership</option><option>Feedback</option>
               </select>
               <textarea name="message" rows={5} required value={form.message} onChange={handleChange} placeholder="Your message..." className={cn(inp, 'resize-none')} />
-              <button type="submit" className="inline-flex items-center gap-2 bg-brand text-white px-8 py-3 rounded-xl font-bold hover:bg-brand-dark transition"><Send size={18} /> Send Message</button>
+              <button type="submit" className="inline-flex items-center gap-2 bg-brand text-white px-8 py-3 rounded-full font-bold hover:bg-brand-dark transition"><Send size={18} /> Send Message</button>
             </form>
           </div>
         </div>

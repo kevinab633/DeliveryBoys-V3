@@ -2,22 +2,29 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { User, RiderProfile, UserRole, RiderStatus, VehicleType } from '../lib/types';
 import { generateId, generateOTP } from '../lib/utils';
+import { usersApi } from '../lib/usersApi';
+import { useThemeStore } from './themeStore';
 
 interface AuthStore {
   user: User | RiderProfile | null;
   allUsers: (User | RiderProfile)[];
+  usersLoaded: boolean;
   otpPending: { contact: string; otp: string; role: UserRole; method: 'email' | 'phone' } | null;
+  /** Fetches every account from Supabase and merges it into allUsers —
+   *  call this once on app startup, same pattern as orderStore's init(). */
+  loadUsers: () => Promise<void>;
   login: (emailOrPhone: string, role: UserRole) => string; // returns OTP
   verifyOTP: (code: string) => boolean;
   signup: (data: { name: string; email?: string; phone?: string; role: UserRole }) => string;
   signupRider: (data: { name: string; email?: string; phone?: string; vehicleType: VehicleType; vehiclePlate: string; nationalIdUrl: string; photoUrl: string }) => string;
   // ── Direct auth (OTP removed for now — will be re-added later) ──────
   // These sign the user in immediately with no verification step.
-  loginDirect: (emailOrPhone: string, role: UserRole) => void;
-  signupDirect: (data: { name: string; email?: string; phone?: string; role: UserRole }) => void;
-  signupRiderDirect: (data: { name: string; email?: string; phone?: string; vehicleType: VehicleType; vehiclePlate: string; nationalIdUrl: string; photoUrl: string }) => void;
+  loginDirect: (emailOrPhone: string, role: UserRole) => Promise<void>;
+  signupDirect: (data: { name: string; email?: string; phone?: string; role: UserRole }) => Promise<void>;
+  signupRiderDirect: (data: { name: string; email?: string; phone?: string; vehicleType: VehicleType; vehiclePlate: string; nationalIdUrl: string; photoUrl: string }) => Promise<void>;
   logout: () => void;
   updateProfile: (data: Partial<User>) => void;
+  updateRiderVerification: (data: { nationalIdUrl?: string; photoUrl?: string; selfieUrl?: string }) => Promise<void>;
   addContact: (type: 'email' | 'phone', value: string) => void;
   // Manager actions
   approveRider: (riderId: string) => void;
@@ -26,7 +33,9 @@ interface AuthStore {
   getRiders: () => RiderProfile[];
   getCustomers: () => User[];
   updateRiderLocation: (lat: number, lng: number) => void;
+  persistRiderLocation: (lat: number, lng: number) => void;
   setRiderAvailability: (status: 'online' | 'offline' | 'busy') => void;
+  recordDelivery: (riderId: string, earnedAmount: number) => void;
   // ── Remote sync handlers (called by syncService on incoming events) ──
   /** A rider on another device announced they are online. */
   applyRemoteRiderPresence: (rider: RiderProfile) => void;
@@ -54,7 +63,33 @@ const DEMO_RIDERS: RiderProfile[] = [
 export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
   user: null,
   allUsers: [DEFAULT_MANAGER, ...DEMO_RIDERS],
+  usersLoaded: false,
   otpPending: null,
+
+  // Merges real Supabase accounts into local state on startup. The demo
+  // riders/manager seeded above stay as an offline fallback — merged, not
+  // replaced, so the app still has riders to show if the DB is briefly
+  // unreachable. Real DB rows win over demo data for the same id.
+  loadUsers: async () => {
+    const remoteUsers = await usersApi.fetchAll();
+    if (remoteUsers.length === 0) {
+      set({ usersLoaded: true });
+      return;
+    }
+    set(s => {
+      const remoteIds = new Set(remoteUsers.map(u => u.id));
+      const keptLocal = s.allUsers.filter(u => !remoteIds.has(u.id));
+      const mergedUsers = [...keptLocal, ...remoteUsers];
+      // If the logged-in user's own record came back from the DB, refresh
+      // it too, so a rider's stats/status reflect what's actually stored.
+      const refreshedSelf = s.user ? remoteUsers.find(u => u.id === s.user!.id) : undefined;
+      return {
+        allUsers: mergedUsers,
+        user: refreshedSelf || s.user,
+        usersLoaded: true,
+      };
+    });
+  },
 
   login: (emailOrPhone, role) => {
     const otp = generateOTP();
@@ -90,13 +125,23 @@ export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
 
   // ── Direct auth (OTP removed for now — will be re-added later) ──────
   // Find-or-create by contact and sign in immediately, no code step.
-  loginDirect: (emailOrPhone, role) => {
+  // Checks Supabase first (so an account created on another device is
+  // found), falling back to local allUsers, then creates fresh if neither
+  // has it — same shape as before, just DB-backed now.
+  loginDirect: async (emailOrPhone, role) => {
     const method = emailOrPhone.includes('@') ? 'email' : 'phone';
-    const { allUsers } = get();
-    let user = allUsers.find(u => {
-      if (method === 'email') return u.email === emailOrPhone && u.role === role;
-      return u.phone === emailOrPhone && u.role === role;
-    });
+    // Check Supabase FIRST, not local allUsers — local state may still be
+    // the hardcoded demo seed if loadUsers() hasn't finished yet (it's
+    // async and runs on a timer, not guaranteed to complete before a
+    // fast login attempt), which was causing a real account on another
+    // device to look "not found" and get duplicated.
+    let user = await usersApi.findByContact(emailOrPhone, method, role) || undefined;
+    if (!user) {
+      user = get().allUsers.find(u => {
+        if (method === 'email') return u.email === emailOrPhone && u.role === role;
+        return u.phone === emailOrPhone && u.role === role;
+      });
+    }
     if (!user) {
       user = {
         id: generateId(),
@@ -106,12 +151,16 @@ export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
         createdAt: Date.now(),
         verified: true,
       } as User;
-      set({ allUsers: [...allUsers, user] });
+      set(s => ({ allUsers: [...s.allUsers, user!] }));
+      await usersApi.upsert(user);
+    } else {
+      // Found (remotely or locally) but not yet merged into local allUsers.
+      set(s => (s.allUsers.some(u => u.id === user!.id) ? s : { allUsers: [...s.allUsers, user!] }));
     }
     set({ user, otpPending: null });
   },
 
-  signupDirect: (data) => {
+  signupDirect: async (data) => {
     const newUser: User = {
       id: generateId(),
       name: data.name,
@@ -122,9 +171,10 @@ export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
       verified: true,
     };
     set(s => ({ allUsers: [...s.allUsers, newUser], user: newUser, otpPending: null }));
+    await usersApi.upsert(newUser);
   },
 
-  signupRiderDirect: (data) => {
+  signupRiderDirect: async (data) => {
     const newRider: RiderProfile = {
       id: generateId(),
       name: data.name,
@@ -144,6 +194,17 @@ export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
       photoUrl: data.photoUrl,
     };
     set(s => ({ allUsers: [...s.allUsers, newRider], user: newRider, otpPending: null }));
+    // Riders are typically outdoors in daylight, where light mode is far
+    // easier to read than dark — so default new rider accounts to light
+    // the moment they sign up. This only happens once, here, at account
+    // creation; it doesn't override a rider's own later choice to switch
+    // to dark, and it never touches customer/manager accounts.
+    useThemeStore.getState().setTheme('light');
+    // Awaited (not fire-and-forget) — a rider signing up needs their
+    // account to actually exist in Supabase before they might log in
+    // again from a different phone; a silent background failure here
+    // was creating duplicate accounts per-device instead of one shared one.
+    await usersApi.upsert(newRider);
   },
 
   signup: (data) => {
@@ -202,32 +263,57 @@ export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
   updateProfile: (data) => set(s => {
     if (!s.user) return s;
     const updated = { ...s.user, ...data };
+    void usersApi.upsert(updated);
     return {
       user: updated,
       allUsers: s.allUsers.map(u => u.id === updated.id ? updated : u),
     };
   }),
+
+  updateRiderVerification: async (data) => {
+    const current = get().user;
+    if (!current || current.role !== 'rider') return;
+    const patch = { ...data, status: 'pending' as const };
+    const updated = { ...current, ...patch } as RiderProfile;
+    set(s => ({ user: updated, allUsers: s.allUsers.map(u => u.id === updated.id ? updated : u) }));
+    await usersApi.update(updated.id, {
+      national_id_url: updated.nationalIdUrl || null,
+      photo_url: updated.photoUrl || null,
+      selfie_url: (updated as RiderProfile & { selfieUrl?: string }).selfieUrl || null,
+      status: 'pending',
+    });
+  },
 
   addContact: (type, value) => set(s => {
     if (!s.user) return s;
     const updated = { ...s.user, [type]: value };
+    void usersApi.upsert(updated);
     return {
       user: updated,
       allUsers: s.allUsers.map(u => u.id === updated.id ? updated : u),
     };
   }),
 
-  approveRider: (riderId) => set(s => ({
-    allUsers: s.allUsers.map(u => u.id === riderId && u.role === 'rider' ? { ...u, status: 'approved' as RiderStatus } : u),
-  })),
+  approveRider: (riderId) => {
+    void usersApi.update(riderId, { status: 'approved' });
+    set(s => ({
+      allUsers: s.allUsers.map(u => u.id === riderId && u.role === 'rider' ? { ...u, status: 'approved' as RiderStatus } : u),
+    }));
+  },
 
-  rejectRider: (riderId) => set(s => ({
-    allUsers: s.allUsers.map(u => u.id === riderId && u.role === 'rider' ? { ...u, status: 'rejected' as RiderStatus } : u),
-  })),
+  rejectRider: (riderId) => {
+    void usersApi.update(riderId, { status: 'rejected' });
+    set(s => ({
+      allUsers: s.allUsers.map(u => u.id === riderId && u.role === 'rider' ? { ...u, status: 'rejected' as RiderStatus } : u),
+    }));
+  },
 
-  suspendRider: (riderId) => set(s => ({
-    allUsers: s.allUsers.map(u => u.id === riderId && u.role === 'rider' ? { ...u, status: 'suspended' as RiderStatus } : u),
-  })),
+  suspendRider: (riderId) => {
+    void usersApi.update(riderId, { status: 'suspended' });
+    set(s => ({
+      allUsers: s.allUsers.map(u => u.id === riderId && u.role === 'rider' ? { ...u, status: 'suspended' as RiderStatus } : u),
+    }));
+  },
 
   // ── Remote sync handlers (invoked by syncService) ──────────────────
   applyRemoteRiderPresence: (remoteRider) => {
@@ -256,21 +342,73 @@ export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
 
   getCustomers: () => get().allUsers.filter(u => u.role === 'customer'),
 
-  updateRiderLocation: (lat, lng) => set(s => {
-    if (!s.user || s.user.role !== 'rider') return s;
-    const updated = { ...s.user, location: { lat, lng } } as RiderProfile;
-    return {
-      user: updated,
-      allUsers: s.allUsers.map(u => u.id === updated.id ? updated : u),
-    };
-  }),
+  // Local-only — updates the in-memory position immediately, with no
+  // network write. This is what should drive the map/camera/arrow, since
+  // it needs every real GPS tick, not throttled. Call persistLocation
+  // (below) separately, on its own throttle, for the Supabase write.
+  updateRiderLocation: (lat, lng) => {
+    const s = get();
+    if (!s.user || s.user.role !== 'rider') return;
+    set(s2 => {
+      if (!s2.user || s2.user.role !== 'rider') return s2;
+      const updated = { ...s2.user, location: { lat, lng } } as RiderProfile;
+      // Only rebuild allUsers when this rider's entry actually needs to
+      // change within it — on the live nav screen this fires frequently
+      // (even at the capped ~10/sec rate above), and remapping the
+      // whole array every time is needless extra work on top of an
+      // already-frequent update.
+      const idx = s2.allUsers.findIndex(u => u.id === updated.id);
+      const allUsers = idx === -1 ? s2.allUsers : [
+        ...s2.allUsers.slice(0, idx),
+        updated,
+        ...s2.allUsers.slice(idx + 1),
+      ];
+      return { user: updated, allUsers };
+    });
+  },
 
-  setRiderAvailability: (status) => set(s => {
-    if (!s.user || s.user.role !== 'rider') return s;
-    const updated = { ...s.user, availability: status } as RiderProfile;
-    return {
-      user: updated,
-      allUsers: s.allUsers.map(u => u.id === updated.id ? updated : u),
-    };
-  }),
+  // Network write — call this on its own throttle (not every GPS tick),
+  // since every call is a real Supabase write.
+  persistRiderLocation: (lat, lng) => {
+    const s = get();
+    if (!s.user || s.user.role !== 'rider') return;
+    void usersApi.update(s.user.id, { location: { lat, lng } });
+  },
+
+  setRiderAvailability: (status) => {
+    const s = get();
+    if (!s.user || s.user.role !== 'rider') return;
+    void usersApi.update(s.user.id, { availability: status });
+    set(s2 => {
+      if (!s2.user || s2.user.role !== 'rider') return s2;
+      const updated = { ...s2.user, availability: status } as RiderProfile;
+      return {
+        user: updated,
+        allUsers: s2.allUsers.map(u => u.id === updated.id ? updated : u),
+      };
+    });
+  },
+
+  // Records a completed delivery against a rider BY ID rather than the
+  // currently logged-in user — the status change that completes an order
+  // can be triggered from the rider's own session, but should still work
+  // correctly if triggered elsewhere (e.g. a manager action) later on.
+  // Now writes through to Supabase so the count/earnings persist across
+  // devices, not just the browser that completed the delivery.
+  recordDelivery: (riderId, earnedAmount) => {
+    const rider = get().allUsers.find(u => u.id === riderId && u.role === 'rider') as RiderProfile | undefined;
+    if (!rider) return;
+    const newTotalDeliveries = (rider.totalDeliveries || 0) + 1;
+    const newEarnings = (rider.earnings || 0) + earnedAmount;
+    void usersApi.update(riderId, { total_deliveries: newTotalDeliveries, earnings: newEarnings });
+    set(s => {
+      const current = s.allUsers.find(u => u.id === riderId && u.role === 'rider') as RiderProfile | undefined;
+      if (!current) return s;
+      const updated: RiderProfile = { ...current, totalDeliveries: newTotalDeliveries, earnings: newEarnings };
+      return {
+        allUsers: s.allUsers.map(u => u.id === riderId ? updated : u),
+        user: s.user && s.user.id === riderId ? updated : s.user,
+      };
+    });
+  },
 }), { name: 'db-auth' }));

@@ -14,6 +14,16 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim());
 });
 
+// A registered fetch handler (even a pure passthrough, no caching) is part
+// of Chrome's installability check on Android — without one, "Install app"
+// can report "This app cannot be installed" even though the manifest and
+// HTTPS requirements are met. This intentionally does no caching, just
+// hands every request straight to the network, matching the "minimal, no
+// offline support" design of this service worker.
+self.addEventListener('fetch', (event) => {
+  event.respondWith(fetch(event.request));
+});
+
 self.addEventListener('push', (event) => {
   let data = { title: 'Delivery Boys', body: 'You have a new update.', url: '/' };
   try {
@@ -32,12 +42,17 @@ self.addEventListener('push', (event) => {
 
   const options = {
     body: data.body,
-    icon: '/favicon.svg',
-    badge: '/favicon.svg',
+    // A real PNG renders reliably as the notification's large icon on
+    // Android; SVG (the old value here) is inconsistently supported and
+    // often falls back to a blank/generic icon, which reads as "weak" or
+    // easy to miss even though the vibration below is firing correctly.
+    icon: '/icons/icon-512.png',
+    badge: '/icons/icon-192.png',
     data: { url: data.url || '/' },
-    vibrate: [200, 100, 200],
+    vibrate: [400, 150, 400, 150, 400],
     tag: data.tag || 'delivery-boys-order',
     renotify: true,
+    requireInteraction: true,
   };
 
   event.waitUntil(self.registration.showNotification(data.title, options));
