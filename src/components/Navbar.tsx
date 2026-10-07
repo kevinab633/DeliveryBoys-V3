@@ -35,13 +35,15 @@ export default function Navbar() {
     <nav className="app-navbar fixed top-0 left-0 right-0 z-50 pointer-events-none">
       <div className="max-w-7xl mx-auto px-4 lg:px-6 pointer-events-none">
         <div className="flex items-center justify-between h-16">
-          <Link to="/" className={cn('liquid-glass-mark pointer-events-auto flex items-center gap-2.5 shrink-0', dk ? 'text-white' : 'text-gray-900')}>
-            <img src="/images/logo.jpeg" alt="DB" className="h-10 w-10 rounded-full object-cover ring-2 ring-brand/20" />
-            <div className="flex items-baseline gap-0.5 leading-none">
-              <span className={cn('font-black text-[1.05rem] tracking-[0.055em]', dk ? 'text-white' : 'text-gray-950')}>Delivery</span>
-              <span className="font-black text-[1.05rem] tracking-[0.055em] text-brand">Boys</span>
-            </div>
-          </Link>
+          <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}>
+            <Link to="/" className={cn('liquid-glass-mark pointer-events-auto flex items-center gap-2.5 shrink-0', dk ? 'text-white' : 'text-gray-900')}>
+              <img src="/images/logo.jpeg" alt="DB" className="h-10 w-10 rounded-full object-cover ring-2 ring-brand/20" />
+              <div className="flex items-baseline gap-0.5 leading-none">
+                <span className={cn('font-black text-[1.05rem] tracking-[0.055em]', dk ? 'text-white' : 'text-gray-950')}>Delivery</span>
+                <span className="font-black text-[1.05rem] tracking-[0.055em] text-brand">Boys</span>
+              </div>
+            </Link>
+          </motion.div>
 
           <div className="hidden items-center gap-0.5">
             {publicLinks.map(l => (
@@ -57,9 +59,13 @@ export default function Navbar() {
           </div>
 
           <div className="navbar-utility-cluster pointer-events-auto flex items-center">
-            <button type="button" aria-label={open ? 'Close navigation menu' : 'Open navigation menu'} aria-expanded={open} onClick={() => setOpen(!open)} className={cn('liquid-glass-menu pointer-events-auto rounded-full p-3', dk ? 'text-white/75' : 'text-gray-700')}>
-              {open ? <X size={22} /> : <Menu size={22} />}
-            </button>
+            <motion.button type="button" aria-label={open ? 'Close navigation menu' : 'Open navigation menu'} aria-expanded={open} onClick={() => setOpen(!open)} whileTap={{ scale: 0.92 }} transition={{ type: 'spring', stiffness: 420, damping: 26 }} className={cn('liquid-glass-menu pointer-events-auto rounded-full p-3', dk ? 'text-white/75' : 'text-gray-700')}>
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.span key={open ? 'close' : 'menu'} initial={{ opacity: 0, rotate: -45, scale: 0.7 }} animate={{ opacity: 1, rotate: 0, scale: 1 }} exit={{ opacity: 0, rotate: 45, scale: 0.7 }} transition={{ duration: 0.16 }} className="flex">
+                  {open ? <X size={22} /> : <Menu size={22} />}
+                </motion.span>
+              </AnimatePresence>
+            </motion.button>
           </div>
         </div>
       </div>
