@@ -37,9 +37,9 @@ export default function Navbar() {
         <div className="flex items-center justify-between h-16">
           <Link to="/" className={cn('liquid-glass-mark pointer-events-auto flex items-center gap-2.5 shrink-0', dk ? 'text-white' : 'text-gray-900')}>
             <img src="/images/logo.jpeg" alt="DB" className="h-10 w-10 rounded-full object-cover ring-2 ring-brand/20" />
-            <div className="hidden sm:flex items-baseline gap-0.5">
-              <span className={cn('font-extrabold text-lg tracking-tight', dk ? 'text-white' : 'text-gray-900')}>Delivery</span>
-              <span className="font-extrabold text-lg tracking-tight text-brand">Boys</span>
+            <div className="flex items-baseline gap-0.5 leading-none">
+              <span className={cn('font-black text-[1.05rem] tracking-[0.055em]', dk ? 'text-white' : 'text-gray-950')}>Delivery</span>
+              <span className="font-black text-[1.05rem] tracking-[0.055em] text-brand">Boys</span>
             </div>
           </Link>
 

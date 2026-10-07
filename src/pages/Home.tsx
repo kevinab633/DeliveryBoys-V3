@@ -268,11 +268,8 @@ function CustomerHomePage() {
             {/* Left - Text */}
             <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8 }}>
               <h1 className={cn('text-5xl sm:text-6xl md:text-7xl font-black leading-[1.05] tracking-tight mb-3', dk ? 'text-white' : 'text-gray-900')}>
-                {getContent('home.hero.title', 'Delivery Boys')}
+                {getContent('home.hero.title', 'We Go The Extra Mile For You!')}
               </h1>
-              <p className="text-xl md:text-2xl font-bold text-brand mb-5">
-                {getContent('home.hero.subtitle', 'We Go The Extra Mile For You!')}
-              </p>
               {/* Primary CTAs */}
               <div className="flex flex-col sm:flex-row gap-3 mb-6">
                 <Link to={user ? '/book' : '/auth/signup'}
