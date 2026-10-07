@@ -5,7 +5,7 @@ import App from './App.tsx'
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    void navigator.serviceWorker.register('/sw.js').catch(() => {
+    void navigator.serviceWorker.register('/sw.js?v=6416d8b', { scope: '/' }).catch(() => {
       // Push notifications are optional; the app remains fully usable without them.
     });
   });
