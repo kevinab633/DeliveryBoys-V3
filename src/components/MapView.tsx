@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import type { Map as MLMap, Marker as MLMarker } from 'maplibre-gl';
 import type * as LeafletType from 'leaflet';
 import { useThemeStore } from '../stores/themeStore';
-import { cn } from '../lib/utils';
+import { cn, escapeHtml } from '../lib/utils';
 import { MapSkeleton } from './Skeleton';
 
 // Leaflet's stylesheet is REQUIRED: it gives .leaflet-pane its absolute
@@ -900,7 +900,8 @@ export default function MapView({
         if (m.popup) {
           marker.setPopup(
             new ml.Popup({ closeButton: true, maxWidth: '260px' }).setHTML(
-              `<div style="font-size:13px;font-weight:600;padding:4px 2px">${m.popup}</div>`,
+              `<div style="font-size:13px;font-weight:600;padding:4px 2px">${escapeHtml(m.popup)}</div>`,
+
             ),
           );
         }
@@ -1235,7 +1236,7 @@ export default function MapView({
           });
           const marker = L.marker([m.lat, m.lng], { icon }).addTo(map);
           if (m.popup) {
-            marker.bindPopup(`<div style="font-size:13px;font-weight:600;padding:4px 2px">${m.popup}</div>`);
+            marker.bindPopup(`<div style="font-size:13px;font-weight:600;padding:4px 2px">${escapeHtml(m.popup)}</div>`);
           }
           leafletMarkersRef.current.push(marker);
         } catch {

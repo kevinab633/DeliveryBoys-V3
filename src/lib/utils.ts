@@ -46,6 +46,13 @@ export function timeAgo(timestamp: number): string {
   return `${days}d ago`;
 }
 
+/** Escape text before it is inserted into the map library's HTML popup API. */
+export function escapeHtml(value: unknown): string {
+  return String(value ?? '').replace(/[&<>"']/g, character => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  })[character] || character);
+}
+
 export function cn(...classes: (string | boolean | undefined | null)[]): string {
   return classes.filter(Boolean).join(' ');
 }

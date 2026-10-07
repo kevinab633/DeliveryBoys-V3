@@ -8,9 +8,22 @@ import { cn } from '../lib/utils';
 import { showToast } from '../components/Toast';
 
 const BUCKET = 'rider-verification';
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 type Key = 'nationalId' | 'selfie' | 'profile';
 type Entry = { file: File; quality: { ok: boolean; message: string } };
 type Files = Partial<Record<Key, Entry>>;
+
+async function validateImageFile(file: File): Promise<{ ok: boolean; message?: string }> {
+  if (!ALLOWED_IMAGE_TYPES.has(file.type)) return { ok: false, message: 'Use a JPEG, PNG, or WebP image. SVG and other file types are not accepted.' };
+  if (file.size > MAX_IMAGE_BYTES) return { ok: false, message: 'Image is too large. Choose an image under 10 MB.' };
+  const header = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+  const jpeg = header[0] === 0xff && header[1] === 0xd8 && header[2] === 0xff;
+  const png = header.slice(0, 8).join(',') === '137,80,78,71,13,10,26,10';
+  const webp = String.fromCharCode(...header.slice(0, 4)) === 'RIFF' && String.fromCharCode(...header.slice(8, 12)) === 'WEBP';
+  if (!jpeg && !png && !webp) return { ok: false, message: 'The file contents do not match a supported image format.' };
+  return { ok: true };
+}
 
 async function inspectImage(file: File): Promise<{ ok: boolean; message: string }> {
   try {
@@ -49,6 +62,12 @@ export default function VerificationPage() {
   const choose = (key: Key) => async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const validation = await validateImageFile(file);
+    if (!validation.ok) {
+      showToast({ title: 'Unsupported image', message: validation.message || 'Choose a valid image file.', type: 'warning' });
+      e.target.value = '';
+      return;
+    }
     const quality = await inspectImage(file);
     setFiles(prev => ({ ...prev, [key]: { file, quality } }));
   };
@@ -65,8 +84,9 @@ export default function VerificationPage() {
       const urls: Record<string, string> = {};
       for (const key of required) {
         const file = files[key]!.file;
-        const path = `${user.id}/${Date.now()}-${key}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '-')}`;
-        const { error } = await supabase.storage.from(BUCKET).upload(path, file, { upsert: true });
+        const extension = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg';
+        const path = `${user.id}/${Date.now()}-${key}.${extension}`;
+        const { error } = await supabase.storage.from(BUCKET).upload(path, file, { upsert: true, contentType: file.type, cacheControl: '3600' });
         if (error) throw error;
         urls[key] = supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
       }
