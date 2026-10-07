@@ -46,8 +46,8 @@ self.addEventListener('push', (event) => {
     // Android; SVG (the old value here) is inconsistently supported and
     // often falls back to a blank/generic icon, which reads as "weak" or
     // easy to miss even though the vibration below is firing correctly.
-    icon: '/icons/icon-512.png',
-    badge: '/icons/icon-192.png',
+    icon: '/icons/delivery-boys-icon-512.png',
+    badge: '/icons/delivery-boys-icon-192.png',
     data: { url: data.url || '/' },
     vibrate: [400, 150, 400, 150, 400],
     tag: data.tag || 'delivery-boys-order',

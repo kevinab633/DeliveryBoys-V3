@@ -221,6 +221,19 @@ function CustomerHomePage() {
   const { getContent } = useContentStore();
   const { user } = useAuthStore();
   const [legacyHeroOpacity, setLegacyHeroOpacity] = useState(1);
+  const [typedTagline, setTypedTagline] = useState('');
+  useEffect(() => {
+    if (user?.role === 'customer') return;
+    const tagline = 'We go the extra mile for you';
+    let index = 0;
+    const timer = window.setInterval(() => {
+      index += 1;
+      setTypedTagline(tagline.slice(0, index));
+      if (index >= tagline.length) window.clearInterval(timer);
+    }, 58);
+    return () => window.clearInterval(timer);
+  }, [user?.role]);
+
   const [supportsWebgl2] = useState(() => {
     if (typeof document === 'undefined') return false;
     return Boolean(document.createElement('canvas').getContext('webgl2'));
@@ -255,9 +268,11 @@ function CustomerHomePage() {
             {/* Left - Text */}
             <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8 }}>
               <h1 className={cn('text-5xl sm:text-6xl md:text-7xl font-black leading-[1.05] tracking-tight mb-3', dk ? 'text-white' : 'text-gray-900')}>
-                {user?.role === 'customer'
-                  ? `Welcome back, ${user.name.split(' ')[0]}`
-                  : 'We go the extra mile for you'}
+                {user?.role === 'customer' ? (
+                  `Welcome back, ${user.name.split(' ')[0]}`
+                ) : (
+                  <><span className="hero-typewriter">{typedTagline}</span><span className="hero-typewriter-cursor" aria-hidden="true" /></>
+                )}
               </h1>
               {/* Primary CTAs */}
               <div className="flex flex-col sm:flex-row gap-3 mb-6">

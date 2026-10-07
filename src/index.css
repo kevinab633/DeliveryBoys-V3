@@ -324,3 +324,17 @@ p { text-wrap: pretty; }
   .liquid-glass-mark, .liquid-glass-menu { backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
 }
 @media (prefers-reduced-motion: reduce) { .liquid-glass-mark, .liquid-glass-menu { transition: none; } }
+
+.hero-typewriter { display: inline; }
+.hero-typewriter-cursor {
+  display: inline-block;
+  width: .08em;
+  height: .82em;
+  margin-left: .12em;
+  vertical-align: -.04em;
+  border-radius: 999px;
+  background: var(--color-brand);
+  animation: typewriter-caret 750ms steps(1, end) infinite;
+}
+@keyframes typewriter-caret { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .hero-typewriter-cursor { animation: none; } }
