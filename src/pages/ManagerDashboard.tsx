@@ -32,7 +32,7 @@ export default function ManagerDashboard() {
   const pendingRiders = riders.filter(r => r.status === 'pending');
   const onlineRiders = riders.filter(r => r.availability === 'online' && r.status === 'approved');
 
-  const card = cn('p-6 rounded-2xl border', dk ? 'bg-surface-dark-2 border-white/5' : 'bg-white border-gray-200');
+  const card = cn('app-card p-6', dk ? '' : 'bg-white');
   const inp = cn('w-full px-4 py-2.5 rounded-xl text-sm border transition', dk ? 'bg-surface-dark-3 border-white/10 text-white placeholder:text-white/30' : 'bg-gray-50 border-gray-200 text-gray-900');
 
   const tabs: { key: Tab; label: string; icon: typeof BarChart3 }[] = [
@@ -55,6 +55,11 @@ export default function ManagerDashboard() {
       popup: `${r.name} (${r.availability})`,
     }));
 
+  const activeOrderMarkers = activeOrders.flatMap(o => ([
+    { lat: o.pickup.lat, lng: o.pickup.lng, color: '#10B981', popup: `Pickup · ${o.displayCode || o.id.slice(0, 8).toUpperCase()}`, icon: 'pickup' as const },
+    { lat: o.dropoff.lat, lng: o.dropoff.lng, color: '#C41E1E', popup: `Drop-off · ${o.displayCode || o.id.slice(0, 8).toUpperCase()}`, icon: 'dropoff' as const },
+  ]));
+
   return (
     <div className="pt-20 min-h-screen">
       <section className={cn('py-6', dk ? 'bg-surface-dark' : 'bg-white')}>
@@ -69,7 +74,7 @@ export default function ManagerDashboard() {
           <div className="flex gap-2 overflow-x-auto pb-2">
             {tabs.map(t => (
               <button key={t.key} onClick={() => setTab(t.key)}
-                className={cn('flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition',
+                className={cn('flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-semibold whitespace-nowrap transition',
                   tab === t.key ? 'bg-brand text-white' : dk ? 'bg-surface-dark-2 text-white/50 hover:text-white' : 'bg-gray-100 text-gray-500 hover:text-gray-700')}>
                 <t.icon size={16} /> {t.label}
               </button>
@@ -107,7 +112,7 @@ export default function ManagerDashboard() {
               <div className="space-y-3">
                 {orders.slice(0, 8).map(o => (
                   <div key={o.id} className={cn('p-4 rounded-xl border flex flex-wrap items-center gap-4', dk ? 'bg-surface-dark-3 border-white/5' : 'bg-white border-gray-200')}>
-                    <span className={cn('font-bold text-sm', dk ? 'text-white' : 'text-gray-900')}>{o.id}</span>
+                    <span className={cn('font-bold text-sm', dk ? 'text-white' : 'text-gray-900')}>{o.displayCode}</span>
                     <span className={cn('text-sm', dk ? 'text-white/50' : 'text-gray-500')}>{o.customerName}</span>
                     <span className={cn('text-sm', dk ? 'text-white/40' : 'text-gray-400')}>{o.riderName || 'No rider'}</span>
                     <span className={cn('px-2 py-0.5 rounded-full text-xs font-bold capitalize ml-auto',
@@ -130,7 +135,7 @@ export default function ManagerDashboard() {
                   <tbody>
                     {orders.map(o => (
                       <tr key={o.id} className={cn('border-t', dk ? 'border-white/5' : 'border-gray-100')}>
-                        <td className={cn('p-3 font-bold', dk ? 'text-white' : 'text-gray-900')}>{o.id}</td>
+                        <td className={cn('p-3 font-bold', dk ? 'text-white' : 'text-gray-900')}>{o.displayCode}</td>
                         <td className={cn('p-3', dk ? 'text-white/70' : 'text-gray-700')}>{o.customerName}</td>
                         <td className={cn('p-3', dk ? 'text-white/50' : 'text-gray-500')}>{o.riderName || '-'}</td>
                         <td className={cn('p-3 max-w-[200px] truncate', dk ? 'text-white/40' : 'text-gray-400')}>{o.pickup.address} → {o.dropoff.address}</td>
@@ -184,7 +189,7 @@ export default function ManagerDashboard() {
                   <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-gray-500" /> Offline</span>
                 </div>
               </div>
-              <MapView markers={riderMarkers} className="h-[500px]" zoom={12} />
+              <MapView markers={[...riderMarkers, ...activeOrderMarkers]} className="h-[500px]" zoom={12} />
             </div>
           )}
 
@@ -195,7 +200,7 @@ export default function ManagerDashboard() {
                 <div className="flex gap-3">
                   {(['auto', 'manual', 'hybrid'] as const).map(m => (
                     <button key={m} onClick={() => setPricingMode(m)}
-                      className={cn('px-4 py-2 rounded-xl text-sm font-semibold capitalize transition',
+                      className={cn('px-4 py-2 rounded-full text-sm font-semibold capitalize transition',
                         pricingMode === m ? 'bg-brand text-white' : dk ? 'bg-surface-dark-3 text-white/50' : 'bg-gray-100 text-gray-500')}>
                       {m}
                     </button>
@@ -235,7 +240,7 @@ export default function ManagerDashboard() {
                   <div className="flex gap-3 mb-4">
                     <input value={newOverrideKey} onChange={e => setNewOverrideKey(e.target.value)} placeholder="Key (e.g. motorcycle-5)" className={inp} />
                     <input type="number" value={newOverridePrice} onChange={e => setNewOverridePrice(e.target.value)} placeholder="Price (GHS)" className={cn(inp, 'w-32')} />
-                    <button onClick={() => { if (newOverrideKey && newOverridePrice) { setManualOverride(newOverrideKey, +newOverridePrice); setNewOverrideKey(''); setNewOverridePrice(''); } }} className="bg-brand text-white px-4 py-2 rounded-xl text-sm font-bold shrink-0">Add</button>
+                    <button onClick={() => { if (newOverrideKey && newOverridePrice) { setManualOverride(newOverrideKey, +newOverridePrice); setNewOverrideKey(''); setNewOverridePrice(''); } }} className="bg-brand text-white px-4 py-2 rounded-full text-sm font-bold shrink-0">Add</button>
                   </div>
                   {Object.entries(manualOverrides).map(([k, v]) => (
                     <div key={k} className={cn('flex items-center justify-between py-2 border-b', dk ? 'border-white/5' : 'border-gray-100')}>

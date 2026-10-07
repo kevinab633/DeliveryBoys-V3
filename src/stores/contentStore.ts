@@ -20,7 +20,7 @@ export const useContentStore = create<ContentStore>()(persist((set, get) => ({
   content: {
     'home.hero.title': 'Delivery Boys',
     'home.hero.subtitle': 'We Go The Extra Mile For You!',
-    'home.hero.description': "Ghana's most trusted delivery service. Fast, reliable, and always on time. Book a delivery in seconds.",
+    'home.hero.description': 'Book a rider, follow the trip, and see the fare before you confirm.',
     'home.cta.primary': 'Book a Delivery',
     'home.cta.secondary': 'Become a Rider',
     'about.title': 'About Delivery Boys',

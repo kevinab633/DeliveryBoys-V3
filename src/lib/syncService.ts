@@ -54,6 +54,17 @@ export type SyncEvent =
       type: 'RIDER_PRESENCE';
       senderId: string;
       rider: RiderProfile;
+    }
+  | {
+      // Broadcast-only — never persisted to the orders table. Fires the
+      // moment a rider opens/is viewing an order's ringing or detail
+      // view, and again with riderId undefined when they close out
+      // without accepting, so the customer's "rider is responding" state
+      // reverts back to "searching".
+      type: 'RIDER_RESPONDING';
+      senderId: string;
+      orderId: string;
+      riderId?: string;
     };
 
 // Listeners for UI connection status
@@ -95,6 +106,11 @@ export function rowToOrder(row: any): Order {
 
   return {
     id: row.id,
+    // Older rows created before this field existed won't have it in the
+    // stored pickup blob — fall back to a code derived from the id so
+    // nothing ever displays blank, though it won't match any code the
+    // customer was originally shown (there wasn't one to show yet).
+    displayCode: pickupData.displayCode || `DB-${String(row.id).slice(0, 4).toUpperCase()}`,
     customerId: row.customer_id || 'cust-anon',
     customerName: pickupData.customerName || 'Customer',
     customerPhone: pickupData.customerPhone || '',
@@ -145,6 +161,7 @@ export function orderToRow(order: Order): any {
       customerName: order.customerName,
       customerPhone: order.customerPhone,
       distance: order.distance,
+      displayCode: order.displayCode,
       acceptedAt: order.acceptedAt,
       pickedUpAt: order.pickedUpAt,
       deliveredAt: order.deliveredAt,
@@ -259,6 +276,11 @@ export function handleIncomingSyncEvent(event: SyncEvent) {
       }
       break;
     }
+
+    case 'RIDER_RESPONDING': {
+      orderStore.applyRemoteRiderResponding(event.orderId, event.riderId);
+      break;
+    }
   }
 }
 
@@ -337,6 +359,22 @@ export const syncService = {
     // Throttle database update to prevent excessive writes while keeping WebSockets 60fps
     void syncService.updateOrderInDatabase(orderId, {
       riderLocation: { lat, lng },
+    });
+  },
+
+  /**
+   * Broadcast that a rider has opened/is reviewing an order (or has
+   * closed out without accepting, when riderId is omitted). Broadcast
+   * only — deliberately never written to the orders table, since this
+   * is a fast, transient signal with no lasting value once the rider
+   * accepts, declines, or the order moves on.
+   */
+  broadcastRiderResponding(orderId: string, riderId?: string) {
+    emitSyncEvent({
+      type: 'RIDER_RESPONDING',
+      senderId: CLIENT_ID,
+      orderId,
+      riderId,
     });
   },
 
@@ -473,6 +511,7 @@ export const syncService = {
         'ORDER_CANCELLED',
         'ORDER_DISPATCH_EXPANDED',
         'RIDER_PRESENCE',
+        'RIDER_RESPONDING',
       ];
 
       eventTypes.forEach((eventType) => {
@@ -512,6 +551,20 @@ export const syncService = {
       (currentUser as RiderProfile).availability === 'online'
     ) {
       syncService.broadcastRiderPresence(currentUser as RiderProfile);
+    }
+  },
+
+  /** Force the Realtime WebSocket to reconnect immediately instead of
+   *  waiting on its internal backoff timer. Call this on tab resume —
+   *  Android suspends/kills the socket while backgrounded, and it doesn't
+   *  always reconnect promptly on its own once the tab is visible again. */
+  reconnectIfNeeded() {
+    if (!isConnected) {
+      try {
+        realtimeChannel?.subscribe();
+      } catch {
+        void 0;
+      }
     }
   },
 };

@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { Map as MLMap, Marker as MLMarker } from 'maplibre-gl';
 import type * as LeafletType from 'leaflet';
+import { useThemeStore } from '../stores/themeStore';
+import { cn } from '../lib/utils';
+import { MapSkeleton } from './Skeleton';
+
 // Leaflet's stylesheet is REQUIRED: it gives .leaflet-pane its absolute
 // positioning. Without it tiles scatter/fail to place and the SVG overlay
 // pane (routes) collapses — which looks like "tiles don't load and the
 // route won't form".
 import 'leaflet/dist/leaflet.css';
-import { useThemeStore } from '../stores/themeStore';
-import { cn } from '../lib/utils';
 
 // ── Types (public interface unchanged — callers need no edits) ─────────
 export interface MarkerData {
@@ -17,6 +19,11 @@ export interface MarkerData {
   color?: string;
   popup?: string;
   icon?: 'pin' | 'rider' | 'bike' | 'pickup' | 'dropoff';
+  /** Heading in degrees (0 = north), for markers that should rotate to
+   *  face their direction of travel — e.g. the rider's own position
+   *  while navigating, so it reads as a moving vehicle rather than a
+   *  static "you are here" dot. */
+  heading?: number;
 }
 
 export interface MapViewProps {
@@ -30,6 +37,39 @@ export interface MapViewProps {
   className?: string;
   interactive?: boolean;
   pinDropActive?: boolean;
+  /** Overrides the app-wide dark/light theme for just this map instance.
+   *  Used on the rider dashboard, which always shows the light map style
+   *  regardless of the rider's own app theme — riders are typically
+   *  outdoors in daylight, where a light map is far easier to read than
+   *  a dark one, independent of whether they prefer a dark app UI. */
+  forceLightMode?: boolean;
+  /** Turn-by-turn follow mode: camera stays centered on and rotated to
+   *  followPosition's heading, like Google Maps navigation, instead of
+   *  the default fit-all-markers-in-view behavior. followHeading is in
+   *  degrees (0 = north), typically computed from consecutive GPS fixes. */
+  followPosition?: { lat: number; lng: number };
+  followHeading?: number;
+  /** Traffic-colored route segments (from fetchTurnByTurnRoute's
+   *  congestionSegments) — drawn as multiple colored polyline pieces
+   *  instead of route/secondaryRoute's single flat color. When present,
+   *  this replaces the "route" prop's rendering for the main trip line;
+   *  pass both if you also want a plain-colored fallback for legs where
+   *  traffic data wasn't available. */
+  congestionRoute?: CongestionSegment[];
+  /** Fires whenever the engine changes or a fallback reason is known —
+   *  temporary diagnostic hook so a caller (like the rider nav view) can
+   *  surface on-screen why MapLibre isn't running on a given device,
+   *  since console.warn is invisible without remote debugging on a
+   *  phone. Not meant to stay long-term once the real cause is found. */
+  onEngineChange?: (engine: 'maplibre' | 'leaflet', reason?: string) => void;
+  /** Bump this number to make the map resume following the rider after
+   *  the user manually panned away — drives the nav screen's Re-centre
+   *  button. */
+  recenterSignal?: number;
+  /** Fires whenever follow-mode is paused (user dragged the map) or
+   *  resumed, so the parent can show/hide its Re-centre button only
+   *  while it's actually needed. */
+  onFollowPausedChange?: (paused: boolean) => void;
 }
 
 // ── Mapbox style + token ───────────────────────────────────────────────
@@ -206,28 +246,148 @@ function isWebGL2Supported(): boolean {
   }
 }
 
-// ── GPU / WebGL failure classifier ─────────────────────────────────────
-// Used by the top-level error boundary (DebugBanner) so a WebGL2-related
-// crash shows the friendly "map unavailable" message instead of the
-// generic "Something went wrong" screen. Covers MapLibre's own
-// GPUInitializationError plus the TypeError cascade it triggers when the
-// painter/context was never created (reading 'resize' / 'destroy' / etc).
+// Keep WebGL initialization failures from taking down the whole React tree.
+// MapLibre can throw these asynchronously on browsers whose WebGL2 probe
+// succeeds but whose real rendering context cannot be initialized.
 export function isGpuInitFailure(err: unknown): boolean {
   if (!err || typeof err !== 'object') return false;
   const e = err as { name?: unknown; message?: unknown };
   if (e.name === 'GPUInitializationError') return true;
   if (typeof e.message === 'string' && /webgl|gpu|graphics context/i.test(e.message)) return true;
-  if (
-    e.name === 'TypeError' &&
-    typeof e.message === 'string' &&
-    /reading '(resize|destroy|render|context)'/i.test(e.message)
-  ) {
-    return true;
-  }
-  return false;
+  return e.name === 'TypeError' && typeof e.message === 'string' &&
+    /reading '(resize|destroy|render|context)'/i.test(e.message);
 }
 
 // ── Directions API fetcher ─────────────────────────────────────────────
+// ── Turn-by-turn directions (steps + geometry), used by the rider's
+//    active-delivery navigation view. Separate from fetchDirectionsRoute
+//    above because that one only needs the line shape — this needs the
+//    actual maneuver list (turn left/right, street names, distances).
+export interface DirectionStep {
+  instruction: string;
+  distanceMeters: number;
+  maneuverType: string; // e.g. 'turn', 'depart', 'arrive', 'roundabout'
+  maneuverModifier?: string; // e.g. 'left', 'right', 'straight'
+  location: [number, number]; // [lat, lng] where this step begins
+}
+
+export interface CongestionSegment {
+  coords: [number, number][];
+  level: 'unknown' | 'low' | 'moderate' | 'heavy' | 'severe';
+}
+
+export interface DirectionsResult {
+  coords: [number, number][];
+  steps: DirectionStep[];
+  distanceMeters: number;
+  durationSeconds: number;
+  /** Route geometry split into contiguous same-congestion segments, using
+   *  Mapbox's driving-traffic profile — mirrors Yango's real traffic-
+   *  colored route (green/yellow/orange/red/black by congestion level,
+   *  confirmed from their app's own mapkit_styling_automotive_jam_*
+   *  color resources) rather than a single flat-colored line. Empty when
+   *  traffic data isn't available for the requested area. */
+  congestionSegments: CongestionSegment[];
+  /** Posted speed limit for roughly the start of this leg, in km/h — null
+   *  when Mapbox has no speed-limit data for the area (common outside
+   *  well-mapped regions). */
+  speedLimitKmh: number | null;
+}
+
+export async function fetchTurnByTurnRoute(
+  a: [number, number],
+  b: [number, number],
+): Promise<DirectionsResult | null> {
+  try {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length < 2 || b.length < 2) return null;
+    const latA = a[0], lngA = a[1], latB = b[0], lngB = b[1];
+    if (!Number.isFinite(latA) || !Number.isFinite(lngA) || !Number.isFinite(latB) || !Number.isFinite(lngB)) return null;
+
+    // driving-traffic (not plain driving) is required for congestion
+    // annotations — it's the only Mapbox profile that returns live
+    // traffic-segment data alongside the route geometry.
+    const url =
+      `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/` +
+      `${lngA},${latA};${lngB},${latB}` +
+      `?geometries=geojson&overview=full&steps=true&banner_instructions=false` +
+      `&annotations=congestion,maxspeed&access_token=${MAPBOX_TOKEN}`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const json = await res.json();
+    const route = json?.routes?.[0];
+    const coordsRaw = route?.geometry?.coordinates;
+    if (!Array.isArray(coordsRaw) || coordsRaw.length < 2) return null;
+
+    const coords: [number, number][] = [];
+    for (const c of coordsRaw) {
+      if (Array.isArray(c) && c.length >= 2 && typeof c[0] === 'number' && typeof c[1] === 'number' && Number.isFinite(c[0]) && Number.isFinite(c[1])) {
+        coords.push([c[1], c[0]]);
+      }
+    }
+    if (coords.length < 2) return null;
+
+    const steps: DirectionStep[] = [];
+    const legs = route?.legs || [];
+    for (const leg of legs) {
+      for (const s of leg?.steps || []) {
+        const loc = s?.maneuver?.location;
+        if (!Array.isArray(loc) || loc.length < 2) continue;
+        steps.push({
+          instruction: s?.maneuver?.instruction || s?.name || 'Continue',
+          distanceMeters: Number(s?.distance) || 0,
+          maneuverType: s?.maneuver?.type || 'continue',
+          maneuverModifier: s?.maneuver?.modifier,
+          location: [loc[1], loc[0]],
+        });
+      }
+    }
+
+    // congestion[] has one entry PER COORDINATE PAIR (i.e. length =
+    // coords.length - 1), one level per segment between consecutive
+    // points. Group consecutive same-level segments into runs so we
+    // draw a handful of colored polylines instead of one per point pair.
+    const congestionSegments: CongestionSegment[] = [];
+    const congestionRaw: string[] = legs.flatMap((l: any) => l?.annotation?.congestion || []);
+    if (congestionRaw.length === coords.length - 1) {
+      let runStart = 0;
+      let runLevel = congestionRaw[0] || 'unknown';
+      for (let i = 1; i <= congestionRaw.length; i++) {
+        const lvl = i < congestionRaw.length ? (congestionRaw[i] || 'unknown') : null;
+        if (lvl !== runLevel) {
+          congestionSegments.push({
+            coords: coords.slice(runStart, i + 1),
+            level: (['unknown', 'low', 'moderate', 'heavy', 'severe'].includes(runLevel) ? runLevel : 'unknown') as CongestionSegment['level'],
+          });
+          runStart = i;
+          runLevel = lvl || 'unknown';
+        }
+      }
+    }
+
+    // Speed limit for the segment nearest the route's start — a single
+    // representative value for display (per-segment speed-limit-following
+    // UI, like Google's, would need matching the rider's live position to
+    // the nearest annotated segment on every tick; this gives a "current
+    // road's limit" reading that's close enough without that complexity).
+    const maxspeedRaw: any[] = legs.flatMap((l: any) => l?.annotation?.maxspeed || []);
+    const firstKnownSpeed = maxspeedRaw.find(s => s && typeof s.speed === 'number' && s.unit);
+    const speedLimitKmh = firstKnownSpeed
+      ? (firstKnownSpeed.unit === 'mph' ? Math.round(firstKnownSpeed.speed * 1.60934) : Math.round(firstKnownSpeed.speed))
+      : null;
+
+    return {
+      coords,
+      steps,
+      distanceMeters: Number(route?.distance) || 0,
+      durationSeconds: Number(route?.duration) || 0,
+      speedLimitKmh,
+      congestionSegments,
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function fetchDirectionsRoute(
   a: [number, number],
   b: [number, number],
@@ -287,14 +447,22 @@ function markerSpec(
   color: string,
 ): { html: string; w: number; h: number; anchor: 'center' | 'bottom' } {
   if (type === 'rider') {
+    // Directional puck: a chevron/arrow pointing "up" inside the SVG's
+    // own coordinate space, so a CSS rotation on the wrapping element
+    // (driven by the marker's heading) turns the whole shape to face the
+    // real direction of travel — this is what makes it read as a moving
+    // vehicle rather than a static "you are here" dot.
     return {
-      html: `<div style="position:relative;width:36px;height:36px;display:flex;align-items:center;justify-content:center">
-        <div style="position:absolute;inset:-4px;border-radius:50%;background:${color}40;animation:pulse-ring 2s ease-out infinite"></div>
-        <div style="width:22px;height:22px;background:${color};border:3px solid white;border-radius:50%;box-shadow:0 3px 12px rgba(0,0,0,0.35);position:relative;z-index:2;display:flex;align-items:center;justify-content:center">
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="white"><path d="M12 2L4 7v10l8 5 8-5V7l-8-5z"/></svg>
+      html: `<div style="position:relative;width:44px;height:44px;display:flex;align-items:center;justify-content:center">
+        <div style="position:absolute;inset:-2px;border-radius:50%;background:${color}35;animation:pulse-ring 2s ease-out infinite"></div>
+        <div class="rider-heading-rotor" style="width:34px;height:34px;position:relative;z-index:2;transition:transform 0.4s linear">
+          <svg width="34" height="34" viewBox="0 0 34 34">
+            <circle cx="17" cy="17" r="15" fill="${color}" stroke="white" stroke-width="3"/>
+            <path d="M17 6 L24 21 L17 17.5 L10 21 Z" fill="white"/>
+          </svg>
         </div>
       </div>`,
-      w: 36, h: 36, anchor: 'center',
+      w: 44, h: 44, anchor: 'center',
     };
   }
   if (type === 'bike') {
@@ -360,6 +528,13 @@ export default function MapView({
   className = 'h-[400px]',
   interactive = true,
   pinDropActive = false,
+  forceLightMode = false,
+  followPosition,
+  followHeading,
+  onEngineChange,
+  congestionRoute,
+  recenterSignal,
+  onFollowPausedChange,
 }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [engine, setEngine] = useState<'maplibre' | 'leaflet'>(() =>
@@ -371,6 +546,7 @@ export default function MapView({
   const [ml, setMl] = useState<MapLibreNS | null>(null);
   const markerRefs = useRef<MLMarker[]>([]);
   const locateMarkerRef = useRef<MLMarker | null>(null);
+  const riderPuckMarkerRef = useRef<MLMarker | null>(null);
   const [preparedStyle, setPreparedStyle] = useState<unknown>(null);
 
   // Leaflet state & refs
@@ -380,14 +556,22 @@ export default function MapView({
   const leafletLocateMarkerRef = useRef<LeafletType.Marker | null>(null);
 
   const [styleReady, setStyleReady] = useState(false);
+  // Paused whenever the rider manually drags the map during turn-by-turn
+  // navigation — matches Google Maps' own behavior: panning away stops
+  // the camera auto-following until the rider explicitly re-centers.
+  // Without this, the camera would just yank itself back mid-drag, which
+  // makes freely panning around impossible.
+  const [followPaused, setFollowPaused] = useState(false);
 
   // SVG route overlay refs (used in MapLibre mode)
   const mainPtsRef = useRef<[number, number][] | null>(null);
   const mainDrawnRef = useRef<[number, number][] | null>(null);
   const secondaryPtsRef = useRef<[number, number][] | null>(null);
+  const congestionSegmentsRef = useRef<CongestionSegment[]>([]);
   const pathCasingRef = useRef<SVGPathElement>(null);
   const pathMainRef = useRef<SVGPathElement>(null);
   const pathSecondaryRef = useRef<SVGPathElement>(null);
+  const congestionGroupRef = useRef<SVGGElement>(null);
   const animRef = useRef(0);
 
   const onClickRef = useRef(onMapClick);
@@ -396,7 +580,8 @@ export default function MapView({
   const pinDropActiveRef = useRef(pinDropActive);
   pinDropActiveRef.current = pinDropActive;
 
-  const dk = useThemeStore((s) => s.theme === 'dark');
+  const appIsDark = useThemeStore((s) => s.theme === 'dark');
+  const dk = forceLightMode ? false : appIsDark;
 
   // Defensive center coordinate extraction
   const safeCenterLat =
@@ -467,17 +652,22 @@ export default function MapView({
 
     if (!isWebGL2Supported()) {
       setEngine('leaflet');
+      onEngineChange?.('leaflet', 'WebGL2 not supported on this device/browser');
       return;
     }
 
     loadMapLibre()
       .then((mod) => {
         if (cancelled) return;
+        mod.setWorkerUrl('/assets/maplibre-gl-worker.mjs');
         setMl(mod);
       })
       .catch((err) => {
         console.warn('[MapView] MapLibre module load failed, falling back to Leaflet:', err);
-        if (!cancelled) setEngine('leaflet');
+        if (!cancelled) {
+          setEngine('leaflet');
+          onEngineChange?.('leaflet', `MapLibre module load failed: ${err?.message || err}`);
+        }
       });
 
     return () => {
@@ -500,7 +690,10 @@ export default function MapView({
       })
       .catch((err) => {
         console.warn('[MapView] Vector style failed, falling back to Leaflet:', err);
-        if (!cancelled) setEngine('leaflet');
+        if (!cancelled) {
+          setEngine('leaflet');
+          onEngineChange?.('leaflet', `Style fetch failed: ${err?.message || err}`);
+        }
       });
 
     return () => {
@@ -531,6 +724,41 @@ export default function MapView({
     if (pathCasingRef.current) pathCasingRef.current.setAttribute('d', toD(mainPtsRef.current));
     if (pathMainRef.current) pathMainRef.current.setAttribute('d', toD(mainDrawnRef.current));
     if (pathSecondaryRef.current) pathSecondaryRef.current.setAttribute('d', toD(secondaryPtsRef.current));
+
+    // Traffic-colored segments (from congestionRoute), drawn as their own
+    // set of paths on top of the main route — one per contiguous
+    // same-congestion run, colored green/yellow/orange/red per Mapbox's
+    // congestion level, matching how Yango/Google show live traffic
+    // density directly on the route rather than a single flat color.
+    const group = congestionGroupRef.current;
+    if (group) {
+      const segments = congestionSegmentsRef.current;
+      // Reuse existing <path> children where possible instead of
+      // recreating the whole set every redraw (which fires on every
+      // map move/pan), to avoid needless DOM churn while panning.
+      while (group.children.length > segments.length) {
+        group.removeChild(group.lastChild as ChildNode);
+      }
+      while (group.children.length < segments.length) {
+        group.appendChild(document.createElementNS('http://www.w3.org/2000/svg', 'path'));
+      }
+      segments.forEach((seg, i) => {
+        const el = group.children[i] as SVGPathElement;
+        const color =
+          seg.level === 'severe' ? '#7F1D1D'
+          : seg.level === 'heavy' ? '#DC2626'
+          : seg.level === 'moderate' ? '#F59E0B'
+          : seg.level === 'low' ? '#22C55E'
+          : '#3B82F6'; // unknown congestion data: fall back to plain active-route blue
+        el.setAttribute('d', toD(seg.coords));
+        el.setAttribute('fill', 'none');
+        el.setAttribute('stroke', color);
+        el.setAttribute('stroke-width', followPosition ? '8' : '5');
+        el.setAttribute('stroke-opacity', '0.95');
+        el.setAttribute('stroke-linecap', 'round');
+        el.setAttribute('stroke-linejoin', 'round');
+      });
+    }
   }, []);
   const redrawRef = useRef(redrawRoutes);
   redrawRef.current = redrawRoutes;
@@ -553,6 +781,7 @@ export default function MapView({
     } catch (err) {
       console.warn('[MapView] MapLibre creation threw, switching to Leaflet:', err);
       setEngine('leaflet');
+      onEngineChange?.('leaflet', `Map creation threw: ${(err as any)?.message || err}`);
       return;
     }
 
@@ -562,7 +791,10 @@ export default function MapView({
       const msg = String(e?.error?.message || '');
       if (msg.includes('WebGL') || msg.includes('GPU') || msg.includes('context')) {
         console.warn('[MapView] WebGL runtime error, switching to Leaflet:', msg);
-        if (!disposed) setEngine('leaflet');
+        if (!disposed) {
+          setEngine('leaflet');
+          onEngineChange?.('leaflet', `WebGL runtime error: ${msg}`);
+        }
       } else {
         if (!disposed) setStyleReady(true);
       }
@@ -573,6 +805,7 @@ export default function MapView({
     } catch (err) {
       console.warn('[MapView] setStyle error, switching to Leaflet:', err);
       setEngine('leaflet');
+      onEngineChange?.('leaflet', `setStyle error: ${(err as any)?.message || err}`);
       return;
     }
 
@@ -594,10 +827,21 @@ export default function MapView({
       }
     };
     const onMove = () => redrawRef.current();
+    // MapLibre distinguishes user-initiated drags from programmatic
+    // camera moves (like our own follow-camera easeTo calls) via
+    // *DragStart specifically — this only fires for real touch/mouse
+    // drags, so it won't falsely trigger from our own auto-follow.
+    const onDragStart = () => setFollowPaused(true);
 
     map.on('moveend', onMoveEnd);
     map.on('move', onMove);
-    map.on('load', () => { if (!disposed) setStyleReady(true); });
+    map.on('dragstart', onDragStart);
+    map.on('load', () => {
+      if (!disposed) {
+        setStyleReady(true);
+        onEngineChange?.('maplibre');
+      }
+    });
 
     return () => {
       disposed = true;
@@ -606,6 +850,7 @@ export default function MapView({
       if (map) {
         try { map.off('moveend', onMoveEnd); } catch { void 0; }
         try { map.off('move', onMove); } catch { void 0; }
+        try { map.off('dragstart', onDragStart); } catch { void 0; }
       }
       markerRefs.current.forEach((m) => {
         try { m.remove(); } catch { void 0; }
@@ -629,7 +874,10 @@ export default function MapView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engine, ml, preparedStyle]);
 
-  // MapLibre Markers
+  // MapLibre Markers — excludes the 'rider' marker while followPosition
+  // is active; that one is handled by its own effect below with smooth
+  // in-place updates instead of destroy-and-recreate every GPS tick,
+  // which is what made the old marker jump instead of glide.
   useEffect(() => {
     if (engine !== 'maplibre') return;
     const map = mapRef.current;
@@ -641,6 +889,7 @@ export default function MapView({
     markerRefs.current = [];
 
     validMarkers.forEach((m) => {
+      if (followPosition && m.icon === 'rider') return;
       try {
         const spec = markerSpec(m.icon || 'pin', m.color || '#C41E1E');
         const el = document.createElement('div');
@@ -663,6 +912,75 @@ export default function MapView({
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engine, markersKey, ml]);
+
+  const lastFollowUpdateRef = useRef<number>(0);
+  const puckAnimRef = useRef<number>(0);
+  const puckFromRef = useRef<{ lng: number; lat: number } | null>(null);
+
+  // Rider puck — smooth in-place position + rotation updates instead of
+  // destroy-and-recreate, so it glides between real GPS fixes and turns
+  // to face the heading like Google Maps' navigation arrow, rather than
+  // jumping to a new static dot every ~4 seconds. Position is animated
+  // with a manual requestAnimationFrame loop (MapLibre's Marker has no
+  // built-in animated setLngLat), matched to the same duration as the
+  // camera's own glide above so the puck and the camera move together
+  // instead of the puck teleporting ahead of/behind a moving camera.
+  useEffect(() => {
+    if (engine !== 'maplibre' || !followPosition) {
+      cancelAnimationFrame(puckAnimRef.current);
+      try { riderPuckMarkerRef.current?.remove(); } catch { void 0; }
+      riderPuckMarkerRef.current = null;
+      puckFromRef.current = null;
+      return;
+    }
+    const map = mapRef.current;
+    if (!map || !ml || !styleReady) return;
+    if (!Number.isFinite(followPosition.lat) || !Number.isFinite(followPosition.lng)) return;
+
+    const target = { lng: followPosition.lng, lat: followPosition.lat };
+
+    if (!riderPuckMarkerRef.current) {
+      const spec = markerSpec('rider', '#C41E1E');
+      const el = document.createElement('div');
+      el.style.width = `${spec.w}px`;
+      el.style.height = `${spec.h}px`;
+      el.innerHTML = spec.html;
+      riderPuckMarkerRef.current = new ml.Marker({ element: el, anchor: spec.anchor })
+        .setLngLat([target.lng, target.lat])
+        .addTo(map);
+      puckFromRef.current = target;
+    } else {
+      const from = puckFromRef.current || target;
+      const gapMs = lastFollowUpdateRef.current ? Date.now() - lastFollowUpdateRef.current + 1 : 1200;
+      const duration = Math.min(Math.max(gapMs * 0.92, 600), 4500);
+      const startTime = performance.now();
+      cancelAnimationFrame(puckAnimRef.current);
+      const step = (now: number) => {
+        const t = Math.min(1, (now - startTime) / duration);
+        const lng = from.lng + (target.lng - from.lng) * t;
+        const lat = from.lat + (target.lat - from.lat) * t;
+        riderPuckMarkerRef.current?.setLngLat([lng, lat]);
+        if (t < 1) {
+          puckAnimRef.current = requestAnimationFrame(step);
+        } else {
+          puckFromRef.current = target;
+        }
+      };
+      puckAnimRef.current = requestAnimationFrame(step);
+    }
+
+    // The map camera itself is already rotated to followHeading via
+    // easeTo({bearing}) above (or in the follow-camera effect), which
+    // turns the whole canvas so "forward" faces up on screen. Rotating
+    // this marker by the SAME heading again was double-applying the
+    // turn — the arrow ended up pointing roughly double the real angle
+    // away from the actual direction of travel. Once the map is already
+    // oriented to heading, the puck should just point straight up
+    // relative to the rotated canvas, i.e. no additional rotation here.
+    const rotor = riderPuckMarkerRef.current.getElement()?.querySelector('.rider-heading-rotor') as HTMLElement | null;
+    if (rotor) rotor.style.transform = 'rotate(0deg)';
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [engine, ml, styleReady, followPosition?.lat, followPosition?.lng, followHeading]);
 
   // MapLibre Single-marker auto-center
   useEffect(() => {
@@ -711,7 +1029,7 @@ export default function MapView({
       };
       animRef.current = requestAnimationFrame(step);
 
-      if (!pinDropActiveRef.current && mapRef.current) {
+      if (!pinDropActiveRef.current && !followPosition && mapRef.current) {
         const all: [number, number][] = [
           ...validMarkers.map((m) => [m.lat, m.lng] as [number, number]),
           ...pts,
@@ -727,31 +1045,99 @@ export default function MapView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engine, routeKey]);
 
-  // MapLibre Secondary route
+  // ── Turn-by-turn follow camera (MapLibre): keeps the view centered on
+  //    and rotated to followPosition/followHeading, like Google Maps
+  //    navigation. Real GPS fixes only arrive every ~4s (see the rider's
+  //    own location-watch throttle), so a single easeTo per fix used to
+  //    animate for under a second and then sit frozen for the rest of
+  //    the gap — that stop-start pattern is what read as laggy/glitchy.
+  //    Instead, animate continuously toward each new fix over the FULL
+  //    gap since the previous one, so motion never actually stops. ────
+  useEffect(() => {
+    if (engine !== 'maplibre' || !mapRef.current || !styleReady || !followPosition) return;
+    if (followPaused) return;
+    if (!Number.isFinite(followPosition.lat) || !Number.isFinite(followPosition.lng)) return;
+    const now = Date.now();
+    const gapMs = lastFollowUpdateRef.current ? now - lastFollowUpdateRef.current : 1200;
+    lastFollowUpdateRef.current = now;
+    // Animate across (most of) the real gap between fixes, not a fixed
+    // short duration — clamped to a sane range so a very late fix
+    // doesn't produce an absurdly slow crawl, and a very quick one
+    // doesn't snap instantly.
+    const duration = Math.min(Math.max(gapMs * 0.92, 600), 4500);
+    try {
+      mapRef.current.easeTo({
+        center: [followPosition.lng, followPosition.lat],
+        bearing: Number.isFinite(followHeading) ? followHeading : mapRef.current.getBearing(),
+        pitch: 55,
+        zoom: 17.5,
+        duration,
+        // Linear, not eased — the whole point is a constant-speed glide
+        // that matches how the vehicle is actually moving between real
+        // fixes; an ease-out here would make it visibly decelerate and
+        // then sit still right as the next real fix should be arriving,
+        // recreating the same stutter this is meant to fix.
+        easing: (t) => t,
+      });
+    } catch {
+      void 0;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [engine, styleReady, followPaused, followPosition?.lat, followPosition?.lng, followHeading]);
+
+  // Parent-triggered recenter: bumping recenterSignal resumes following
+  // (clears the pause set by a manual drag) and immediately re-snaps the
+  // camera onto the rider — this is what the nav screen's Re-centre
+  // button drives.
+  useEffect(() => {
+    if (!recenterSignal) return;
+    setFollowPaused(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recenterSignal]);
+
+  // A fresh navigation session (followPosition going from off to on)
+  // should never start paused from a leftover drag in a previous one.
+  useEffect(() => {
+    if (!followPosition) setFollowPaused(false);
+  }, [!!followPosition]);
+
+  useEffect(() => {
+    onFollowPausedChange?.(followPaused);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [followPaused]);
+
+  // MapLibre Secondary route — the rider→destination "you are heading
+  // here" indicator. Drawn as a direct straight line, updated instantly
+  // on every position tick with no network round-trip: this used to call
+  // fetchDirectionsRoute() on every GPS update (every ~4s while driving),
+  // which raced overlapping requests against each other and could apply
+  // a stale, out-of-order response — the actual symptom being "the line
+  // doesn't move/update as the rider moves". The road-accurate path is
+  // already shown separately via the main route/congestion rendering;
+  // this line only needs to point at the destination, not trace roads.
   useEffect(() => {
     if (engine !== 'maplibre') return;
-    secondaryPtsRef.current = null;
-    redrawRoutes();
-
-    if (!validSecondaryRoute || validSecondaryRoute.length < 2 || !validSecondaryRoute[0]) return;
-
-    const start = validSecondaryRoute[0];
-    const end = validSecondaryRoute[validSecondaryRoute.length - 1];
-    if (!start || !end) return;
-    let cancelled = false;
-
-    (async () => {
-      const roadPts = await fetchDirectionsRoute(start, end);
-      if (cancelled) return;
-      secondaryPtsRef.current = roadPts ?? [start, end];
+    if (!validSecondaryRoute || validSecondaryRoute.length < 2 || !validSecondaryRoute[0]) {
+      secondaryPtsRef.current = null;
       redrawRoutes();
-    })();
-
-    return () => {
-      cancelled = true;
-    };
+      return;
+    }
+    secondaryPtsRef.current = validSecondaryRoute;
+    redrawRoutes();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [engine, secondaryRouteKey]);
+  }, [engine, secondaryRouteKey, styleReady]);
+
+  // MapLibre Congestion (traffic-colored) route segments
+  const congestionKey = (congestionRoute || [])
+    .map(s => `${s.level}:${s.coords.map(c => `${c[0].toFixed(4)},${c[1].toFixed(4)}`).join(',')}`)
+    .join('|');
+  const hasCongestionData = (congestionRoute || []).length > 0;
+  useEffect(() => {
+    if (engine !== 'maplibre') return;
+    congestionSegmentsRef.current = congestionRoute || [];
+    redrawRoutes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [engine, congestionKey, styleReady]);
 
   // ─────────────────────────────────────────────────────────────────────
   // LEAFLET FALLBACK INITIALIZATION & LOGIC
@@ -894,7 +1280,10 @@ export default function MapView({
         if (secStart && secEnd) {
           const secRoadPts = await fetchDirectionsRoute(secStart, secEnd);
           const secPts: [number, number][] = secRoadPts ?? [secStart, secEnd];
-          L.polyline(secPts, { color: '#64748B', weight: 4.5, dashArray: '8, 10', opacity: 0.9, lineCap: 'round', lineJoin: 'round' }).addTo(group);
+          // Rider → pickup leg: solid, theme-aware (white on dark map,
+          // deep grey on light map) rather than the old dashed grey —
+          // distinct from the main red trip line without competing with it.
+          L.polyline(secPts, { color: dk ? '#FFFFFF' : '#374151', weight: 4.5, opacity: 0.95, lineCap: 'round', lineJoin: 'round' }).addTo(group);
         }
       }
 
@@ -1022,40 +1411,64 @@ export default function MapView({
       {/* SVG route overlay (MapLibre vector mode only) */}
       {engine === 'maplibre' && (
         <svg className="absolute inset-0 z-[2] pointer-events-none" width="100%" height="100%">
-          <path ref={pathCasingRef} fill="none" stroke="#ffffff" strokeWidth={9} strokeOpacity={0.7} strokeLinecap="round" strokeLinejoin="round" />
-          <path ref={pathSecondaryRef} fill="none" stroke="#64748B" strokeWidth={4.5} strokeOpacity={0.9} strokeDasharray="10 14" strokeLinecap="round" strokeLinejoin="round" />
-          <path ref={pathMainRef} fill="none" stroke="#C41E1E" strokeWidth={5} strokeOpacity={0.95} strokeLinecap="round" strokeLinejoin="round" />
+          {/* Soft outer glow, bolder during turn-by-turn navigation
+              (followPosition active) to match a real nav app's route
+              weight — a plain thin line reads as a static map, not an
+              active "follow this" indicator. */}
+          <path ref={pathCasingRef} fill="none" stroke={followPosition ? '#2563EB' : '#ffffff'}
+            strokeWidth={followPosition ? 16 : 9} strokeOpacity={followPosition ? 0.25 : 0.7}
+            strokeLinecap="round" strokeLinejoin="round" />
+          {/* Rider → pickup leg: solid, theme-aware — white on a dark
+              map, deep grey on a light map — distinct from the main red
+              trip route without a dashed pattern competing for attention. */}
+          <path ref={pathSecondaryRef} fill="none" stroke={dk ? '#FFFFFF' : '#374151'}
+            strokeWidth={followPosition ? 6 : 4.5} strokeOpacity={0.95} strokeLinecap="round" strokeLinejoin="round" />
+          {/* Plain active-route line — Google's own spec colors this
+              blue, not red. Hidden when live congestion data is present,
+              since the congestion segments below fully replace it with
+              traffic-colored pieces covering the same path; without
+              hiding it, the two would overlap and just look like a
+              slightly thicker blue line with no visible traffic info. */}
+          {congestionSegmentsRef.current.length === 0 && !hasCongestionData && (
+            <path ref={pathMainRef} fill="none" stroke="#2563EB"
+              strokeWidth={followPosition ? 8 : 5} strokeOpacity={0.95} strokeLinecap="round" strokeLinejoin="round" />
+          )}
+          {/* Traffic-colored segments — green/yellow/orange/red pieces
+              covering the same path, matching Google's and Yango's own
+              real-time traffic overlay instead of one flat color. */}
+          <g ref={congestionGroupRef} />
         </svg>
       )}
 
       {/* Loading spinner until initial map style/tiles are ready */}
       {!styleReady && (
-        <div className="absolute inset-0 z-[3] flex items-center justify-center pointer-events-none">
-          <div
-            className={cn(
-              'w-10 h-10 rounded-full border-2 animate-spin',
-              dk ? 'border-white/15 border-t-white/70' : 'border-gray-200 border-t-brand',
-            )}
-          />
+        <div className="absolute inset-0 z-[3] pointer-events-none">
+          <MapSkeleton className="h-full min-h-0 w-full" />
         </div>
       )}
 
-      {/* Zoom and geolocation buttons */}
-      <div className="absolute bottom-4 right-3 z-[10] flex flex-col items-center">
-        <div className="db-zoom-wrap">
-          <button className="db-zoom-btn db-zoom-in" title="Zoom in" onClick={handleZoomIn}>
-            +
-          </button>
-          <button className="db-zoom-btn db-zoom-out" title="Zoom out" onClick={handleZoomOut}>
-            {'\u2212'}
+      {/* Zoom and geolocation buttons — hidden during turn-by-turn
+          navigation (followPosition active), where the camera is meant
+          to stay locked onto the rider; ActiveDeliveryView provides its
+          own dedicated re-centre control instead, styled and positioned
+          for that screen rather than this generic corner cluster. */}
+      {!followPosition && (
+        <div className="absolute bottom-4 right-3 z-[10] flex flex-col items-center">
+          <div className="db-zoom-wrap">
+            <button type="button" className="db-zoom-btn db-zoom-in" aria-label="Zoom in" title="Zoom in" onClick={handleZoomIn}>
+              +
+            </button>
+            <button type="button" className="db-zoom-btn db-zoom-out" aria-label="Zoom out" title="Zoom out" onClick={handleZoomOut}>
+              {'\u2212'}
+            </button>
+          </div>
+          <button type="button" className="db-locate-btn" aria-label="Center map on my location" title="My location" onClick={handleLocate}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="3 11 22 2 13 21 11 13 3 11" />
+            </svg>
           </button>
         </div>
-        <button className="db-locate-btn" title="My location" onClick={handleLocate}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <polygon points="3 11 22 2 13 21 11 13 3 11" />
-          </svg>
-        </button>
-      </div>
+      )}
 
       {/* Attribution credit */}
       <div
@@ -1079,7 +1492,7 @@ export default function MapView({
       {/* Center pin when pin-drop mode is active */}
       {pinDropActive && (
         <div className="absolute inset-0 pointer-events-none z-[500] flex items-center justify-center">
-          <div className="relative flex flex-col items-center" style={{ marginTop: '-20px' }}>
+          <div className="db-drop-pin relative flex flex-col items-center" style={{ marginTop: '-20px' }}>
             <div
               style={{
                 width: 32,

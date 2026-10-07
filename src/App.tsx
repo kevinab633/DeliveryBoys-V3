@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { motion, AnimatePresence, MotionConfig } from 'framer-motion';
 import { useEffect } from 'react';
 import { useThemeStore } from './stores/themeStore';
 import { useOrderStore } from './stores/orderStore';
@@ -8,9 +9,9 @@ import { subscribeToPush } from './lib/pushClient';
 import { syncService } from './lib/syncService';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
-import WhatsAppFloat from './components/WhatsAppFloat';
 import ToastContainer from './components/Toast';
-import DebugBanner, { DebugErrorBoundary } from './components/DebugBanner';
+import { DebugErrorBoundary } from './components/DebugBanner';
+import { PageSkeleton } from './components/Skeleton';
 import Home from './pages/Home';
 import Services from './pages/Services';
 import Book from './pages/Book';
@@ -22,6 +23,7 @@ import RiderDashboard from './pages/RiderDashboard';
 import ManagerDashboard from './pages/ManagerDashboard';
 import Profile from './pages/Profile';
 import MyOrders from './pages/MyOrders';
+import VerificationPage from './pages/Verification';
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -30,13 +32,16 @@ function ScrollToTop() {
 }
 
 // Routes where the map is full-screen — hide Footer & WhatsApp FAB
-const FULL_SCREEN_ROUTES = ['/book', '/track'];
+const FULL_SCREEN_ROUTES = ['/book', '/track', '/rider/dashboard'];
+const MINIMAL_ROUTES = ['/auth/login', '/auth/signup', '/manager/login', '/rider/verification'];
 
 function AppContent() {
   const theme = useThemeStore(s => s.theme);
-  const { pathname } = useLocation();
+  const location = useLocation();
+  const { pathname } = location;
   const isFullScreen = FULL_SCREEN_ROUTES.includes(pathname);
   const user = useAuthStore(s => s.user);
+  const usersLoaded = useAuthStore(s => s.usersLoaded);
 
   // ── Browser Notification permission: requested once, the first time
   //    a user is logged in. Graceful no-op if denied/unsupported. ────
@@ -53,6 +58,34 @@ function AppContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
+  // ── Load real accounts from Supabase on startup, merging over the local
+  //    demo/cached data — this is what makes rider signups, availability,
+  //    and delivery stats visible across devices instead of being stuck
+  //    in whichever browser created them. ─────────────────────────────
+  useEffect(() => {
+    void useAuthStore.getState().loadUsers();
+  }, []);
+
+  // ── Re-sync on resume: Android suspends/kills the Realtime WebSocket
+  //    whenever the tab/PWA is backgrounded or the phone sleeps, so a
+  //    broadcast sent while closed (e.g. a cancellation, or a rider going
+  //    online) is simply missed — there's no queue or replay. Re-fetching
+  //    from the DB every time the tab becomes visible again means the UI
+  //    is always correct within a moment of reopening, regardless of what
+  //    the socket missed while backgrounded. mergeRemoteOrders only moves
+  //    a status forward (cancelled always wins), so this can't undo a
+  //    newer local change. ─────────────────────────────────────────────
+  useEffect(() => {
+    function handleVisibility() {
+      if (document.visibilityState !== 'visible') return;
+      void useOrderStore.getState().fetchOrders();
+      void useAuthStore.getState().loadUsers();
+      syncService.reconnectIfNeeded();
+    }
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, []);
+
   // ── Periodic sweep: auto-cancel expired instant orders, start dispatch
   //    for scheduled orders coming due (~30 min before), and auto-cancel
   //    scheduled orders that missed their window. Runs app-wide so it
@@ -60,6 +93,17 @@ function AppContent() {
   useEffect(() => {
     useOrderStore.getState().sweepExpiredOrders();
     const iv = setInterval(() => useOrderStore.getState().sweepExpiredOrders(), 15000);
+    return () => clearInterval(iv);
+  }, []);
+
+  // ── Periodic rider refresh: the RIDER_PRESENCE broadcast covers instant
+  //    updates while both devices are actively connected, but the socket
+  //    dies in the background (see resume-sync above). Polling every 20s
+  //    on top of that closes the gap while a device is foregrounded but
+  //    the broadcast happened to be missed, without waiting for a full
+  //    background/foreground cycle. ────────────────────────────────
+  useEffect(() => {
+    const iv = setInterval(() => void useAuthStore.getState().loadUsers(), 20000);
     return () => clearInterval(iv);
   }, []);
 
@@ -85,12 +129,34 @@ function AppContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
+  if (!usersLoaded) {
+    return (
+      <div className={theme === 'dark' ? 'theme-dark' : 'theme-light'}>
+        <PageSkeleton />
+      </div>
+    );
+  }
+
   return (
     <div className={theme === 'dark' ? 'theme-dark' : 'theme-light'}>
       <ScrollToTop />
-      <Navbar />
+      {!isFullScreen && <Navbar />}
       <main className="min-h-screen">
-        <Routes>
+        {/* Route-level page transition: a short fade + slight upward
+            slide on every screen change instead of an instant snap.
+            Only opacity/transform are animated (GPU-friendly), and the
+            duration is kept brief so it feels responsive rather than
+            slow, which matters on mid-range phones and in the native
+            app conversion where navigation should feel native. */}
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={pathname}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+          >
+        <Routes location={location}>
           <Route path="/" element={<Home />} />
           <Route path="/services" element={<Services />} />
           <Route path="/book" element={<Book />} />
@@ -104,22 +170,33 @@ function AppContent() {
           <Route path="/manager" element={<ManagerDashboard />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/my-orders" element={<MyOrders />} />
+          <Route path="/rider/verification" element={<VerificationPage />} />
         </Routes>
+          </motion.div>
+        </AnimatePresence>
       </main>
-      {!isFullScreen && <Footer />}
-      {!isFullScreen && <WhatsAppFloat />}
+      {!isFullScreen && !MINIMAL_ROUTES.some(route => pathname.startsWith(route)) && <Footer />}
       <ToastContainer />
-      <DebugBanner />
     </div>
   );
 }
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <DebugErrorBoundary>
-        <AppContent />
-      </DebugErrorBoundary>
-    </BrowserRouter>
+    // reducedMotion="user" makes every motion.* component and
+    // AnimatePresence transition in the app automatically respect the
+    // OS-level "reduce motion" accessibility setting — transforms and
+    // opacity fades are kept (so content still appears/disappears
+    // correctly), but the animated motion itself is skipped for anyone
+    // who has that preference turned on. This covers every page-
+    // transition, panel-swap, and nav-screen animation added this
+    // session in one place, rather than needing a per-component check.
+    <MotionConfig reducedMotion="user">
+      <BrowserRouter>
+        <DebugErrorBoundary>
+          <AppContent />
+        </DebugErrorBoundary>
+      </BrowserRouter>
+    </MotionConfig>
   );
 }
