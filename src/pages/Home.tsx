@@ -1,23 +1,14 @@
 import { Link, Navigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Package, UtensilsCrossed, ShoppingCart, FileText, Building2, Zap, Bike, ArrowRight, Shield, Clock, MapPin, TrendingUp, TrendingDown, Minus, Star, ChevronRight, Power, PowerOff, DollarSign, CheckCircle2, Wallet } from 'lucide-react';
+import { Package, UtensilsCrossed, ShoppingCart, FileText, Zap, Bike, ArrowRight, Shield, Clock, MapPin, TrendingUp, TrendingDown, Minus, Star, ChevronRight, Power, PowerOff, DollarSign, CheckCircle2, Wallet, Pill, Gift, MoreHorizontal } from 'lucide-react';
 import { useThemeStore } from '../stores/themeStore';
-import { useContentStore } from '../stores/contentStore';
 import { useAuthStore } from '../stores/authStore';
 import { useOrderStore } from '../stores/orderStore';
 import { cn, formatCurrency } from '../lib/utils';
 import { RiderProfile } from '../lib/types';
 import MicroSlatsBackdrop from '../components/MicroSlatsBackdrop';
 
-const services = [
-  { icon: Package, name: 'Parcel Delivery', desc: 'Safe and secure parcel delivery across town.', color: '#C41E1E' },
-  { icon: UtensilsCrossed, name: 'Food Delivery', desc: 'Hot meals from your favorite restaurants.', color: '#F59E0B' },
-  { icon: ShoppingCart, name: 'Grocery Delivery', desc: 'Fresh groceries to your doorstep.', color: '#10B981' },
-  { icon: FileText, name: 'Document Delivery', desc: 'Confidential document courier services.', color: '#3B82F6' },
-  { icon: Building2, name: 'Corporate Deliveries', desc: 'Tailored solutions for businesses.', color: '#8B5CF6' },
-  { icon: Zap, name: 'Express Delivery', desc: 'Fast delivery options when available.', color: '#EC4899' },
-];
 
 
 
@@ -214,26 +205,59 @@ function RiderHomePage() {
 }
 
 // ════════════════════════════════════════════════════════════════════
-// CUSTOMER / VISITOR HOME (unchanged for logged-out, customers, managers)
+// CUSTOMER / VISITOR HOME — mobile-first layout from the approved mockups
 // ════════════════════════════════════════════════════════════════════
+
+// Service shortcuts. Each tile opens booking with a pre-filled package
+// description. Visitors are sent to sign-in first (see bookHref below).
+const serviceTiles = [
+  { name: 'Food', icon: UtensilsCrossed, service: 'food' },
+  { name: 'Groceries', icon: ShoppingCart, service: 'groceries' },
+  { name: 'Pharmacy', icon: Pill, service: 'pharmacy' },
+  { name: 'Documents', icon: FileText, service: 'documents' },
+  { name: 'Gifts', icon: Gift, service: 'gifts' },
+  { name: 'Others', icon: MoreHorizontal, service: 'other' },
+];
+
+const promoFeatures = [
+  { icon: Shield, label: 'Safe Handling' },
+  { icon: Zap, label: 'Quick Booking' },
+  { icon: MapPin, label: 'Live Map' },
+  { icon: Bike, label: 'Rider Matching' },
+];
+
+const HEADLINE_LINE_1 = 'Your Delivery';
+const HEADLINE_LINE_2 = 'Our Priority';
+
+/** Types the visitor headline one character at a time. Users who ask for
+ *  reduced motion get the full text immediately. */
+function useTypedHeadline(enabled: boolean) {
+  const total = HEADLINE_LINE_1.length + HEADLINE_LINE_2.length;
+  const [count, setCount] = useState(() => {
+    if (!enabled || typeof window === 'undefined') return total;
+    return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? total : 0;
+  });
+
+  useEffect(() => {
+    if (!enabled || count >= total) return;
+    const timer = window.setTimeout(() => setCount(c => c + 1), 70);
+    return () => window.clearTimeout(timer);
+  }, [enabled, count, total]);
+
+  return {
+    line1: HEADLINE_LINE_1.slice(0, count),
+    line2: HEADLINE_LINE_2.slice(0, Math.max(0, count - HEADLINE_LINE_1.length)),
+    typingLine1: count < HEADLINE_LINE_1.length,
+    done: count >= total,
+  };
+}
+
 function CustomerHomePage() {
   const dk = useThemeStore(s => s.theme === 'dark');
-  const { getContent } = useContentStore();
   const { user } = useAuthStore();
+  const isCustomer = user?.role === 'customer';
+  const headline = useTypedHeadline(!isCustomer);
   const [legacyHeroOpacity, setLegacyHeroOpacity] = useState(1);
-  const [typedTagline, setTypedTagline] = useState('');
-  useEffect(() => {
-    if (user?.role === 'customer') return;
-    const tagline = 'We go the extra mile for you';
-    let index = 0;
-    const timer = window.setInterval(() => {
-      index += 1;
-      setTypedTagline(tagline.slice(0, index));
-      if (index >= tagline.length) window.clearInterval(timer);
-    }, 58);
-    return () => window.clearInterval(timer);
-  }, [user?.role]);
-
   const [supportsWebgl2] = useState(() => {
     if (typeof document === 'undefined') return false;
     return Boolean(document.createElement('canvas').getContext('webgl2'));
@@ -249,215 +273,163 @@ function CustomerHomePage() {
     return () => window.removeEventListener('scroll', updateFade);
   }, []);
 
+  // Booking is only reachable after sign-in. Visitors get the login page
+  // with a `next` target, so they land on booking once authenticated.
+  const bookHref = (service?: string) => {
+    const target = service ? `/book?service=${service}` : '/book';
+    return user ? target : `/auth/login?role=customer&next=${encodeURIComponent(target)}`;
+  };
+
+  const heading = dk ? 'text-white' : 'text-gray-900';
+  const muted = dk ? 'text-white/55' : 'text-gray-500';
+  const tile = dk ? 'border-white/10 bg-surface-dark-2 hover:border-brand/50' : 'border-gray-200 bg-white hover:border-brand/40';
+  const outlineBtn = cn('inline-flex items-center justify-center gap-3 rounded-full border px-8 py-4 text-lg font-bold transition',
+    dk ? 'border-white/15 text-white hover:border-brand hover:text-brand' : 'border-gray-300 text-gray-800 hover:border-brand hover:text-brand');
+
   return (
     <div>
       {/* ===== HERO ===== */}
-      <section className="relative min-h-[100vh] flex items-center overflow-hidden">
-        <div className={cn('legacy-hero-layer absolute inset-0 z-0', supportsWebgl2 && 'webgl-hero-hidden')} style={{ opacity: legacyHeroOpacity }}>
-          <img src="/images/hero-rider.jpg" alt="" className="h-full w-full object-cover" />
-          <div className={cn('absolute inset-0',
-            dk ? 'bg-gradient-to-br from-black/97 via-black/85 to-brand/15' : 'bg-gradient-to-br from-white/97 via-white/90 to-brand/8'
-          )} />
-        </div>
+      <section className="relative flex min-h-[78vh] items-center overflow-hidden">
+        {!isCustomer && (
+          <div className={cn('legacy-hero-layer absolute inset-0 z-0', supportsWebgl2 && 'webgl-hero-hidden')} style={{ opacity: legacyHeroOpacity }}>
+            <img src="/images/hero-rider.jpg" alt="" className="h-full w-full object-cover" />
+            <div className={cn('absolute inset-0',
+              dk ? 'bg-gradient-to-br from-black/97 via-black/85 to-brand/15' : 'bg-gradient-to-br from-white/97 via-white/90 to-brand/8'
+            )} />
+          </div>
+        )}
         <MicroSlatsBackdrop />
-        <div className="absolute top-20 right-10 w-72 h-72 bg-brand/10 rounded-full blur-[120px]" />
-        <div className="absolute bottom-20 left-10 w-96 h-96 bg-brand/5 rounded-full blur-[150px]" />
 
-        <div className="relative max-w-7xl mx-auto px-6 py-32 lg:py-40 w-full">
-          <div className="grid lg:grid-cols-2 gap-16 items-center">
-            {/* Left - Text */}
-            <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8 }}>
-              <h1 className={cn('text-5xl sm:text-6xl md:text-7xl font-black leading-[1.05] tracking-tight mb-3', dk ? 'text-white' : 'text-gray-900')}>
-                {user?.role === 'customer' ? (
-                  `Welcome back, ${user.name.split(' ')[0]}`
-                ) : (
-                  <><span className="hero-typewriter">{typedTagline}</span><span className="hero-typewriter-cursor" aria-hidden="true" /></>
-                )}
-              </h1>
-              {/* Primary CTAs */}
-              <div className="flex flex-col sm:flex-row gap-3 mb-6">
-                <Link to={user ? '/book' : '/auth/signup'}
-                  className="inline-flex items-center justify-center gap-2 bg-brand text-white px-8 py-4 rounded-full font-bold text-lg hover:bg-brand-dark transition shadow-xl shadow-brand/25 group">
-                  <Package size={22} />
-                  {user ? getContent('home.cta.primary', 'Book a Delivery') : 'Get Started'}
-                  <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+        <div className="relative mx-auto w-full max-w-6xl px-6 pb-14 pt-32 lg:pt-40">
+          <motion.div initial={{ opacity: 0, y: 28 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }} className="max-w-xl">
+            {isCustomer ? (
+              <>
+                <p className={cn('text-xs font-bold uppercase tracking-[0.3em]', muted)}>Welcome back,</p>
+                <h1 className="mt-1 text-5xl font-black tracking-tight text-brand sm:text-6xl">{user?.name.split(' ')[0]}</h1>
+                <p className={cn('mt-3 text-base', muted)}>Good to have you here! Let’s get your delivery going.</p>
+                <span className="mt-4 block h-1 w-14 rounded-full bg-brand" />
+              </>
+            ) : (
+              <>
+                <h1 aria-label="Your Delivery Our Priority" className={cn('text-5xl font-black leading-[1.05] tracking-tight sm:text-6xl md:text-7xl', heading)}>
+                  <span className="block">
+                    {headline.line1}
+                    {headline.typingLine1 && !headline.done && <span className="hero-typewriter-cursor" aria-hidden="true" />}
+                  </span>
+                  <span className="block text-brand">
+                    {headline.line2}
+                    {!headline.typingLine1 && !headline.done && <span className="hero-typewriter-cursor" aria-hidden="true" />}
+                  </span>
+                </h1>
+                <p className={cn('mt-4 text-base sm:text-lg', muted)}>We pick. We deliver. You relax.</p>
+              </>
+            )}
+
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <Link to={bookHref()}
+                className="group inline-flex items-center justify-center gap-3 rounded-full bg-brand px-8 py-4 text-lg font-bold text-white shadow-xl shadow-brand/25 transition hover:bg-brand-dark">
+                <Package size={22} />
+                Book a Delivery
+                <ArrowRight size={20} className="transition-transform group-hover:translate-x-1" />
+              </Link>
+              {isCustomer ? (
+                <Link to="/my-orders" className={outlineBtn}>
+                  <MapPin size={20} /> Track Orders <ArrowRight size={18} />
                 </Link>
-                {user?.role === 'customer' ? (
-                  <Link to="/my-orders"
-                    className={cn('inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-bold text-lg border-2 transition group',
-                      dk ? 'border-white/15 text-white hover:border-brand hover:text-brand' : 'border-gray-200 text-gray-700 hover:border-brand hover:text-brand')}>
-                    <Package size={22} />
-                    Track Orders
-                  </Link>
-                ) : (
-                  <Link to="/auth/signup?role=rider"
-                    className={cn('inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-bold text-lg border-2 transition group',
-                      dk ? 'border-white/15 text-white hover:border-brand hover:text-brand' : 'border-gray-200 text-gray-700 hover:border-brand hover:text-brand')}>
-                    <Bike size={22} />
-                    {getContent('home.cta.secondary', 'Become a Rider')}
-                  </Link>
-                )}
-              </div>
+              ) : (
+                <Link to="/auth/signup?role=customer" className={outlineBtn}>
+                  Create account
+                </Link>
+              )}
+            </div>
+            {!isCustomer && (
+              <p className={cn('mt-4 text-sm', muted)}>
+                Already registered?{' '}
+                <Link to="/auth/login?role=customer" className="font-semibold text-brand hover:underline">Sign in</Link>
+              </p>
+            )}
+          </motion.div>
+        </div>
+      </section>
 
-            </motion.div>
-
-            {/* Right - Logo & Quick Action Cards */}
-            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.8, delay: 0.2 }}
-              className="hidden lg:block">
-              <div className="relative">
-                <div className="absolute -inset-8 bg-brand/8 rounded-full blur-3xl" />
-                <img src="/images/logo.jpeg" alt="Delivery Boys" className="relative w-72 h-72 xl:w-80 xl:h-80 rounded-full object-cover mx-auto shadow-2xl ring-4 ring-brand/20 animate-float" />
-
-                {/* Floating cards */}
-                <motion.div initial={{ x: 30, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 0.8 }}
-                  className={cn('absolute -right-4 top-8 px-4 py-3 rounded-2xl shadow-2xl border max-w-[180px]',
-                    dk ? 'bg-surface-dark-3/90 glass border-white/10' : 'bg-white/90 glass border-gray-200')}>
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-success/10 flex items-center justify-center"><MapPin size={16} className="text-success" /></div>
-                    <div>
-                      <p className={cn('text-[11px] font-bold', dk ? 'text-white' : 'text-gray-900')}>Live Tracking</p>
-                      <p className={cn('text-[10px]', dk ? 'text-white/40' : 'text-gray-500')}>Real-time GPS</p>
-                    </div>
-                  </div>
-                </motion.div>
-
-                <motion.div initial={{ x: -30, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 1 }}
-                  className={cn('absolute -left-4 bottom-12 px-4 py-3 rounded-2xl shadow-2xl border max-w-[180px]',
-                    dk ? 'bg-surface-dark-3/90 glass border-white/10' : 'bg-white/90 glass border-gray-200')}>
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-brand/10 flex items-center justify-center"><TrendingUp size={16} className="text-brand" /></div>
-                    <div>
-                      <p className={cn('text-[11px] font-bold', dk ? 'text-white' : 'text-gray-900')}>Fair Pricing</p>
-                      <p className={cn('text-[10px]', dk ? 'text-white/40' : 'text-gray-500')}>Distance-based</p>
-                    </div>
-                  </div>
-                </motion.div>
-              </div>
-            </motion.div>
+      {/* ===== SERVICE SHORTCUTS ===== */}
+      <section className="px-6 py-10">
+        <div className="mx-auto max-w-6xl">
+          <div className="mb-5 flex items-end justify-between gap-4">
+            <h2 className={cn('text-2xl font-black tracking-tight sm:text-3xl', heading)}>What do you need delivered?</h2>
+            <Link to="/services" className="shrink-0 text-sm font-semibold text-brand hover:underline">See all services</Link>
+          </div>
+          <div className="grid grid-cols-3 gap-3 md:grid-cols-6">
+            {serviceTiles.map(item => (
+              <Link key={item.name} to={bookHref(item.service)}
+                className={cn('group flex flex-col items-center gap-2.5 rounded-2xl border p-4 text-center transition hover:-translate-y-0.5', tile)}>
+                <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand/10 text-brand transition group-hover:bg-brand group-hover:text-white">
+                  <item.icon size={26} />
+                </span>
+                <span className={cn('text-sm font-semibold', heading)}>{item.name}</span>
+              </Link>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* ===== SERVICES ===== */}
-      <section className={cn('py-28', dk ? 'bg-surface-dark' : 'bg-white')}>
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="text-center mb-14">
-            <span className="inline-block px-4 py-1.5 rounded-full bg-brand/8 text-brand text-sm font-semibold mb-4">Our Services</span>
-            <h2 className={cn('text-4xl md:text-5xl font-black tracking-tight', dk ? 'text-white' : 'text-gray-900')}>What We Deliver</h2>
-            <p className={cn('mt-3 text-lg max-w-xl mx-auto', dk ? 'text-white/45' : 'text-gray-500')}>From parcels to food, groceries to documents — we deliver it all.</p>
+      {/* ===== PROMO BANNER ===== */}
+      <section className="px-6 pb-10">
+        <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
+          className="mx-auto max-w-6xl overflow-hidden rounded-3xl bg-gray-950 p-7 text-white md:p-10">
+          <div className="flex items-center gap-3">
+            <Zap size={34} className="text-brand" fill="currentColor" />
+            <div>
+              <p className="text-2xl font-black tracking-tight sm:text-3xl">Fast &amp; Secure</p>
+              <p className="text-2xl font-black tracking-tight text-brand sm:text-3xl">Delivery</p>
+            </div>
           </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {services.map((s, i) => (
-              <motion.div key={s.name} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.07 }}>
-                <Link to={user ? '/book' : '/auth/login?role=customer'}
-                  className={cn('block p-6 rounded-2xl border transition hover:-translate-y-1 group',
-                    dk ? 'bg-surface-dark-2 border-white/5 hover:border-brand/25 hover:shadow-lg hover:shadow-brand/5' : 'bg-gray-50/50 border-gray-100 hover:border-brand/25 hover:shadow-xl hover:shadow-brand/5')}>
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-4" style={{ background: `${s.color}15` }}>
-                    <s.icon size={24} style={{ color: s.color }} />
-                  </div>
-                  <h3 className={cn('text-lg font-bold mb-2 group-hover:text-brand transition', dk ? 'text-white' : 'text-gray-900')}>{s.name}</h3>
-                  <p className={cn('text-sm leading-relaxed', dk ? 'text-white/45' : 'text-gray-500')}>{s.desc}</p>
-                </Link>
-              </motion.div>
+          <p className="mt-4 max-w-md text-sm text-white/70 sm:text-base">From your door to theirs, we get it there.</p>
+          <div className="mt-6 grid grid-cols-2 gap-4 border-t border-white/10 pt-6 md:grid-cols-4">
+            {promoFeatures.map(f => (
+              <div key={f.label} className="flex flex-col items-center gap-2 text-center">
+                <f.icon size={22} className="text-brand" />
+                <span className="text-xs font-semibold text-white/80">{f.label}</span>
+              </div>
             ))}
           </div>
-        </div>
+        </motion.div>
       </section>
 
       {/* ===== HOW IT WORKS ===== */}
-      <section className={cn('py-28', dk ? 'bg-surface-dark-2' : 'bg-gray-50')}>
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="text-center mb-14">
-            <span className="inline-block px-4 py-1.5 rounded-full bg-brand/8 text-brand text-sm font-semibold mb-4">How It Works</span>
-            <h2 className={cn('text-4xl md:text-5xl font-black tracking-tight', dk ? 'text-white' : 'text-gray-900')}>Simple & Fast</h2>
-          </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {steps.map((s, i) => (
-              <motion.div key={s.n} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.1 }}
-                className={cn('relative p-7 rounded-2xl border', dk ? 'bg-surface-dark-3 border-white/5' : 'bg-white border-gray-200')}>
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-xl bg-brand/10 flex items-center justify-center">
-                    <s.icon size={20} className="text-brand" />
-                  </div>
-                  <span className="text-4xl font-black text-brand/15">{s.n}</span>
+      <section className={cn('px-6 py-14', dk ? 'bg-surface-dark-2' : 'bg-gray-50')}>
+        <div className="mx-auto max-w-6xl">
+          <h2 className={cn('mb-8 text-2xl font-black tracking-tight sm:text-3xl', heading)}>How it works</h2>
+          <div className="grid gap-4 md:grid-cols-4">
+            {steps.map(step => (
+              <div key={step.n} className={cn('rounded-2xl border p-5', dk ? 'border-white/10 bg-surface-dark' : 'border-gray-200 bg-white')}>
+                <div className="mb-4 flex items-center justify-between">
+                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand/10 text-brand"><step.icon size={22} /></span>
+                  <span className={cn('text-xs font-bold tracking-widest', muted)}>{step.n}</span>
                 </div>
-                <h3 className={cn('text-lg font-bold mb-2', dk ? 'text-white' : 'text-gray-900')}>{s.title}</h3>
-                <p className={cn('text-sm leading-relaxed', dk ? 'text-white/45' : 'text-gray-500')}>{s.desc}</p>
-                {i < steps.length - 1 && (
-                  <div className="hidden lg:block absolute top-1/2 -right-3 z-10">
-                    <ChevronRight size={20} className={dk ? 'text-white/10' : 'text-gray-300'} />
-                  </div>
-                )}
-              </motion.div>
+                <h3 className={cn('font-bold', heading)}>{step.title}</h3>
+                <p className={cn('mt-1.5 text-sm leading-relaxed', muted)}>{step.desc}</p>
+              </div>
             ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ===== WHY CHOOSE US ===== */}
-      <section className={cn('py-28', dk ? 'bg-surface-dark' : 'bg-white')}>
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="grid lg:grid-cols-2 gap-16 items-center">
-            <div>
-              <span className="inline-block px-4 py-1.5 rounded-full bg-brand/8 text-brand text-sm font-semibold mb-4">Why Choose Us</span>
-              <h2 className={cn('text-4xl font-black tracking-tight mb-8', dk ? 'text-white' : 'text-gray-900')}>We Go The Extra Mile</h2>
-              <div className="space-y-4">
-                {[
-                  { icon: Clock, title: 'Lightning Fast', desc: 'Same-day and express delivery options. Most deliveries within 1-3 hours.' },
-                  { icon: Shield, title: 'Verified Riders', desc: 'All riders submit National ID and photo. Managers verify every application.' },
-                  { icon: MapPin, title: 'Live Map Tracking', desc: 'Track your rider in real-time, just like Uber and Yango.' },
-                  { icon: TrendingUp, title: 'Transparent Pricing', desc: 'See the full price breakdown: distance, fuel, and service fee.' },
-                ].map((item, i) => (
-                  <motion.div key={item.title} initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.1 }}
-                    className={cn('flex gap-4 p-5 rounded-2xl border transition hover:border-brand/20',
-                      dk ? 'bg-surface-dark-2 border-white/5' : 'bg-gray-50 border-gray-100')}>
-                    <div className="w-12 h-12 rounded-xl bg-brand/10 flex items-center justify-center shrink-0">
-                      <item.icon size={22} className="text-brand" />
-                    </div>
-                    <div>
-                      <h4 className={cn('font-bold', dk ? 'text-white' : 'text-gray-900')}>{item.title}</h4>
-                      <p className={cn('text-sm mt-1 leading-relaxed', dk ? 'text-white/45' : 'text-gray-500')}>{item.desc}</p>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-            </div>
-            <motion.div initial={{ opacity: 0, x: 40 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}>
-              <div className="relative">
-                <div className="absolute -inset-6 bg-brand/5 rounded-3xl blur-2xl" />
-                <img src="/images/img2.jpeg" alt="Delivery Boys Flyer" className="relative rounded-3xl shadow-2xl w-full max-w-md mx-auto" />
-              </div>
-            </motion.div>
           </div>
         </div>
       </section>
 
       {/* ===== CTA ===== */}
-      <section className="py-28">
-        <div className="max-w-4xl mx-auto px-6">
-          <motion.div initial={{ opacity: 0, scale: 0.95 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }}
-            className="bg-gradient-to-br from-brand via-brand to-brand-dark rounded-3xl p-12 md:p-16 text-center relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-80 h-80 bg-white/5 rounded-full -translate-y-1/3 translate-x-1/3" />
-            <div className="absolute bottom-0 left-0 w-60 h-60 bg-white/5 rounded-full translate-y-1/3 -translate-x-1/3" />
-            <div className="relative">
-              <h2 className="text-4xl md:text-5xl font-black text-white mb-4 tracking-tight">Ready to Send a Delivery?</h2>
-              <p className="text-white/75 text-lg mb-10 max-w-xl mx-auto">Book now and get matched with a verified rider in seconds. Available 7 days a week.</p>
-              <div className="flex flex-wrap justify-center gap-4">
-                <Link to={user ? '/book' : '/auth/signup'} className="inline-flex items-center gap-2 bg-white text-brand px-8 py-4 rounded-2xl font-bold text-lg hover:bg-white/90 transition shadow-xl group">
-                  {user ? 'Book Now' : 'Get Started'} <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
-                </Link>
-                {user?.role === 'customer' ? (
-                  <Link to="/my-orders" className="inline-flex items-center gap-2 border-2 border-white/25 text-white px-8 py-4 rounded-2xl font-bold text-lg hover:bg-white/10 transition">
-                    <Package size={20} /> Track Orders
-                  </Link>
-                ) : (
-                  <Link to="/auth/signup?role=rider" className="inline-flex items-center gap-2 border-2 border-white/25 text-white px-8 py-4 rounded-2xl font-bold text-lg hover:bg-white/10 transition">
-                    <Bike size={20} /> Join as Rider
-                  </Link>
-                )}
-              </div>
-            </div>
-          </motion.div>
+      <section className="px-6 py-14 text-center">
+        <div className="mx-auto max-w-2xl">
+          <h2 className={cn('text-2xl font-black tracking-tight sm:text-3xl', heading)}>
+            {isCustomer ? 'Ready for your next delivery?' : 'Ready to send something?'}
+          </h2>
+          <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+            <Link to={bookHref()}
+              className="inline-flex items-center justify-center gap-2 rounded-full bg-brand px-8 py-4 font-bold text-white shadow-xl shadow-brand/25 transition hover:bg-brand-dark">
+              <Package size={20} /> Book a Delivery
+            </Link>
+            <Link to="/services" className={cn('inline-flex items-center justify-center gap-2 rounded-full border px-6 py-3.5 font-bold transition', dk ? 'border-white/15 text-white hover:border-brand hover:text-brand' : 'border-gray-300 text-gray-800 hover:border-brand hover:text-brand')}>
+              View services
+            </Link>
+          </div>
         </div>
       </section>
     </div>

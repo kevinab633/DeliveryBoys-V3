@@ -8,7 +8,7 @@ interface ThemeStore {
 }
 
 export const useThemeStore = create<ThemeStore>()(persist((set) => ({
-  theme: 'dark',
+  theme: 'light',
   toggle: () => set(s => ({ theme: s.theme === 'dark' ? 'light' : 'dark' })),
   setTheme: (t) => set({ theme: t }),
 }), { name: 'db-theme' }));

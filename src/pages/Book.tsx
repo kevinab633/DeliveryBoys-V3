@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Bike, Car, Truck, ArrowRight, ArrowLeft as ArrowLeftIcon, Info, CheckCircle2, ChevronUp, ChevronDown, Zap, Calendar, Star, X, AlertTriangle } from 'lucide-react';
 import { useThemeStore } from '../stores/themeStore';
@@ -13,6 +13,11 @@ import { VehicleType, OrderType } from '../lib/types';
 import LocationSearch from '../components/LocationSearch';
 import MapView from '../components/MapView';
 import { reverseGeocode } from '../lib/locations';
+
+const serviceDescriptions: Record<string, string> = {
+  food: 'Food order', groceries: 'Grocery order', pharmacy: 'Pharmacy items',
+  documents: 'Documents', gifts: 'Gift delivery',
+};
 
 const vehicles: { type: VehicleType; icon: typeof Bike; label: string; desc: string }[] = [
   { type: 'motorcycle', icon: Bike, label: 'Motorcycle', desc: 'Fast, for small items' },
@@ -43,7 +48,8 @@ export default function Book() {
   const [pickup, setPickup] = useState<{ lat: number; lng: number; address: string } | null>(null);
   const [dropoff, setDropoff] = useState<{ lat: number; lng: number; address: string } | null>(null);
   const [vehicle, setVehicle] = useState<VehicleType>('motorcycle');
-  const [desc, setDesc] = useState('');
+  const [searchParams] = useSearchParams();
+  const [desc, setDesc] = useState(() => serviceDescriptions[searchParams.get('service') ?? ''] ?? '');
   const [phone, setPhone] = useState(user?.phone || '');
   const [pinMode, setPinMode] = useState<'pickup' | 'dropoff' | null>(null);
   const [sheetOpen, setSheetOpen] = useState(true);

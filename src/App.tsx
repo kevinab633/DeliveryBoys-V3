@@ -11,6 +11,7 @@ import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import ToastContainer from './components/Toast';
 import CookieConsent from './components/CookieConsent';
+import CustomerTabBar, { CUSTOMER_TAB_ROUTES } from './components/CustomerTabBar';
 import { DebugErrorBoundary } from './components/DebugBanner';
 import { PageSkeleton } from './components/Skeleton';
 import Home from './pages/Home';
@@ -186,7 +187,12 @@ function AppContent() {
           </motion.div>
         </AnimatePresence>
       </main>
-      {!isFullScreen && !MINIMAL_ROUTES.some(route => pathname.startsWith(route)) && <Footer />}
+      {!isFullScreen && !MINIMAL_ROUTES.some(route => pathname.startsWith(route)) && (
+        <div className={user?.role === 'customer' && CUSTOMER_TAB_ROUTES.includes(pathname) ? 'pb-20 md:pb-0' : undefined}>
+          <Footer />
+        </div>
+      )}
+      <CustomerTabBar />
       <ToastContainer />
       <CookieConsent />
     </div>
