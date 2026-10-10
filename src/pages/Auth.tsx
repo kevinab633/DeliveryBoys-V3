@@ -28,9 +28,7 @@ export function LoginPage() {
       return;
     }
     await loginDirect(contact, role);
-    const next = searchParams.get('next');
-    const safeNext = next && next.startsWith('/') && !next.startsWith('//') ? next : null;
-    navigate(role === 'rider' ? '/rider/dashboard' : (safeNext ?? '/'));
+    navigate(role === 'rider' ? '/rider/dashboard' : '/');
   };
 
   const inp = cn('w-full pl-12 pr-4 py-3.5 rounded-xl text-sm border transition', dk ? 'bg-surface-dark-3 border-white/10 text-white placeholder:text-white/30' : 'bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-400');
