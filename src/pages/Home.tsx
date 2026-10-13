@@ -7,6 +7,7 @@ import { useContentStore } from '../stores/contentStore';
 import { useAuthStore } from '../stores/authStore';
 import { useOrderStore } from '../stores/orderStore';
 import { cn, formatCurrency } from '../lib/utils';
+import { riderEarningsForOrder } from '../lib/pricing';
 import { RiderProfile } from '../lib/types';
 import MicroSlatsBackdrop from '../components/MicroSlatsBackdrop';
 
@@ -34,7 +35,7 @@ const steps = [
 const riderSteps = [
   { n: '01', title: 'Go Online', desc: 'Flip the switch to online and start receiving nearby orders instantly.', icon: Power },
   { n: '02', title: 'Accept Orders', desc: 'Orders ring on your dashboard — nearest riders get alerted first.', icon: CheckCircle2 },
-  { n: '03', title: 'Deliver & Get Paid', desc: 'Pick up, drop off, and earn 75% of every fare you complete.', icon: Wallet },
+  { n: '03', title: 'Deliver & Get Paid', desc: 'Pick up, drop off, and keep your share of every fare you complete.', icon: Wallet },
 ];
 
 function RiderHomePage() {
@@ -52,11 +53,11 @@ function RiderHomePage() {
 
   const myDelivered = orders.filter(o => o.riderId === rider.id && o.status === 'delivered');
   const todayDelivered = myDelivered.filter(o => (o.deliveredAt ?? 0) >= todayStart);
-  const todayEarnings = todayDelivered.reduce((s, o) => s + o.price * 0.75, 0);
-  const weekEarnings = myDelivered.filter(o => (o.deliveredAt ?? 0) >= weekAgo).reduce((s, o) => s + o.price * 0.75, 0);
+  const todayEarnings = todayDelivered.reduce((s, o) => s + riderEarningsForOrder(o), 0);
+  const weekEarnings = myDelivered.filter(o => (o.deliveredAt ?? 0) >= weekAgo).reduce((s, o) => s + riderEarningsForOrder(o), 0);
   const prevWeekEarnings = myDelivered
     .filter(o => (o.deliveredAt ?? 0) >= prevWeekStart && (o.deliveredAt ?? 0) < weekAgo)
-    .reduce((s, o) => s + o.price * 0.75, 0);
+    .reduce((s, o) => s + riderEarningsForOrder(o), 0);
   const trendUp = weekEarnings > prevWeekEarnings;
   const trendDown = weekEarnings < prevWeekEarnings;
   const TrendIcon = trendUp ? TrendingUp : trendDown ? TrendingDown : Minus;

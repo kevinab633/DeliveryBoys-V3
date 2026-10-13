@@ -41,7 +41,30 @@ export function calculatePrice(
   rules: PriceRule[],
   manualOverrides?: Record<string, number>,
   pricingMode: 'auto' | 'manual' | 'hybrid' = 'auto'
-): { price: number; breakdown: { baseFare: number; distanceFare: number; fuelCost: number; companyFee: number; total: number } } {
+): { price: number; breakdown: PriceBreakdown } {
+  // Motorcycles use the agreed rider-pay formula (see motorcyclePricing).
+  if (vehicleType === 'motorcycle') {
+    const m = motorcyclePricing(distance);
+    let total = m.total;
+    if ((pricingMode === 'manual' || pricingMode === 'hybrid') && manualOverrides) {
+      const key = `${vehicleType}-${Math.floor(distance)}`;
+      if (manualOverrides[key]) total = manualOverrides[key];
+    }
+    return {
+      price: total,
+      breakdown: {
+        baseFare: m.riderPay,
+        distanceFare: 0,
+        fuelCost: m.fuelCost,
+        companyFee: m.companyFee,
+        total,
+        riderPay: m.riderPay,
+        serviceFee: MOTORCYCLE_RATES.companyFlatFee,
+        riderEarnings: round2(total - m.companyFee),
+      },
+    };
+  }
+
   // Find applicable rule
   const rule = rules.find(r => r.vehicleType === vehicleType && distance >= r.minDistance && distance < r.maxDistance)
     || rules.find(r => r.vehicleType === vehicleType);
@@ -86,4 +109,73 @@ export function estimateFuelCost(distance: number, vehicleType: VehicleType): nu
   const consumption = FUEL_CONSUMPTION[vehicleType];
   const liters = (distance / 100) * consumption;
   return Math.round(liters * FUEL_PRICE_PER_LITER * 100) / 100;
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Motorcycle pricing (agreed Oct 2026 model)
+//  - Rider pay: GHS 15 for trips up to 4 km, then +GHS 2.50 per km
+//    (i.e. +GHS 5 for every 2 km).
+//  - Fuel: separate line, for the trip plus a 2 km approach to pickup,
+//    at the motorcycle's litres/100 km and the current pump price.
+//  - Service fee: GHS 5 flat, charged to the customer.
+//  - Company keeps a 10% share of rider pay above GHS 15, taken from the
+//    rider's pay (the customer fare is not affected by this share).
+// Customer fare = rider pay + fuel + service fee.
+// ════════════════════════════════════════════════════════════════════
+
+export interface PriceBreakdown {
+  baseFare: number;
+  distanceFare: number;
+  fuelCost: number;
+  companyFee: number;
+  total: number;
+  /** Motorcycle only: gross rider pay before the company share. */
+  riderPay?: number;
+  /** Motorcycle only: flat service fee shown to the customer. */
+  serviceFee?: number;
+  /** Motorcycle only: what the rider receives (rider pay minus the company
+   *  share, plus fuel). Equals total minus companyFee. */
+  riderEarnings?: number;
+}
+
+export const MOTORCYCLE_RATES = {
+  approachKm: 2,
+  riderBaseFare: 15,
+  riderBaseKm: 4,
+  riderPerKmAfterBase: 2.5,
+  companyFlatFee: 5,
+  companyShareAboveBase: 0.1,
+};
+
+/** Orders created before this moment keep the old 75% rider earnings. */
+export const MOTORCYCLE_PRICING_EFFECTIVE_AT = Date.parse('2026-10-13T00:00:00Z');
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+export function motorcyclePricing(distance: number) {
+  const r = MOTORCYCLE_RATES;
+  const riderPay = distance <= r.riderBaseKm
+    ? r.riderBaseFare
+    : r.riderBaseFare + r.riderPerKmAfterBase * (distance - r.riderBaseKm);
+  const fuelCost = round2((distance + r.approachKm) * (FUEL_CONSUMPTION.motorcycle / 100) * FUEL_PRICE_PER_LITER);
+  const companyShare = round2(r.companyShareAboveBase * Math.max(0, riderPay - r.riderBaseFare));
+  const companyFee = round2(r.companyFlatFee + companyShare);
+  const total = round2(riderPay + fuelCost + r.companyFlatFee);
+  return { riderPay: round2(riderPay), fuelCost, companyFee, total };
+}
+
+/** What the rider receives for an order. Motorcycle orders from the new
+ *  model: fare minus the company fee. Older orders: 75% of the fare. */
+export function riderEarningsForOrder(order: {
+  price: number;
+  distance: number;
+  vehicleType: VehicleType;
+  createdAt: number;
+}): number {
+  if (order.vehicleType === 'motorcycle' && order.createdAt >= MOTORCYCLE_PRICING_EFFECTIVE_AT) {
+    return round2(order.price - motorcyclePricing(order.distance).companyFee);
+  }
+  return order.price * 0.75;
 }

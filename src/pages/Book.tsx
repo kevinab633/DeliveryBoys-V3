@@ -462,25 +462,46 @@ export default function Book() {
               <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Distance</span>
               <span className={cn('font-semibold', dk ? 'text-white' : 'text-text-light')}>{formatDistance(distance)}</span>
             </div>
-            <div className="flex justify-between">
-              <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Base Fare</span>
-              <span className={dk ? 'text-white/70' : 'text-text-light-2'}>{formatCurrency(pricing.breakdown.baseFare)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Distance Fare</span>
-              <span className={dk ? 'text-white/70' : 'text-text-light-2'}>{formatCurrency(pricing.breakdown.distanceFare)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Fuel Cost</span>
-              <span className={dk ? 'text-white/70' : 'text-text-light-2'}>{formatCurrency(pricing.breakdown.fuelCost)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Service Fee</span>
-              <span className={dk ? 'text-white/70' : 'text-text-light-2'}>{formatCurrency(pricing.breakdown.companyFee)}</span>
-            </div>
-            <p className={cn('text-xs pt-1', dk ? 'text-white/25' : 'text-surface-light-3')}>
-              Est. fuel: {formatCurrency(fuelEst)} ({vehicle})
-            </p>
+            {pricing.breakdown.riderPay !== undefined ? (
+              <>
+                <div className="flex justify-between">
+                  <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Rider Pay</span>
+                  <span className={dk ? 'text-white/70' : 'text-text-light-2'}>{formatCurrency(pricing.breakdown.riderPay)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Fuel</span>
+                  <span className={dk ? 'text-white/70' : 'text-text-light-2'}>{formatCurrency(pricing.breakdown.fuelCost)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Service Fee</span>
+                  <span className={dk ? 'text-white/70' : 'text-text-light-2'}>{formatCurrency(pricing.breakdown.serviceFee ?? 0)}</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex justify-between">
+                  <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Base Fare</span>
+                  <span className={dk ? 'text-white/70' : 'text-text-light-2'}>{formatCurrency(pricing.breakdown.baseFare)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Distance Fare</span>
+                  <span className={dk ? 'text-white/70' : 'text-text-light-2'}>{formatCurrency(pricing.breakdown.distanceFare)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Fuel Cost</span>
+                  <span className={dk ? 'text-white/70' : 'text-text-light-2'}>{formatCurrency(pricing.breakdown.fuelCost)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Service Fee</span>
+                  <span className={dk ? 'text-white/70' : 'text-text-light-2'}>{formatCurrency(pricing.breakdown.companyFee)}</span>
+                </div>
+              </>
+            )}
+            {pricing.breakdown.riderPay === undefined && (
+              <p className={cn('text-xs pt-1', dk ? 'text-white/25' : 'text-surface-light-3')}>
+                Est. fuel: {formatCurrency(fuelEst)} ({vehicle})
+              </p>
+            )}
           </div>
         </motion.div>
       )}

@@ -7,7 +7,7 @@ import { useAuthStore } from '../stores/authStore';
 import { useOrderStore } from '../stores/orderStore';
 import { syncService } from '../lib/syncService';
 import { cn, formatCurrency, formatDistance, formatDate, timeAgo } from '../lib/utils';
-import { calculateDistance } from '../lib/pricing';
+import { calculateDistance, riderEarningsForOrder } from '../lib/pricing';
 import { RiderProfile, Order } from '../lib/types';
 import MapView from '../components/MapView';
 import { fetchTurnByTurnRoute, DirectionStep, CongestionSegment } from '../components/MapView';
@@ -111,8 +111,8 @@ function OrderDetailRows({ order, dk, showEarnings }: { order: Order; dk: boolea
       </div>
       {showEarnings && (
         <div className="flex justify-between text-xs">
-          <span className={dk ? 'text-white/40' : 'text-surface-light-3'}>Your earnings (75%)</span>
-          <span className={cn('font-bold', 'text-success')}>{formatCurrency(order.price * 0.75)}</span>
+          <span className={dk ? 'text-white/40' : 'text-surface-light-3'}>Your earnings</span>
+          <span className={cn('font-bold', 'text-success')}>{formatCurrency(riderEarningsForOrder(order))}</span>
         </div>
       )}
     </div>
