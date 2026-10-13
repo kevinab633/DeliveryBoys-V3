@@ -119,46 +119,74 @@ export function formulaPricing(
   return { riderPay: round2(riderPay), fuelCost, companyShare, companyFee, serviceFee: r.companyFlatFee, total };
 }
 
+/** Cars, vans and trucks: the previous rule-table structure (base fare, per-km
+ *  rate, company margin) is unchanged. The only moving part is the fuel line,
+ *  which is now litres (distance x L/100 km) x the current pump price. */
+function rulePricing(
+  distance: number,
+  vehicleType: VehicleType,
+  rules: PriceRule[],
+  fuelPricePerLitre: number
+) {
+  const rule = rules.find(r => r.vehicleType === vehicleType && distance >= r.minDistance && distance < r.maxDistance)
+    || rules.find(r => r.vehicleType === vehicleType);
+  if (!rule) return null;
+  const baseFare = rule.baseFare;
+  const distanceFare = round2(distance * rule.perKmRate);
+  const fuelCost = estimateFuelCost(distance, vehicleType, fuelPricePerLitre);
+  const subtotal = baseFare + distanceFare + fuelCost;
+  const companyFee = round2(subtotal * rule.companyMargin);
+  const total = round2(subtotal + companyFee);
+  return { baseFare, distanceFare, fuelCost, companyFee, total };
+}
+
 export function calculatePrice(
   distance: number,
   vehicleType: VehicleType,
-  _rules: PriceRule[] = DEFAULT_RULES,
+  rules: PriceRule[] = DEFAULT_RULES,
   manualOverrides?: Record<string, number>,
   pricingMode: 'auto' | 'manual' | 'hybrid' = 'auto',
   fuelPricePerLitre: number = FUEL_PRICE_PER_LITER
 ): { price: number; breakdown: PriceBreakdown } {
-  const m = formulaPricing(distance, vehicleType, fuelPricePerLitre);
-  let total = m.total;
+  let breakdown: PriceBreakdown;
 
+  if (vehicleType === 'motorcycle') {
+    const m = formulaPricing(distance, vehicleType, fuelPricePerLitre);
+    breakdown = {
+      baseFare: m.riderPay,
+      distanceFare: 0,
+      fuelCost: m.fuelCost,
+      companyFee: m.companyFee,
+      total: m.total,
+      riderPay: m.riderPay,
+      serviceFee: m.serviceFee,
+      riderEarnings: round2(m.total - m.companyFee),
+    };
+  } else {
+    const r = rulePricing(distance, vehicleType, rules, fuelPricePerLitre);
+    if (!r) return { price: 0, breakdown: { baseFare: 0, distanceFare: 0, fuelCost: 0, companyFee: 0, total: 0 } };
+    breakdown = { ...r };
+  }
+
+  let total = breakdown.total;
   if ((pricingMode === 'manual' || pricingMode === 'hybrid') && manualOverrides) {
     const key = `${vehicleType}-${Math.floor(distance)}`;
     if (manualOverrides[key]) total = manualOverrides[key];
   }
 
-  return {
-    price: total,
-    breakdown: {
-      baseFare: m.riderPay,
-      distanceFare: 0,
-      fuelCost: m.fuelCost,
-      companyFee: m.companyFee,
-      total,
-      riderPay: m.riderPay,
-      serviceFee: m.serviceFee,
-      riderEarnings: round2(total - m.companyFee),
-    },
-  };
+  return { price: total, breakdown: { ...breakdown, total } };
 }
 
-/** What the rider receives for an order. New orders: fare minus the company
- *  fee. Older orders: 75% of the fare, as before. */
+/** What the rider receives for an order.
+ *  - Motorcycle orders from 2026-10-13: fare minus the company fee.
+ *  - Everything else (and older orders): 75% of the fare, as before. */
 export function riderEarningsForOrder(order: {
   price: number;
   distance: number;
   vehicleType: VehicleType;
   createdAt: number;
 }): number {
-  if (order.createdAt >= PRICING_EFFECTIVE_AT) {
+  if (order.vehicleType === 'motorcycle' && order.createdAt >= PRICING_EFFECTIVE_AT) {
     return round2(order.price - formulaPricing(order.distance, order.vehicleType).companyFee);
   }
   return order.price * 0.75;

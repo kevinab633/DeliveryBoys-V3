@@ -6,7 +6,7 @@ import { formatDate, generateOrderCode } from '../lib/utils';
 import { syncService } from '../lib/syncService';
 import { calculatePrice, calculateDistance, riderEarningsForOrder } from '../lib/pricing';
 import { useFuelPriceStore } from './fuelPriceStore';
-import { getDefaultRules } from '../lib/pricing';
+import { useContentStore } from './contentStore';
 import { useAuthStore } from './authStore';
 import { useNotificationStore } from './notificationStore';
 import { showToast } from '../components/Toast';
@@ -176,7 +176,9 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
 
   createOrder: (data) => {
     const distance = calculateDistance(data.pickup.lat, data.pickup.lng, data.dropoff.lat, data.dropoff.lng);
-    const { price } = calculatePrice(distance, data.vehicleType, getDefaultRules(), undefined, 'auto', useFuelPriceStore.getState().pricePerLitre);
+    // Same inputs as the booking screen, so the stored price matches what the customer saw.
+    const content = useContentStore.getState();
+    const { price } = calculatePrice(distance, data.vehicleType, content.priceRules, content.manualOverrides, content.pricingMode, useFuelPriceStore.getState().pricePerLitre);
     const orderType: OrderType = data.orderType || 'instant';
     const baseOrder: Order = {
       // NOTE: the Supabase `orders.id` column is a real `uuid` — a
