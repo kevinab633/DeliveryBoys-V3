@@ -1,7 +1,7 @@
 import { VehicleType, PriceRule } from './types';
 
-// Yango-style pricing model
-// Base fare + per-km rate + fuel surcharge + company margin
+// Legacy per-km rules. They are still stored for the manager's pricing
+// table, but fares no longer use them (see calculatePrice).
 const DEFAULT_RULES: PriceRule[] = [
   // Motorcycle
   { id: 'moto-short', minDistance: 0, maxDistance: 5, baseFare: 8, perKmRate: 2.5, fuelSurcharge: 1.5, companyMargin: 0.25, vehicleType: 'motorcycle' },
@@ -35,64 +35,11 @@ export function calculateDistance(lat1: number, lon1: number, lat2: number, lon2
   return Math.round(R * c * 1.3 * 10) / 10; // 1.3x road factor
 }
 
-export function calculatePrice(
-  distance: number,
-  vehicleType: VehicleType,
-  rules: PriceRule[],
-  manualOverrides?: Record<string, number>,
-  pricingMode: 'auto' | 'manual' | 'hybrid' = 'auto'
-): { price: number; breakdown: PriceBreakdown } {
-  // Motorcycles use the agreed rider-pay formula (see motorcyclePricing).
-  if (vehicleType === 'motorcycle') {
-    const m = motorcyclePricing(distance);
-    let total = m.total;
-    if ((pricingMode === 'manual' || pricingMode === 'hybrid') && manualOverrides) {
-      const key = `${vehicleType}-${Math.floor(distance)}`;
-      if (manualOverrides[key]) total = manualOverrides[key];
-    }
-    return {
-      price: total,
-      breakdown: {
-        baseFare: m.riderPay,
-        distanceFare: 0,
-        fuelCost: m.fuelCost,
-        companyFee: m.companyFee,
-        total,
-        riderPay: m.riderPay,
-        serviceFee: MOTORCYCLE_RATES.companyFlatFee,
-        riderEarnings: round2(total - m.companyFee),
-      },
-    };
-  }
+// ════════════════════════════════════════════════════════════════════
+// Fuel
+// ════════════════════════════════════════════════════════════════════
 
-  // Find applicable rule
-  const rule = rules.find(r => r.vehicleType === vehicleType && distance >= r.minDistance && distance < r.maxDistance)
-    || rules.find(r => r.vehicleType === vehicleType);
-  
-  if (!rule) {
-    return { price: 0, breakdown: { baseFare: 0, distanceFare: 0, fuelCost: 0, companyFee: 0, total: 0 } };
-  }
-
-  const baseFare = rule.baseFare;
-  const distanceFare = distance * rule.perKmRate;
-  const fuelCost = distance * (rule.fuelSurcharge / 10); // fuel per km
-  const subtotal = baseFare + distanceFare + fuelCost;
-  const companyFee = subtotal * rule.companyMargin;
-  let total = Math.round((subtotal + companyFee) * 100) / 100;
-
-  // Manual override
-  if (pricingMode === 'manual' && manualOverrides) {
-    const key = `${vehicleType}-${Math.floor(distance)}`;
-    if (manualOverrides[key]) total = manualOverrides[key];
-  } else if (pricingMode === 'hybrid' && manualOverrides) {
-    const key = `${vehicleType}-${Math.floor(distance)}`;
-    if (manualOverrides[key]) total = manualOverrides[key];
-  }
-
-  return { price: total, breakdown: { baseFare, distanceFare: Math.round(distanceFare * 100) / 100, fuelCost: Math.round(fuelCost * 100) / 100, companyFee: Math.round(companyFee * 100) / 100, total } };
-}
-
-// Fuel consumption estimates (L/100km)
+// Fuel consumption estimates (L/100km) per vehicle type.
 export const FUEL_CONSUMPTION: Record<VehicleType, number> = {
   motorcycle: 3.0,
   car: 8.0,
@@ -100,26 +47,28 @@ export const FUEL_CONSUMPTION: Record<VehicleType, number> = {
   truck: 18.0,
 };
 
-// Petrol pump price in GHS per litre. Updated to the October 2026 price
-// (about GHS 18.78). Used only for the "Est. fuel" display on the booking
-// page; fares are calculated separately in calculatePrice and do not use it.
-export const FUEL_PRICE_PER_LITER = 18.78; // GHS
+/** Default petrol pump price in GHS per litre (October 2026). The live
+ *  value is set by managers and stored in the app's settings table. */
+export const FUEL_PRICE_PER_LITER = 18.78;
 
-export function estimateFuelCost(distance: number, vehicleType: VehicleType): number {
-  const consumption = FUEL_CONSUMPTION[vehicleType];
-  const liters = (distance / 100) * consumption;
-  return Math.round(liters * FUEL_PRICE_PER_LITER * 100) / 100;
+export function estimateFuelCost(
+  distance: number,
+  vehicleType: VehicleType,
+  fuelPricePerLitre: number = FUEL_PRICE_PER_LITER
+): number {
+  const liters = (distance / 100) * FUEL_CONSUMPTION[vehicleType];
+  return Math.round(liters * fuelPricePerLitre * 100) / 100;
 }
 
 // ════════════════════════════════════════════════════════════════════
-// Motorcycle pricing (agreed Oct 2026 model)
+// Fare model (agreed October 2026, all vehicle types)
 //  - Rider pay: GHS 15 for trips up to 4 km, then +GHS 2.50 per km
 //    (i.e. +GHS 5 for every 2 km).
 //  - Fuel: separate line, for the trip plus a 2 km approach to pickup,
-//    at the motorcycle's litres/100 km and the current pump price.
+//    at the vehicle's L/100 km and the current pump price.
 //  - Service fee: GHS 5 flat, charged to the customer.
 //  - Company keeps a 10% share of rider pay above GHS 15, taken from the
-//    rider's pay (the customer fare is not affected by this share).
+//    rider's pay (it does not change the customer fare).
 // Customer fare = rider pay + fuel + service fee.
 // ════════════════════════════════════════════════════════════════════
 
@@ -129,16 +78,16 @@ export interface PriceBreakdown {
   fuelCost: number;
   companyFee: number;
   total: number;
-  /** Motorcycle only: gross rider pay before the company share. */
+  /** Gross rider pay before the company share. */
   riderPay?: number;
-  /** Motorcycle only: flat service fee shown to the customer. */
+  /** Flat service fee shown to the customer. */
   serviceFee?: number;
-  /** Motorcycle only: what the rider receives (rider pay minus the company
-   *  share, plus fuel). Equals total minus companyFee. */
+  /** What the rider receives: rider pay minus the company share, plus fuel.
+   *  Equals total minus companyFee. */
   riderEarnings?: number;
 }
 
-export const MOTORCYCLE_RATES = {
+export const PAY_RATES = {
   approachKm: 2,
   riderBaseFare: 15,
   riderBaseKm: 4,
@@ -148,34 +97,69 @@ export const MOTORCYCLE_RATES = {
 };
 
 /** Orders created before this moment keep the old 75% rider earnings. */
-export const MOTORCYCLE_PRICING_EFFECTIVE_AT = Date.parse('2026-10-13T00:00:00Z');
+export const PRICING_EFFECTIVE_AT = Date.parse('2026-10-13T00:00:00Z');
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
-export function motorcyclePricing(distance: number) {
-  const r = MOTORCYCLE_RATES;
+export function formulaPricing(
+  distance: number,
+  vehicleType: VehicleType,
+  fuelPricePerLitre: number = FUEL_PRICE_PER_LITER
+) {
+  const r = PAY_RATES;
   const riderPay = distance <= r.riderBaseKm
     ? r.riderBaseFare
     : r.riderBaseFare + r.riderPerKmAfterBase * (distance - r.riderBaseKm);
-  const fuelCost = round2((distance + r.approachKm) * (FUEL_CONSUMPTION.motorcycle / 100) * FUEL_PRICE_PER_LITER);
+  const fuelCost = round2((distance + r.approachKm) * (FUEL_CONSUMPTION[vehicleType] / 100) * fuelPricePerLitre);
   const companyShare = round2(r.companyShareAboveBase * Math.max(0, riderPay - r.riderBaseFare));
   const companyFee = round2(r.companyFlatFee + companyShare);
   const total = round2(riderPay + fuelCost + r.companyFlatFee);
-  return { riderPay: round2(riderPay), fuelCost, companyFee, total };
+  return { riderPay: round2(riderPay), fuelCost, companyShare, companyFee, serviceFee: r.companyFlatFee, total };
 }
 
-/** What the rider receives for an order. Motorcycle orders from the new
- *  model: fare minus the company fee. Older orders: 75% of the fare. */
+export function calculatePrice(
+  distance: number,
+  vehicleType: VehicleType,
+  _rules: PriceRule[] = DEFAULT_RULES,
+  manualOverrides?: Record<string, number>,
+  pricingMode: 'auto' | 'manual' | 'hybrid' = 'auto',
+  fuelPricePerLitre: number = FUEL_PRICE_PER_LITER
+): { price: number; breakdown: PriceBreakdown } {
+  const m = formulaPricing(distance, vehicleType, fuelPricePerLitre);
+  let total = m.total;
+
+  if ((pricingMode === 'manual' || pricingMode === 'hybrid') && manualOverrides) {
+    const key = `${vehicleType}-${Math.floor(distance)}`;
+    if (manualOverrides[key]) total = manualOverrides[key];
+  }
+
+  return {
+    price: total,
+    breakdown: {
+      baseFare: m.riderPay,
+      distanceFare: 0,
+      fuelCost: m.fuelCost,
+      companyFee: m.companyFee,
+      total,
+      riderPay: m.riderPay,
+      serviceFee: m.serviceFee,
+      riderEarnings: round2(total - m.companyFee),
+    },
+  };
+}
+
+/** What the rider receives for an order. New orders: fare minus the company
+ *  fee. Older orders: 75% of the fare, as before. */
 export function riderEarningsForOrder(order: {
   price: number;
   distance: number;
   vehicleType: VehicleType;
   createdAt: number;
 }): number {
-  if (order.vehicleType === 'motorcycle' && order.createdAt >= MOTORCYCLE_PRICING_EFFECTIVE_AT) {
-    return round2(order.price - motorcyclePricing(order.distance).companyFee);
+  if (order.createdAt >= PRICING_EFFECTIVE_AT) {
+    return round2(order.price - formulaPricing(order.distance, order.vehicleType).companyFee);
   }
   return order.price * 0.75;
 }

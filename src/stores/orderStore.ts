@@ -5,6 +5,7 @@ import { Order, OrderStatus, OrderType, VehicleType, Location, RiderProfile } fr
 import { formatDate, generateOrderCode } from '../lib/utils';
 import { syncService } from '../lib/syncService';
 import { calculatePrice, calculateDistance, riderEarningsForOrder } from '../lib/pricing';
+import { useFuelPriceStore } from './fuelPriceStore';
 import { getDefaultRules } from '../lib/pricing';
 import { useAuthStore } from './authStore';
 import { useNotificationStore } from './notificationStore';
@@ -175,7 +176,7 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
 
   createOrder: (data) => {
     const distance = calculateDistance(data.pickup.lat, data.pickup.lng, data.dropoff.lat, data.dropoff.lng);
-    const { price } = calculatePrice(distance, data.vehicleType, getDefaultRules());
+    const { price } = calculatePrice(distance, data.vehicleType, getDefaultRules(), undefined, 'auto', useFuelPriceStore.getState().pricePerLitre);
     const orderType: OrderType = data.orderType || 'instant';
     const baseOrder: Order = {
       // NOTE: the Supabase `orders.id` column is a real `uuid` — a

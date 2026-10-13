@@ -7,6 +7,7 @@ import { useAuthStore } from '../stores/authStore';
 import { useOrderStore } from '../stores/orderStore';
 import { useContentStore } from '../stores/contentStore';
 import { calculateDistance, calculatePrice, estimateFuelCost } from '../lib/pricing';
+import { useFuelPriceStore } from '../stores/fuelPriceStore';
 import { cn, formatCurrency, formatDistance, formatDate } from '../lib/utils';
 import { showToast } from '../components/Toast';
 import { VehicleType, OrderType } from '../lib/types';
@@ -177,8 +178,9 @@ export default function Book() {
   }, []);
 
   const distance = pickup && dropoff ? calculateDistance(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng) : 0;
-  const pricing = distance > 0 ? calculatePrice(distance, vehicle, priceRules, manualOverrides, pricingMode) : null;
-  const fuelEst = distance > 0 ? estimateFuelCost(distance, vehicle) : 0;
+  const fuelPrice = useFuelPriceStore(s => s.pricePerLitre);
+  const pricing = distance > 0 ? calculatePrice(distance, vehicle, priceRules, manualOverrides, pricingMode, fuelPrice) : null;
+  const fuelEst = distance > 0 ? estimateFuelCost(distance, vehicle, fuelPrice) : 0;
 
   useEffect(() => {
     if (availableVehicleTypes.length > 0 && !availableVehicleTypes.includes(vehicle)) {
@@ -188,8 +190,8 @@ export default function Book() {
 
   const priceForVehicle = useCallback((vt: VehicleType) => {
     if (distance <= 0) return null;
-    return calculatePrice(distance, vt, priceRules, manualOverrides, pricingMode);
-  }, [distance, priceRules, manualOverrides, pricingMode]);
+    return calculatePrice(distance, vt, priceRules, manualOverrides, pricingMode, fuelPrice);
+  }, [distance, priceRules, manualOverrides, pricingMode, fuelPrice]);
 
   const handleMapClick = useCallback(async (lat: number, lng: number) => {
     const addr = await reverseGeocode(lat, lng);

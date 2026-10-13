@@ -7,6 +7,7 @@ import { useAuthStore } from './stores/authStore';
 import { requestNotifyPermission } from './lib/browserNotify';
 import { subscribeToPush } from './lib/pushClient';
 import { syncService } from './lib/syncService';
+import { useFuelPriceStore } from './stores/fuelPriceStore';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import ToastContainer from './components/Toast';
@@ -71,6 +72,7 @@ function AppContent() {
   //    in whichever browser created them. ─────────────────────────────
   useEffect(() => {
     void useAuthStore.getState().loadUsers();
+    void useFuelPriceStore.getState().load();
   }, []);
 
   // ── Re-sync on resume: Android suspends/kills the Realtime WebSocket
@@ -87,6 +89,7 @@ function AppContent() {
       if (document.visibilityState !== 'visible') return;
       void useOrderStore.getState().fetchOrders();
       void useAuthStore.getState().loadUsers();
+      void useFuelPriceStore.getState().load();
       syncService.reconnectIfNeeded();
     }
     document.addEventListener('visibilitychange', handleVisibility);

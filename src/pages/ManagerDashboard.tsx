@@ -6,6 +6,7 @@ import { useThemeStore } from '../stores/themeStore';
 import { useAuthStore } from '../stores/authStore';
 import { useOrderStore } from '../stores/orderStore';
 import { useContentStore } from '../stores/contentStore';
+import { useFuelPriceStore } from '../stores/fuelPriceStore';
 import { cn, formatCurrency, formatDate, timeAgo } from '../lib/utils';
 import { RiderProfile, PriceRule } from '../lib/types';
 import MapView from '../components/MapView';
@@ -17,6 +18,23 @@ export default function ManagerDashboard() {
   const { user, getRiders, getCustomers, approveRider, rejectRider, suspendRider } = useAuthStore();
   const { orders, getTotalRevenue } = useOrderStore();
   const { content, updateContent, priceRules, updatePriceRule, pricingMode, setPricingMode, manualOverrides, setManualOverride, removeManualOverride } = useContentStore();
+  const fuelPrice = useFuelPriceStore(st => st.pricePerLitre);
+  const fuelUpdatedAt = useFuelPriceStore(st => st.updatedAt);
+  const saveFuelPrice = useFuelPriceStore(st => st.save);
+  const [fuelDraft, setFuelDraft] = useState(fuelPrice.toFixed(2));
+  const [fuelSaving, setFuelSaving] = useState(false);
+  const [fuelMessage, setFuelMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  useEffect(() => { setFuelDraft(fuelPrice.toFixed(2)); }, [fuelPrice]);
+
+  const handleSaveFuel = async () => {
+    const value = Number(fuelDraft);
+    setFuelSaving(true);
+    const ok = await saveFuelPrice(value);
+    setFuelSaving(false);
+    setFuelMessage(ok
+      ? { ok: true, text: 'Fuel price saved. New bookings will use it.' }
+      : { ok: false, text: 'Could not save. Enter a price between 0.01 and 100, and check the connection.' });
+  };
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get('tab') as Tab | null;
   const [tab, setTab] = useState<Tab>(requestedTab && ['overview', 'orders', 'riders', 'map', 'pricing', 'content'].includes(requestedTab) ? requestedTab : 'overview');
@@ -199,6 +217,30 @@ export default function ManagerDashboard() {
 
           {tab === 'pricing' && (
             <div className="space-y-6">
+              <div className={card}>
+                <h3 className={cn('font-bold mb-1', dk ? 'text-white' : 'text-gray-900')}>Fuel Price</h3>
+                <p className={cn('text-xs mb-4', dk ? 'text-white/50' : 'text-gray-500')}>
+                  Petrol price in GHS per litre. It sets the fuel line on every new fare, for all devices. Existing bookings are not changed.
+                </p>
+                <div className="flex flex-wrap items-end gap-3">
+                  <label className="flex flex-col gap-1 text-xs font-semibold">
+                    <span className={dk ? 'text-white/60' : 'text-gray-600'}>GHS per litre</span>
+                    <input type="number" step="0.01" min="0.01" max="100" value={fuelDraft}
+                      onChange={e => setFuelDraft(e.target.value)}
+                      className={cn('w-32 rounded-lg border px-3 py-2 text-sm', dk ? 'bg-surface-dark-3 border-white/10 text-white' : 'bg-gray-50 border-gray-200')} />
+                  </label>
+                  <button type="button" onClick={handleSaveFuel} disabled={fuelSaving}
+                    className="rounded-full bg-brand px-5 py-2 text-sm font-bold text-white transition hover:bg-brand-dark disabled:opacity-50">
+                    {fuelSaving ? 'Saving…' : 'Save fuel price'}
+                  </button>
+                  <span className={cn('text-xs', dk ? 'text-white/40' : 'text-gray-400')}>
+                    Current: GHS {fuelPrice.toFixed(2)}{fuelUpdatedAt ? ` · saved ${new Date(fuelUpdatedAt).toLocaleString()}` : ''}
+                  </span>
+                </div>
+                {fuelMessage && (
+                  <p className={cn('mt-3 text-xs font-semibold', fuelMessage.ok ? 'text-success' : 'text-danger')}>{fuelMessage.text}</p>
+                )}
+              </div>
               <div className={card}>
                 <h3 className={cn('font-bold mb-4', dk ? 'text-white' : 'text-gray-900')}>Pricing Mode</h3>
                 <div className="flex gap-3">
