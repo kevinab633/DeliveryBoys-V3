@@ -77,7 +77,10 @@ export const FUEL_CONSUMPTION: Record<VehicleType, number> = {
   truck: 18.0,
 };
 
-export const FUEL_PRICE_PER_LITER = 14.5; // GHS
+// Petrol pump price in GHS per litre. Updated to the October 2026 price
+// (about GHS 18.78). Used only for the "Est. fuel" display on the booking
+// page; fares are calculated separately in calculatePrice and do not use it.
+export const FUEL_PRICE_PER_LITER = 18.78; // GHS
 
 export function estimateFuelCost(distance: number, vehicleType: VehicleType): number {
   const consumption = FUEL_CONSUMPTION[vehicleType];
