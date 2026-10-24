@@ -300,9 +300,13 @@ p { text-wrap: pretty; }
 /* Phone hero: the image fades into the page at the bottom instead of
    being cut off. Desktop keeps the full image. */
 @media (max-width: 767px) {
+  .legacy-hero-layer {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
   .hero-bg-image {
-    -webkit-mask-image: linear-gradient(to bottom, #000 62%, transparent 100%);
-    mask-image: linear-gradient(to bottom, #000 62%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, #000 84%, transparent 100%);
+    mask-image: linear-gradient(to bottom, #000 84%, transparent 100%);
   }
 }
 /* Floating navigation chrome: the brand and menu remain visible without

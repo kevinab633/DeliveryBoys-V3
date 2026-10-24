@@ -256,9 +256,14 @@ function CustomerHomePage() {
             <img src="/images/hero-rider-wide-logo.jpg" alt="" className="hero-bg-image h-full w-full object-cover object-bottom" />
           </picture>
           <div className={cn('absolute inset-0',
-            dk ? 'bg-gradient-to-br from-black/97 via-black/85 to-brand/15' : 'bg-gradient-to-br from-white/97 via-white/90 to-brand/8'
+            dk ? 'bg-gradient-to-br from-black/85 via-black/50 to-black/10' : 'bg-gradient-to-br from-white/85 via-white/45 to-white/5'
           )} />
         </div>
+        {/* Bottom edge melts into the site background, so the photo never ends in a hard line */}
+        <div
+          className="absolute inset-x-0 bottom-0 h-[12%] z-0 pointer-events-none"
+          style={{ background: `linear-gradient(to bottom, rgba(${dk ? '10,10,11' : '250,250,250'},0), ${dk ? '#0A0A0B' : '#FAFAFA'})` }}
+        />
         <div className="absolute top-20 right-10 w-72 h-72 bg-brand/10 rounded-full blur-[120px]" />
         <div className="absolute bottom-20 left-10 w-96 h-96 bg-brand/5 rounded-full blur-[150px]" />
 
