@@ -12,12 +12,13 @@ import { RiderProfile } from '../lib/types';
 import CommissionCard from '../components/CommissionCard';
 
 const services = [
-  { icon: Package, name: 'Parcel Delivery', desc: 'Safe and secure parcel delivery across town.', color: '#C41E1E' },
-  { icon: UtensilsCrossed, name: 'Food Delivery', desc: 'Hot meals from your favorite restaurants.', color: '#F59E0B' },
-  { icon: ShoppingCart, name: 'Grocery Delivery', desc: 'Fresh groceries to your doorstep.', color: '#10B981' },
-  { icon: FileText, name: 'Document Delivery', desc: 'Confidential document courier services.', color: '#3B82F6' },
-  { icon: Building2, name: 'Corporate Deliveries', desc: 'Tailored solutions for businesses.', color: '#8B5CF6' },
-  { icon: Zap, name: 'Express Delivery', desc: 'Fast delivery options when available.', color: '#EC4899' },
+  { icon: Package, name: 'Parcel Delivery', desc: 'Send and receive parcels of all sizes safely and securely.', features: ['Delivery options', 'Careful handling', 'Real-time tracking', 'Delivery updates'], img: '/images/parcel-delivery.jpg' },
+  { icon: UtensilsCrossed, name: 'Food Delivery', desc: 'Hot meals delivered fresh from your favorite restaurants.', features: ['Temperature-controlled', 'Fast pickup', 'Multiple restaurants', 'Contactless delivery'], img: '/images/food-delivery.jpg' },
+  { icon: ShoppingCart, name: 'Grocery Delivery', desc: 'Fresh groceries delivered right to your doorstep.', features: ['Market shopping', 'Scheduled deliveries', 'Order updates', 'Bulk discounts'], img: '/images/grocery-delivery.jpg' },
+  { icon: FileText, name: 'Document Delivery', desc: 'Confidential document courier services.', features: ['Confidential handling', 'Proof of delivery', 'Express options', 'Corporate accounts'], img: '/images/document-delivery.jpg' },
+  { icon: Building2, name: 'Corporate Deliveries', desc: 'Tailored delivery solutions for businesses.', features: ['Dedicated manager', 'Volume discounts', 'Monthly invoicing', 'Custom SLA'], img: '/images/corporate-delivery.jpg' },
+  { icon: Zap, name: 'Express / Same-Day', desc: 'Fast delivery options when available.', features: ['Estimated delivery window', 'Priority handling', 'Live GPS tracking', 'Status updates'], img: '/images/express-delivery.jpg' },
+  { icon: Bike, name: 'On-Demand Delivery', desc: 'Request a rider anytime for immediate pickups.', features: ['Instant dispatch', '7 days a week', 'Flexible scheduling', 'Pay per delivery'], img: '/images/ondemand-delivery.jpg' },
 ];
 
 
@@ -343,28 +344,37 @@ function CustomerHomePage() {
       </section>
 
       {/* ===== SERVICES ===== */}
-      <section className={cn('py-28', dk ? 'bg-surface-dark' : 'bg-white')}>
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="text-center mb-14">
-            <span className="inline-block px-4 py-1.5 rounded-full bg-brand/8 text-brand text-sm font-semibold mb-4">Our Services</span>
-            <h2 className={cn('text-4xl md:text-5xl font-black tracking-tight', dk ? 'text-white' : 'text-gray-900')}>What We Deliver</h2>
-            <p className={cn('mt-3 text-lg max-w-xl mx-auto', dk ? 'text-white/45' : 'text-gray-500')}>From parcels to food, groceries to documents — we deliver it all.</p>
-          </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {services.map((s, i) => (
-              <motion.div key={s.name} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.07 }}>
-                <Link to={user ? '/book' : '/auth/login?role=customer'}
-                  className={cn('block p-6 rounded-2xl border transition hover:-translate-y-1 group',
-                    dk ? 'bg-surface-dark-2 border-white/5 hover:border-brand/25 hover:shadow-lg hover:shadow-brand/5' : 'bg-gray-50/50 border-gray-100 hover:border-brand/25 hover:shadow-xl hover:shadow-brand/5')}>
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-4" style={{ background: `${s.color}15` }}>
-                    <s.icon size={24} style={{ color: s.color }} />
-                  </div>
-                  <h3 className={cn('text-lg font-bold mb-2 group-hover:text-brand transition', dk ? 'text-white' : 'text-gray-900')}>{s.name}</h3>
-                  <p className={cn('text-sm leading-relaxed', dk ? 'text-white/45' : 'text-gray-500')}>{s.desc}</p>
+      <section className={cn('py-16', dk ? 'bg-surface-dark' : 'bg-white')}>
+        <div className="max-w-7xl mx-auto px-6 text-center">
+          <span className="inline-block px-4 py-1.5 rounded-full bg-brand/10 text-brand text-sm font-semibold mb-4">Our Services</span>
+          <h2 className={cn('text-4xl md:text-5xl font-extrabold', dk ? 'text-white' : 'text-gray-900')}>What We Deliver</h2>
+          <p className={cn('mt-4 text-lg max-w-2xl mx-auto', dk ? 'text-white/50' : 'text-gray-500')}>From parcels to food, groceries to documents — we handle it all.</p>
+        </div>
+        <div className="max-w-7xl mx-auto px-6 space-y-12 mt-12">
+          {services.map((s, i) => (
+            <motion.div key={s.name} initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
+              className={cn('grid lg:grid-cols-2 gap-8 items-center', i % 2 === 1 && 'lg:[direction:rtl] lg:[&>*]:[direction:ltr]')}>
+              <div className="relative rounded-3xl overflow-hidden h-64 lg:h-80">
+                <img src={s.img} alt={s.name} className="w-full h-full object-cover" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                <div className="absolute top-4 left-4 w-12 h-12 rounded-full bg-brand flex items-center justify-center"><s.icon size={24} className="text-white" /></div>
+              </div>
+              <div>
+                <h3 className={cn('text-3xl font-extrabold mb-4', dk ? 'text-white' : 'text-gray-900')}>{s.name}</h3>
+                <p className={cn('mb-6', dk ? 'text-white/60' : 'text-gray-600')}>{s.desc}</p>
+                <ul className="space-y-2 mb-6">
+                  {s.features.map(f => (
+                    <li key={f} className={cn('flex items-center gap-2 text-sm', dk ? 'text-white/70' : 'text-gray-600')}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-brand" /> {f}
+                    </li>
+                  ))}
+                </ul>
+                <Link to={user ? '/book' : '/auth/login?role=customer'} className="inline-flex items-center gap-2 bg-brand text-white px-6 py-3 rounded-full font-bold text-sm hover:bg-brand-dark transition">
+                  Book This Service <ArrowRight size={16} />
                 </Link>
-              </motion.div>
-            ))}
-          </div>
+              </div>
+            </motion.div>
+          ))}
         </div>
       </section>
 
