@@ -178,15 +178,15 @@ export function calculatePrice(
 }
 
 /** What the rider receives for an order.
- *  - Motorcycle orders from 2026-10-13: fare minus the company fee.
- *  - Everything else (and older orders): 75% of the fare, as before. */
+ *  - Orders from 2026-10-13 (all vehicles): fare minus the company fee.
+ *  - Older orders: 75% of the fare, as before. */
 export function riderEarningsForOrder(order: {
   price: number;
   distance: number;
   vehicleType: VehicleType;
   createdAt: number;
 }): number {
-  if (order.vehicleType === 'motorcycle' && order.createdAt >= PRICING_EFFECTIVE_AT) {
+  if (order.createdAt >= PRICING_EFFECTIVE_AT) {
     return round2(order.price - formulaPricing(order.distance, order.vehicleType).companyFee);
   }
   return order.price * 0.75;

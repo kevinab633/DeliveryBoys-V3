@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bike, Car, Truck, ArrowRight, ArrowLeft as ArrowLeftIcon, Info, CheckCircle2, ChevronUp, ChevronDown, Zap, Calendar, Star, X, AlertTriangle } from 'lucide-react';
+import { Bike, Car, Truck, ArrowRight, ArrowLeft as ArrowLeftIcon, Info, CheckCircle2, ChevronUp, ChevronDown, Zap, Calendar, X, AlertTriangle } from 'lucide-react';
 import { useThemeStore } from '../stores/themeStore';
 import { useAuthStore } from '../stores/authStore';
 import { useOrderStore } from '../stores/orderStore';
@@ -590,10 +590,6 @@ export default function Book() {
       </div>
       {assignedRider && (
         <div className={cn('flex items-center justify-center gap-4 text-xs', dk ? 'text-white/50' : 'text-text-light-2')}>
-          <span className="flex items-center gap-1">
-            <Star size={12} className="text-yellow-400 fill-yellow-400" />
-            {assignedRider.rating > 0 ? assignedRider.rating.toFixed(1) : 'New'}
-          </span>
           <span>{assignedRider.totalDeliveries || 0} deliveries</span>
           <span className="uppercase">{assignedRider.vehiclePlate}</span>
         </div>

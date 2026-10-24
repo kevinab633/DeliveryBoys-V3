@@ -27,7 +27,7 @@ const steps = [
   { n: '01', title: 'Book Online', desc: 'Enter pickup & drop-off. Search locations or drop a pin on the map.', icon: MapPin },
   { n: '02', title: 'Get Matched', desc: 'A nearby rider sees your order and accepts it instantly.', icon: Bike },
   { n: '03', title: 'Track Live', desc: 'Watch your rider move in real-time on the live map.', icon: Clock },
-  { n: '04', title: 'Delivered!', desc: 'Your item arrives safely. Rate your experience.', icon: Star },
+  { n: '04', title: 'Delivered!', desc: 'Your item arrives safely.', icon: CheckCircle2 },
 ];
 
 // ════════════════════════════════════════════════════════════════════
