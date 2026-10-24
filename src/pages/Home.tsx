@@ -9,7 +9,6 @@ import { useOrderStore } from '../stores/orderStore';
 import { cn, formatCurrency } from '../lib/utils';
 import { riderEarningsForOrder } from '../lib/pricing';
 import { RiderProfile } from '../lib/types';
-import MicroSlatsBackdrop from '../components/MicroSlatsBackdrop';
 import CommissionCard from '../components/CommissionCard';
 
 const services = [
@@ -237,11 +236,6 @@ function CustomerHomePage() {
     return () => window.clearInterval(timer);
   }, [user?.role]);
 
-  const [supportsWebgl2] = useState(() => {
-    if (typeof document === 'undefined') return false;
-    return Boolean(document.createElement('canvas').getContext('webgl2'));
-  });
-
   useEffect(() => {
     const updateFade = () => {
       const distance = Math.max(window.innerHeight * 0.7, 1);
@@ -256,7 +250,7 @@ function CustomerHomePage() {
     <div>
       {/* ===== HERO ===== */}
       <section className="relative min-h-[100vh] flex items-center overflow-hidden">
-        <div className={cn('legacy-hero-layer absolute inset-0 z-0', supportsWebgl2 && 'webgl-hero-hidden')} style={{ opacity: legacyHeroOpacity }}>
+        <div className="legacy-hero-layer absolute inset-0 z-0" style={{ opacity: legacyHeroOpacity }}>
           <picture className="block h-full w-full">
             <source media="(max-width: 767px)" srcSet="/images/hero-rider-portrait-final.jpg" />
             <img src="/images/hero-rider-wide-logo.jpg" alt="" className="hero-bg-image h-full w-full object-cover object-bottom" />
@@ -265,7 +259,6 @@ function CustomerHomePage() {
             dk ? 'bg-gradient-to-br from-black/97 via-black/85 to-brand/15' : 'bg-gradient-to-br from-white/97 via-white/90 to-brand/8'
           )} />
         </div>
-        <MicroSlatsBackdrop />
         <div className="absolute top-20 right-10 w-72 h-72 bg-brand/10 rounded-full blur-[120px]" />
         <div className="absolute bottom-20 left-10 w-96 h-96 bg-brand/5 rounded-full blur-[150px]" />
 
