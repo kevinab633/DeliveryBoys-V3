@@ -27,6 +27,8 @@ function rowToUser(row: any): User | RiderProfile {
     earnings: Number(row.earnings) || 0,
     nationalIdUrl: row.national_id_url || undefined,
     photoUrl: row.photo_url || undefined,
+    commissionSettledAt: row.commission_settled_at ? new Date(row.commission_settled_at).getTime() : undefined,
+    commissionPaymentRequest: row.commission_payment_request || undefined,
   } as RiderProfile;
 }
 

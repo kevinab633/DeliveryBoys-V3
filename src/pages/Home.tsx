@@ -10,6 +10,7 @@ import { cn, formatCurrency } from '../lib/utils';
 import { riderEarningsForOrder } from '../lib/pricing';
 import { RiderProfile } from '../lib/types';
 import MicroSlatsBackdrop from '../components/MicroSlatsBackdrop';
+import CommissionCard from '../components/CommissionCard';
 
 const services = [
   { icon: Package, name: 'Parcel Delivery', desc: 'Safe and secure parcel delivery across town.', color: '#C41E1E' },
@@ -119,10 +120,8 @@ function RiderHomePage() {
                 <p className={cn('text-2xl font-extrabold', dk ? 'text-white' : 'text-gray-900')}>{formatCurrency(todayEarnings)}</p>
                 <p className={cn('text-xs', dk ? 'text-white/40' : 'text-gray-500')}>Earned today</p>
               </div>
-              <div className={card}>
-                <Star size={18} className="text-yellow-400 mb-2" />
-                <p className={cn('text-2xl font-extrabold', dk ? 'text-white' : 'text-gray-900')}>{rider.rating > 0 ? rider.rating.toFixed(1) : 'No ratings'}</p>
-                <p className={cn('text-xs', dk ? 'text-white/40' : 'text-gray-500')}>Current rating</p>
+              <div className="col-span-3">
+                <CommissionCard rider={rider} orders={orders} dk={dk} />
               </div>
             </div>
           </motion.div>

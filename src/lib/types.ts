@@ -29,6 +29,10 @@ export interface RiderProfile extends User {
   totalDeliveries: number;
   rating: number;
   earnings: number;
+  /** Commission payments: deliveries up to this time are settled. */
+  commissionSettledAt?: number;
+  /** Rider has reported paying the commission; waiting for manager confirmation. */
+  commissionPaymentRequest?: { amount: number; requestedAt: number };
 }
 
 export interface Location {

@@ -1,4 +1,4 @@
-import { VehicleType, PriceRule } from './types';
+import { VehicleType, PriceRule, Order } from './types';
 
 // Legacy per-km rules. They are still stored for the manager's pricing
 // table, but fares no longer use them (see calculatePrice).
@@ -190,4 +190,18 @@ export function riderEarningsForOrder(order: {
     return round2(order.price - formulaPricing(order.distance, order.vehicleType).companyFee);
   }
   return order.price * 0.75;
+}
+
+/** Company commission on one order: the fare minus what the rider receives. */
+export function commissionForOrder(order: Order): number {
+  return round2(order.price - riderEarningsForOrder(order));
+}
+
+/** Commission a rider still owes: their delivered orders after the last
+ *  confirmed payment. Resets to zero once a payment is confirmed. */
+export function commissionOwed(riderId: string, orders: Order[], settledAt?: number): number {
+  const since = settledAt ?? 0;
+  return round2(orders
+    .filter(o => o.riderId === riderId && o.status === 'delivered' && (o.deliveredAt ?? o.createdAt) > since)
+    .reduce((sum, o) => sum + commissionForOrder(o), 0));
 }

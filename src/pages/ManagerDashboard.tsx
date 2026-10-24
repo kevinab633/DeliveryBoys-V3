@@ -74,6 +74,8 @@ export default function ManagerDashboard() {
   const deliveredOrders = orders.filter(o => o.status === 'delivered');
   const pendingRiders = riders.filter(r => r.status === 'pending');
   const onlineRiders = riders.filter(r => r.availability === 'online' && r.status === 'approved');
+  const pendingCommission = riders.filter(r => r.commissionPaymentRequest);
+  const confirmCommissionPayment = useAuthStore(st => st.confirmCommissionPayment);
 
   const card = cn('app-card p-6', dk ? '' : 'bg-white');
   const inp = cn('w-full px-4 py-2.5 rounded-xl text-sm border transition', dk ? 'bg-surface-dark-3 border-white/10 text-white placeholder:text-white/30' : 'bg-gray-50 border-gray-200 text-gray-900');
@@ -206,7 +208,22 @@ export default function ManagerDashboard() {
               </div>
             );
             const renderRider = (r: RiderProfile) => <button type="button" key={r.id} onClick={() => openRider(r.id)} className={cn('flex w-full flex-wrap items-center gap-4 rounded-2xl border p-5 text-left transition hover:-translate-y-0.5 hover:border-brand/40', dk ? 'border-white/5 bg-surface-dark-3' : 'border-gray-200 bg-white')}><div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand text-lg font-bold text-white">{r.name[0]}</div><div className="min-w-[200px] flex-1"><p className={cn('font-bold', dk ? 'text-white' : 'text-gray-900')}>{r.name}</p><p className="text-xs text-gray-500">{r.email || r.phone} · {r.vehicleType} · {r.vehiclePlate}</p><span className={cn('mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-bold capitalize', r.status === 'approved' ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning')}>{r.status}</span></div><span className="text-sm font-semibold capitalize text-gray-500">{r.availability}</span><ChevronDown className="-rotate-90 text-gray-400" size={18} /></button>;
-            return <div className="space-y-7"><div><h2 className={cn('text-2xl font-black', dk ? 'text-white' : 'text-gray-900')}>Riders & verification</h2><p className="mt-1 text-sm text-gray-500">Review accepted riders and applications waiting for document approval.</p></div><section><div className="mb-3 flex items-center justify-between"><h3 className={cn('font-bold', dk ? 'text-white' : 'text-gray-900')}>Accepted riders ({riders.filter(r => r.status === 'approved').length})</h3><span className="text-xs text-success">Ready to work</span></div><div className="space-y-3">{riders.filter(r => r.status === 'approved').map(renderRider)}</div></section><section><div className="mb-3 flex items-center justify-between"><h3 className={cn('font-bold', dk ? 'text-white' : 'text-gray-900')}>Pending verification ({pendingRiders.length})</h3><span className="text-xs text-warning">Needs review</span></div><div className="space-y-3">{pendingRiders.length ? pendingRiders.map(renderRider) : <p className="rounded-2xl border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500">No riders are waiting for verification.</p>}</div></section></div>;
+            return <div className="space-y-7">{pendingCommission.length > 0 && (
+              <section className={card}>
+                <h3 className={cn('font-bold mb-3', dk ? 'text-white' : 'text-gray-900')}>Commission payments to confirm ({pendingCommission.length})</h3>
+                <div className="space-y-3">
+                  {pendingCommission.map(r => (
+                    <div key={r.id} className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className={cn('text-sm font-semibold', dk ? 'text-white' : 'text-gray-900')}>{r.name}</p>
+                        <p className="text-xs text-gray-500">Reports paying {formatCurrency(r.commissionPaymentRequest!.amount)} · {new Date(r.commissionPaymentRequest!.requestedAt).toLocaleString()}</p>
+                      </div>
+                      <button type="button" onClick={() => confirmCommissionPayment(r.id)} className="rounded-full bg-success px-4 py-2 text-sm font-bold text-white transition hover:opacity-90">Confirm payment received</button>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}<div><h2 className={cn('text-2xl font-black', dk ? 'text-white' : 'text-gray-900')}>Riders & verification</h2><p className="mt-1 text-sm text-gray-500">Review accepted riders and applications waiting for document approval.</p></div><section><div className="mb-3 flex items-center justify-between"><h3 className={cn('font-bold', dk ? 'text-white' : 'text-gray-900')}>Accepted riders ({riders.filter(r => r.status === 'approved').length})</h3><span className="text-xs text-success">Ready to work</span></div><div className="space-y-3">{riders.filter(r => r.status === 'approved').map(renderRider)}</div></section><section><div className="mb-3 flex items-center justify-between"><h3 className={cn('font-bold', dk ? 'text-white' : 'text-gray-900')}>Pending verification ({pendingRiders.length})</h3><span className="text-xs text-warning">Needs review</span></div><div className="space-y-3">{pendingRiders.length ? pendingRiders.map(renderRider) : <p className="rounded-2xl border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500">No riders are waiting for verification.</p>}</div></section></div>;
           })()}
 
           {tab === 'map' && (
