@@ -6,7 +6,7 @@ import { useThemeStore } from '../stores/themeStore';
 import { useAuthStore } from '../stores/authStore';
 import { useOrderStore } from '../stores/orderStore';
 import { useContentStore } from '../stores/contentStore';
-import { calculateDistance, calculatePrice, estimateFuelCost } from '../lib/pricing';
+import { calculateDistance, calculatePrice, estimateFuelCost, fuelPriceFor } from '../lib/pricing';
 import { useFuelPriceStore } from '../stores/fuelPriceStore';
 import { cn, formatCurrency, formatDistance, formatDate } from '../lib/utils';
 import { showToast } from '../components/Toast';
@@ -179,8 +179,10 @@ export default function Book() {
 
   const distance = pickup && dropoff ? calculateDistance(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng) : 0;
   const fuelPrice = useFuelPriceStore(s => s.pricePerLitre);
-  const pricing = distance > 0 ? calculatePrice(distance, vehicle, priceRules, manualOverrides, pricingMode, fuelPrice) : null;
-  const fuelEst = distance > 0 ? estimateFuelCost(distance, vehicle, fuelPrice) : 0;
+  const dieselPrice = useFuelPriceStore(s => s.dieselPricePerLitre);
+  const fuelPrices = { petrol: fuelPrice, diesel: dieselPrice };
+  const pricing = distance > 0 ? calculatePrice(distance, vehicle, priceRules, manualOverrides, pricingMode, fuelPrices) : null;
+  const fuelEst = distance > 0 ? estimateFuelCost(distance, vehicle, fuelPriceFor(vehicle, fuelPrices)) : 0;
 
   useEffect(() => {
     if (availableVehicleTypes.length > 0 && !availableVehicleTypes.includes(vehicle)) {
@@ -190,8 +192,8 @@ export default function Book() {
 
   const priceForVehicle = useCallback((vt: VehicleType) => {
     if (distance <= 0) return null;
-    return calculatePrice(distance, vt, priceRules, manualOverrides, pricingMode, fuelPrice);
-  }, [distance, priceRules, manualOverrides, pricingMode, fuelPrice]);
+    return calculatePrice(distance, vt, priceRules, manualOverrides, pricingMode, { petrol: fuelPrice, diesel: dieselPrice });
+  }, [distance, priceRules, manualOverrides, pricingMode, fuelPrice, dieselPrice]);
 
   const handleMapClick = useCallback(async (lat: number, lng: number) => {
     const addr = await reverseGeocode(lat, lng);

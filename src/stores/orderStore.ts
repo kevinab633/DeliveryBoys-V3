@@ -178,7 +178,8 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
     const distance = calculateDistance(data.pickup.lat, data.pickup.lng, data.dropoff.lat, data.dropoff.lng);
     // Same inputs as the booking screen, so the stored price matches what the customer saw.
     const content = useContentStore.getState();
-    const { price } = calculatePrice(distance, data.vehicleType, content.priceRules, content.manualOverrides, content.pricingMode, useFuelPriceStore.getState().pricePerLitre);
+    const fuels = useFuelPriceStore.getState();
+    const { price } = calculatePrice(distance, data.vehicleType, content.priceRules, content.manualOverrides, content.pricingMode, { petrol: fuels.pricePerLitre, diesel: fuels.dieselPricePerLitre });
     const orderType: OrderType = data.orderType || 'instant';
     const baseOrder: Order = {
       // NOTE: the Supabase `orders.id` column is a real `uuid` — a

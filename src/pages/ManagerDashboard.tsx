@@ -19,20 +19,24 @@ export default function ManagerDashboard() {
   const { orders, getTotalRevenue } = useOrderStore();
   const { content, updateContent, priceRules, updatePriceRule, pricingMode, setPricingMode, manualOverrides, setManualOverride, removeManualOverride } = useContentStore();
   const fuelPrice = useFuelPriceStore(st => st.pricePerLitre);
+  const dieselPrice = useFuelPriceStore(st => st.dieselPricePerLitre);
   const fuelUpdatedAt = useFuelPriceStore(st => st.updatedAt);
-  const saveFuelPrice = useFuelPriceStore(st => st.save);
-  const [fuelDraft, setFuelDraft] = useState(fuelPrice.toFixed(2));
-  const [fuelSaving, setFuelSaving] = useState(false);
+  const dieselUpdatedAt = useFuelPriceStore(st => st.dieselUpdatedAt);
+  const saveFuel = useFuelPriceStore(st => st.save);
+  const [petrolDraft, setPetrolDraft] = useState(fuelPrice.toFixed(2));
+  const [dieselDraft, setDieselDraft] = useState(dieselPrice.toFixed(2));
+  const [fuelSaving, setFuelSaving] = useState<'petrol' | 'diesel' | null>(null);
   const [fuelMessage, setFuelMessage] = useState<{ ok: boolean; text: string } | null>(null);
-  useEffect(() => { setFuelDraft(fuelPrice.toFixed(2)); }, [fuelPrice]);
+  useEffect(() => { setPetrolDraft(fuelPrice.toFixed(2)); }, [fuelPrice]);
+  useEffect(() => { setDieselDraft(dieselPrice.toFixed(2)); }, [dieselPrice]);
 
-  const handleSaveFuel = async () => {
-    const value = Number(fuelDraft);
-    setFuelSaving(true);
-    const ok = await saveFuelPrice(value);
-    setFuelSaving(false);
+  const handleSaveFuel = async (fuel: 'petrol' | 'diesel') => {
+    const value = Number(fuel === 'petrol' ? petrolDraft : dieselDraft);
+    setFuelSaving(fuel);
+    const ok = await saveFuel(fuel, value);
+    setFuelSaving(null);
     setFuelMessage(ok
-      ? { ok: true, text: 'Fuel price saved. New bookings will use it.' }
+      ? { ok: true, text: `${fuel === 'petrol' ? 'Petrol' : 'Diesel'} price saved. New bookings will use it.` }
       : { ok: false, text: 'Could not save. Enter a price between 0.01 and 100, and check the connection.' });
   };
   const [searchParams, setSearchParams] = useSearchParams();
@@ -235,24 +239,41 @@ export default function ManagerDashboard() {
           {tab === 'pricing' && (
             <div className="space-y-6">
               <div className={card}>
-                <h3 className={cn('font-bold mb-1', dk ? 'text-white' : 'text-gray-900')}>Fuel Price</h3>
+                <h3 className={cn('font-bold mb-1', dk ? 'text-white' : 'text-gray-900')}>Fuel Prices</h3>
                 <p className={cn('text-xs mb-4', dk ? 'text-white/50' : 'text-gray-500')}>
-                  Petrol price in GHS per litre. It sets the fuel line on every new fare, for all devices. Existing bookings are not changed.
+                  Price per litre in GHS. Petrol sets the fuel line for motorcycles and cars. Diesel sets it for vans and trucks. Each new fare uses the current price, for all devices. Existing bookings are not changed.
                 </p>
-                <div className="flex flex-wrap items-end gap-3">
-                  <label className="flex flex-col gap-1 text-xs font-semibold">
-                    <span className={dk ? 'text-white/60' : 'text-gray-600'}>GHS per litre</span>
-                    <input type="number" step="0.01" min="0.01" max="100" value={fuelDraft}
-                      onChange={e => setFuelDraft(e.target.value)}
-                      className={cn('w-32 rounded-lg border px-3 py-2 text-sm', dk ? 'bg-surface-dark-3 border-white/10 text-white' : 'bg-gray-50 border-gray-200')} />
-                  </label>
-                  <button type="button" onClick={handleSaveFuel} disabled={fuelSaving}
-                    className="rounded-full bg-brand px-5 py-2 text-sm font-bold text-white transition hover:bg-brand-dark disabled:opacity-50">
-                    {fuelSaving ? 'Saving…' : 'Save fuel price'}
-                  </button>
-                  <span className={cn('text-xs', dk ? 'text-white/40' : 'text-gray-400')}>
-                    Current: GHS {fuelPrice.toFixed(2)}{fuelUpdatedAt ? ` · saved ${new Date(fuelUpdatedAt).toLocaleString()}` : ''}
-                  </span>
+                <div className="space-y-4">
+                  <div className="flex flex-wrap items-end gap-3">
+                    <label className="flex flex-col gap-1 text-xs font-semibold">
+                      <span className={dk ? 'text-white/60' : 'text-gray-600'}>Petrol (GHS per litre)</span>
+                      <input type="number" step="0.01" min="0.01" max="100" value={petrolDraft}
+                        onChange={e => setPetrolDraft(e.target.value)}
+                        className={cn('w-32 rounded-lg border px-3 py-2 text-sm', dk ? 'bg-surface-dark-3 border-white/10 text-white' : 'bg-gray-50 border-gray-200')} />
+                    </label>
+                    <button type="button" onClick={() => handleSaveFuel('petrol')} disabled={fuelSaving !== null}
+                      className="rounded-full bg-brand px-5 py-2 text-sm font-bold text-white transition hover:bg-brand-dark disabled:opacity-50">
+                      {fuelSaving === 'petrol' ? 'Saving…' : 'Save petrol price'}
+                    </button>
+                    <span className={cn('text-xs', dk ? 'text-white/40' : 'text-gray-400')}>
+                      Current: GHS {fuelPrice.toFixed(2)}{fuelUpdatedAt ? ` · saved ${new Date(fuelUpdatedAt).toLocaleString()}` : ''}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-end gap-3">
+                    <label className="flex flex-col gap-1 text-xs font-semibold">
+                      <span className={dk ? 'text-white/60' : 'text-gray-600'}>Diesel (GHS per litre)</span>
+                      <input type="number" step="0.01" min="0.01" max="100" value={dieselDraft}
+                        onChange={e => setDieselDraft(e.target.value)}
+                        className={cn('w-32 rounded-lg border px-3 py-2 text-sm', dk ? 'bg-surface-dark-3 border-white/10 text-white' : 'bg-gray-50 border-gray-200')} />
+                    </label>
+                    <button type="button" onClick={() => handleSaveFuel('diesel')} disabled={fuelSaving !== null}
+                      className="rounded-full bg-brand px-5 py-2 text-sm font-bold text-white transition hover:bg-brand-dark disabled:opacity-50">
+                      {fuelSaving === 'diesel' ? 'Saving…' : 'Save diesel price'}
+                    </button>
+                    <span className={cn('text-xs', dk ? 'text-white/40' : 'text-gray-400')}>
+                      Current: GHS {dieselPrice.toFixed(2)}{dieselUpdatedAt ? ` · saved ${new Date(dieselUpdatedAt).toLocaleString()}` : ''}
+                    </span>
+                  </div>
                 </div>
                 {fuelMessage && (
                   <p className={cn('mt-3 text-xs font-semibold', fuelMessage.ok ? 'text-success' : 'text-danger')}>{fuelMessage.text}</p>

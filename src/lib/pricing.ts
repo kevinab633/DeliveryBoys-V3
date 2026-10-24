@@ -51,6 +51,27 @@ export const FUEL_CONSUMPTION: Record<VehicleType, number> = {
  *  value is set by managers and stored in the app's settings table. */
 export const FUEL_PRICE_PER_LITER = 18.78;
 
+/** Default diesel price in GHS per litre (COMAC projection, 16-31 Oct 2026).
+ *  Not a confirmed pump price: managers set the live value. */
+export const DIESEL_PRICE_PER_LITER = 19.30;
+
+export type FuelType = 'petrol' | 'diesel';
+export interface FuelPrices { petrol: number; diesel: number }
+
+/** Which fuel each vehicle type runs on. */
+export const FUEL_TYPE: Record<VehicleType, FuelType> = {
+  motorcycle: 'petrol',
+  car: 'petrol',
+  van: 'diesel',
+  truck: 'diesel',
+};
+
+export const DEFAULT_FUEL_PRICES: FuelPrices = { petrol: FUEL_PRICE_PER_LITER, diesel: DIESEL_PRICE_PER_LITER };
+
+export function fuelPriceFor(vehicleType: VehicleType, prices: FuelPrices): number {
+  return prices[FUEL_TYPE[vehicleType]];
+}
+
 export function estimateFuelCost(
   distance: number,
   vehicleType: VehicleType,
@@ -125,10 +146,10 @@ export function calculatePrice(
   _rules: PriceRule[] = DEFAULT_RULES,
   manualOverrides?: Record<string, number>,
   pricingMode: 'auto' | 'manual' | 'hybrid' = 'auto',
-  fuelPricePerLitre: number = FUEL_PRICE_PER_LITER
+  fuelPrices: FuelPrices = DEFAULT_FUEL_PRICES
 ): { price: number; breakdown: PriceBreakdown } {
-  // Same formula for every vehicle; fuel consumption makes the difference.
-  const m = formulaPricing(distance, vehicleType, fuelPricePerLitre);
+  // Same formula for every vehicle; fuel consumption and fuel type set the difference.
+  const m = formulaPricing(distance, vehicleType, fuelPriceFor(vehicleType, fuelPrices));
   let total = m.total;
 
   if ((pricingMode === 'manual' || pricingMode === 'hybrid') && manualOverrides) {
