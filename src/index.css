@@ -297,6 +297,14 @@ p { text-wrap: pretty; }
   h2 { letter-spacing: -0.02em; }
 }
 
+/* Phone hero: the image fades into the page at the bottom instead of
+   being cut off. Desktop keeps the full image. */
+@media (max-width: 767px) {
+  .hero-bg-image {
+    -webkit-mask-image: linear-gradient(to bottom, #000 62%, transparent 100%);
+    mask-image: linear-gradient(to bottom, #000 62%, transparent 100%);
+  }
+}
 /* Floating navigation chrome: the brand and menu remain visible without
    recreating the old full-width navigation bar. */
 .app-navbar {

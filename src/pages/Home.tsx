@@ -255,8 +255,8 @@ function CustomerHomePage() {
       <section className="relative min-h-[100vh] flex items-center overflow-hidden">
         <div className={cn('legacy-hero-layer absolute inset-0 z-0', supportsWebgl2 && 'webgl-hero-hidden')} style={{ opacity: legacyHeroOpacity }}>
           <picture className="block h-full w-full">
-            <source media="(max-width: 767px)" srcSet="/images/hero-rider-portrait.jpg" />
-            <img src="/images/hero-rider-wide.jpg" alt="" className="h-full w-full object-cover object-bottom" />
+            <source media="(max-width: 767px)" srcSet="/images/hero-rider-portrait-tall.jpg" />
+            <img src="/images/hero-rider-wide-logo.jpg" alt="" className="hero-bg-image h-full w-full object-cover object-bottom" />
           </picture>
           <div className={cn('absolute inset-0',
             dk ? 'bg-gradient-to-br from-black/97 via-black/85 to-brand/15' : 'bg-gradient-to-br from-white/97 via-white/90 to-brand/8'
