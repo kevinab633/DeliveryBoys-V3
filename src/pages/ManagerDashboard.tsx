@@ -33,11 +33,11 @@ export default function ManagerDashboard() {
   const handleSaveFuel = async (fuel: 'petrol' | 'diesel') => {
     const value = Number(fuel === 'petrol' ? petrolDraft : dieselDraft);
     setFuelSaving(fuel);
-    const ok = await saveFuel(fuel, value);
+    const result = await saveFuel(fuel, value);
     setFuelSaving(null);
-    setFuelMessage(ok
+    setFuelMessage(result.ok
       ? { ok: true, text: `${fuel === 'petrol' ? 'Petrol' : 'Diesel'} price saved. New bookings will use it.` }
-      : { ok: false, text: 'Could not save. Enter a price between 0.01 and 100, and check the connection.' });
+      : { ok: false, text: `Could not save: ${result.error ?? 'unknown error'}` });
   };
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get('tab') as Tab | null;

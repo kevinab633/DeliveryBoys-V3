@@ -15,7 +15,7 @@ interface FuelPriceStore {
   /** Pull the shared prices from the database. Keeps the last known values if offline. */
   load: () => Promise<void>;
   /** Save a new price for everyone. Returns false if validation or the save fails. */
-  save: (fuel: FuelKind, price: number) => Promise<boolean>;
+  save: (fuel: FuelKind, price: number) => Promise<{ ok: boolean; error?: string }>;
 }
 
 export const useFuelPriceStore = create<FuelPriceStore>()(persist((set) => ({
@@ -35,13 +35,15 @@ export const useFuelPriceStore = create<FuelPriceStore>()(persist((set) => ({
   },
 
   save: async (fuel, price) => {
-    if (!Number.isFinite(price) || price <= 0 || price > 100) return false;
-    const ok = await saveFuelPrice(fuel, price);
-    if (!ok) return false;
+    if (!Number.isFinite(price) || price <= 0 || price > 100) {
+      return { ok: false, error: 'Enter a price between 0.01 and 100.' };
+    }
+    const result = await saveFuelPrice(fuel, price);
+    if (!result.ok) return result;
     const now = Date.now();
     set(fuel === 'petrol'
       ? { pricePerLitre: price, updatedAt: now }
       : { dieselPricePerLitre: price, dieselUpdatedAt: now });
-    return true;
+    return { ok: true };
   },
 }), { name: 'db-fuel-price' }));

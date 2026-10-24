@@ -21,11 +21,16 @@ export async function fetchFuelPrice(fuel: FuelKind): Promise<{ price: number; u
   return { price, updatedAt: Date.parse(data.updated_at) || Date.now() };
 }
 
-export async function saveFuelPrice(fuel: FuelKind, price: number): Promise<boolean> {
-  const { error } = await supabase.from('app_settings').upsert({
-    key: KEYS[fuel],
-    value: String(price),
-    updated_at: new Date().toISOString(),
-  });
-  return !error;
+export async function saveFuelPrice(fuel: FuelKind, price: number): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const { error } = await supabase.from('app_settings').upsert({
+      key: KEYS[fuel],
+      value: String(price),
+      updated_at: new Date().toISOString(),
+    });
+    if (error) return { ok: false, error: `${error.code ?? ''} ${error.message}`.trim() };
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'network error' };
+  }
 }
