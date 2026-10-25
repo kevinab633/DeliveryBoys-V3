@@ -7,9 +7,10 @@ import { useAuthStore } from '../stores/authStore';
 import { useOrderStore } from '../stores/orderStore';
 import { syncService } from '../lib/syncService';
 import { cn, formatCurrency, formatDistance, formatDate, timeAgo } from '../lib/utils';
-import { calculateDistance } from '../lib/pricing';
+import { calculateDistance, riderEarningsForOrder } from '../lib/pricing';
 import { RiderProfile, Order } from '../lib/types';
 import MapView from '../components/MapView';
+import CommissionCard from '../components/CommissionCard';
 import { fetchTurnByTurnRoute, DirectionStep, CongestionSegment } from '../components/MapView';
 import { showToast } from '../components/Toast';
 
@@ -111,8 +112,8 @@ function OrderDetailRows({ order, dk, showEarnings }: { order: Order; dk: boolea
       </div>
       {showEarnings && (
         <div className="flex justify-between text-xs">
-          <span className={dk ? 'text-white/40' : 'text-surface-light-3'}>Your earnings (75%)</span>
-          <span className={cn('font-bold', 'text-success')}>{formatCurrency(order.price * 0.75)}</span>
+          <span className={dk ? 'text-white/40' : 'text-surface-light-3'}>Your earnings</span>
+          <span className={cn('font-bold', 'text-success')}>{formatCurrency(riderEarningsForOrder(order))}</span>
         </div>
       )}
     </div>
@@ -1282,11 +1283,12 @@ export default function RiderDashboard() {
             </button>
           </div>
 
+          <CommissionCard rider={rider} orders={orders} dk={dk} className="mt-6" />
+
           {/* Stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
             {[
               { icon: Package, label: 'Deliveries', value: rider.totalDeliveries || 0 },
-              { icon: Star, label: 'Rating', value: rider.rating > 0 ? rider.rating.toFixed(1) : 'No ratings' },
               { icon: DollarSign, label: 'Earnings', value: formatCurrency(rider.earnings) },
               { icon: Clock, label: 'Active', value: activeOrder ? 'Yes' : 'No' },
             ].map(s => (

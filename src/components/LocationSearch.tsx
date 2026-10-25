@@ -103,7 +103,7 @@ export default function LocationSearch({
       <div className="relative">
         <Search size={16} className={cn('absolute left-3 top-1/2 -translate-y-1/2 z-[1]', dk ? 'text-white/30' : 'text-gray-400')} />
         <input
-          type="text" value={query}
+          type="text" id={`location-${label.toLowerCase().replace(/\s+/g, '-')}`} aria-label={label} value={query}
           onChange={e => handleSearch(e.target.value)}
           onFocus={handleFocus}
           placeholder={placeholder || 'Search location...'}
@@ -114,19 +114,19 @@ export default function LocationSearch({
         />
         <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
           {hasQuery && (
-            <button onClick={() => { setQuery(''); setResults([]); setShow(false); }}
+            <button type="button" aria-label={`Clear ${label}`} onClick={() => { setQuery(''); setResults([]); setShow(false); }}
               className={cn('p-1 rounded-md transition', dk ? 'text-white/30 hover:text-white/60' : 'text-gray-400 hover:text-gray-600')}>
               <X size={15} />
             </button>
           )}
           {hasPin && (
-            <button onClick={onPinClick} title="Drop pin on map"
+            <button type="button" aria-label={`Drop ${label.toLowerCase()} pin on map`} aria-pressed={pinActive} onClick={onPinClick} title="Drop pin on map"
               className={cn('w-7 h-7 rounded-full flex items-center justify-center transition',
                 pinActive
                   ? 'bg-brand text-white shadow-sm'
                   : dk ? 'text-white/30 hover:bg-white/5 hover:text-white/60' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'
               )}>
-              <MapPin size={14} />
+              <MapPin size={14} /><span className="hidden sm:inline text-[11px] font-semibold">Map</span>
             </button>
           )}
         </div>

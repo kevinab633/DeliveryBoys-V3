@@ -4,8 +4,9 @@ import { v4 as uuidv4 } from 'uuid';
 import { Order, OrderStatus, OrderType, VehicleType, Location, RiderProfile } from '../lib/types';
 import { formatDate, generateOrderCode } from '../lib/utils';
 import { syncService } from '../lib/syncService';
-import { calculatePrice, calculateDistance } from '../lib/pricing';
-import { getDefaultRules } from '../lib/pricing';
+import { calculatePrice, calculateDistance, riderEarningsForOrder } from '../lib/pricing';
+import { useFuelPriceStore } from './fuelPriceStore';
+import { useContentStore } from './contentStore';
 import { useAuthStore } from './authStore';
 import { useNotificationStore } from './notificationStore';
 import { showToast } from '../components/Toast';
@@ -175,7 +176,10 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
 
   createOrder: (data) => {
     const distance = calculateDistance(data.pickup.lat, data.pickup.lng, data.dropoff.lat, data.dropoff.lng);
-    const { price } = calculatePrice(distance, data.vehicleType, getDefaultRules());
+    // Same inputs as the booking screen, so the stored price matches what the customer saw.
+    const content = useContentStore.getState();
+    const fuels = useFuelPriceStore.getState();
+    const { price } = calculatePrice(distance, data.vehicleType, content.priceRules, content.manualOverrides, content.pricingMode, { petrol: fuels.pricePerLitre, diesel: fuels.dieselPricePerLitre });
     const orderType: OrderType = data.orderType || 'instant';
     const baseOrder: Order = {
       // NOTE: the Supabase `orders.id` column is a real `uuid` — a
@@ -336,7 +340,7 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
         // without this, the dashboard's delivery/earnings counters only
         // ever reflected orders still held in local session state, so
         // they reset on reload and never actually accumulated.
-        useAuthStore.getState().recordDelivery(order.riderId, order.price * 0.75);
+        useAuthStore.getState().recordDelivery(order.riderId, riderEarningsForOrder(order));
       }
       fireBrowserNotification('Delivered 🎉', `Order ${order.displayCode} has been delivered.`);
     } else if (status === 'cancelled') {

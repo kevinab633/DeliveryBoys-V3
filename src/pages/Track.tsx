@@ -303,6 +303,19 @@ export default function Track() {
     </>
   );
 
+  const orderList = (
+    <div className="space-y-2" aria-label="Your recent orders">
+      <p className={cn('text-xs font-bold uppercase tracking-wider', dk ? 'text-white/40' : 'text-gray-500')}>Choose an order to track</p>
+      {orders.length === 0 ? <p className={cn('py-6 text-sm', dk ? 'text-white/40' : 'text-gray-500')}>No recent orders yet.</p> : orders.slice(0, 8).map(o => (
+        <button type="button" key={o.id} onClick={() => { setSelectedId(o.id); setTrackId(o.id); setSearched(true); setSheetOpen(false); }} className={cn('app-card flex w-full items-center gap-3 p-3 text-left transition hover:border-brand/40', dk ? 'bg-surface-dark-2' : 'bg-white')}>
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand"><Package size={17} /></span>
+          <span className="min-w-0 flex-1"><span className={cn('block truncate text-sm font-bold', dk ? 'text-white' : 'text-gray-900')}>{o.displayCode || o.id.slice(0, 8).toUpperCase()}</span><span className={cn('block truncate text-xs', dk ? 'text-white/45' : 'text-gray-500')}>{o.pickup.address} → {o.dropoff.address}</span></span>
+          <ChevronDown size={16} className="-rotate-90 text-brand" />
+        </button>
+      ))}
+    </div>
+  );
+
   const notFound = (
     <div className="py-10 text-center">
       <Package size={44} className={cn('mx-auto mb-3', dk ? 'text-white/20' : 'text-surface-light-3')} />
@@ -348,7 +361,7 @@ export default function Track() {
               <p className={cn('text-xs mt-0.5', dk ? 'text-white/40' : 'text-text-light-2')}>Live rider location & route</p>
             </div>
             {searchForm}
-            {order ? orderDetails : searched ? notFound : hint}
+            {order ? orderDetails : searched ? notFound : orderList}
           </div>
         </div>
       </div>
@@ -421,7 +434,7 @@ export default function Track() {
                 <h1 className={cn('text-lg font-extrabold', dk ? 'text-white' : 'text-text-light')}>Track Delivery</h1>
               </div>
               {searchForm}
-              {order ? orderDetails : searched ? notFound : hint}
+              {order ? orderDetails : searched ? notFound : orderList}
             </div>
           </div>
         )}

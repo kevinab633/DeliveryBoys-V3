@@ -49,7 +49,7 @@ export function fireBrowserNotification(title: string, body: string) {
   try {
     if (typeof Notification === 'undefined') return;
     if (Notification.permission !== 'granted') return;
-    const n = new Notification(title, { body, icon: '/favicon.svg' });
+    const n = new Notification(title, { body, icon: '/icons/delivery-boys-icon-192.png' });
     n.onclick = () => {
       try { window.focus(); n.close(); } catch { /* ignore */ }
     };

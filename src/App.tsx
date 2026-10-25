@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence, MotionConfig } from 'framer-motion';
 import { useEffect } from 'react';
 import { useThemeStore } from './stores/themeStore';
@@ -7,11 +7,13 @@ import { useAuthStore } from './stores/authStore';
 import { requestNotifyPermission } from './lib/browserNotify';
 import { subscribeToPush } from './lib/pushClient';
 import { syncService } from './lib/syncService';
+import { useFuelPriceStore } from './stores/fuelPriceStore';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
-import WhatsAppFloat from './components/WhatsAppFloat';
 import ToastContainer from './components/Toast';
+import CookieConsent from './components/CookieConsent';
 import { DebugErrorBoundary } from './components/DebugBanner';
+import { PageSkeleton } from './components/Skeleton';
 import Home from './pages/Home';
 import Services from './pages/Services';
 import Book from './pages/Book';
@@ -23,6 +25,8 @@ import RiderDashboard from './pages/RiderDashboard';
 import ManagerDashboard from './pages/ManagerDashboard';
 import Profile from './pages/Profile';
 import MyOrders from './pages/MyOrders';
+import VerificationPage from './pages/Verification';
+import LegalPage from './pages/Legal';
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -32,6 +36,12 @@ function ScrollToTop() {
 
 // Routes where the map is full-screen — hide Footer & WhatsApp FAB
 const FULL_SCREEN_ROUTES = ['/book', '/track', '/rider/dashboard'];
+const MINIMAL_ROUTES = ['/auth/login', '/auth/signup', '/manager/login', '/manager', '/rider/verification'];
+
+function CustomerOnly({ children }: { children: React.ReactNode }) {
+  const user = useAuthStore(s => s.user);
+  return user?.role === 'customer' ? <>{children}</> : <Navigate to="/auth/login?role=customer" replace />;
+}
 
 function AppContent() {
   const theme = useThemeStore(s => s.theme);
@@ -39,6 +49,7 @@ function AppContent() {
   const { pathname } = location;
   const isFullScreen = FULL_SCREEN_ROUTES.includes(pathname);
   const user = useAuthStore(s => s.user);
+  const usersLoaded = useAuthStore(s => s.usersLoaded);
 
   // ── Browser Notification permission: requested once, the first time
   //    a user is logged in. Graceful no-op if denied/unsupported. ────
@@ -61,6 +72,7 @@ function AppContent() {
   //    in whichever browser created them. ─────────────────────────────
   useEffect(() => {
     void useAuthStore.getState().loadUsers();
+    void useFuelPriceStore.getState().load();
   }, []);
 
   // ── Re-sync on resume: Android suspends/kills the Realtime WebSocket
@@ -77,6 +89,7 @@ function AppContent() {
       if (document.visibilityState !== 'visible') return;
       void useOrderStore.getState().fetchOrders();
       void useAuthStore.getState().loadUsers();
+      void useFuelPriceStore.getState().load();
       syncService.reconnectIfNeeded();
     }
     document.addEventListener('visibilitychange', handleVisibility);
@@ -126,6 +139,14 @@ function AppContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
+  if (!usersLoaded) {
+    return (
+      <div className={theme === 'dark' ? 'theme-dark' : 'theme-light'}>
+        <PageSkeleton />
+      </div>
+    );
+  }
+
   return (
     <div className={theme === 'dark' ? 'theme-dark' : 'theme-light'}>
       <ScrollToTop />
@@ -148,8 +169,8 @@ function AppContent() {
         <Routes location={location}>
           <Route path="/" element={<Home />} />
           <Route path="/services" element={<Services />} />
-          <Route path="/book" element={<Book />} />
-          <Route path="/track" element={<Track />} />
+          <Route path="/book" element={<CustomerOnly><Book /></CustomerOnly>} />
+          <Route path="/track" element={<CustomerOnly><Track /></CustomerOnly>} />
           <Route path="/about" element={<About />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/auth/login" element={<LoginPage />} />
@@ -158,14 +179,19 @@ function AppContent() {
           <Route path="/rider/dashboard" element={<RiderDashboard />} />
           <Route path="/manager" element={<ManagerDashboard />} />
           <Route path="/profile" element={<Profile />} />
-          <Route path="/my-orders" element={<MyOrders />} />
+          <Route path="/my-orders" element={<CustomerOnly><MyOrders /></CustomerOnly>} />
+          <Route path="/rider/verification" element={<VerificationPage />} />
+          <Route path="/privacy" element={<LegalPage kind="privacy" />} />
+          <Route path="/terms" element={<LegalPage kind="terms" />} />
+          <Route path="/refunds" element={<LegalPage kind="refund" />} />
+          <Route path="/cookies" element={<LegalPage kind="cookies" />} />
         </Routes>
           </motion.div>
         </AnimatePresence>
       </main>
-      {!isFullScreen && <Footer />}
-      {!isFullScreen && <WhatsAppFloat />}
+      {!isFullScreen && !MINIMAL_ROUTES.some(route => pathname.startsWith(route)) && <Footer />}
       <ToastContainer />
+      <CookieConsent />
     </div>
   );
 }

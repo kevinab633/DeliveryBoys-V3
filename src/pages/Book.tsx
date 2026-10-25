@@ -1,12 +1,13 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bike, Car, Truck, ArrowRight, ArrowLeft as ArrowLeftIcon, Info, CheckCircle2, ChevronUp, ChevronDown, Zap, Calendar, Star, X, AlertTriangle } from 'lucide-react';
+import { Bike, Car, Truck, ArrowRight, ArrowLeft as ArrowLeftIcon, Info, CheckCircle2, ChevronUp, ChevronDown, Zap, Calendar, X, AlertTriangle } from 'lucide-react';
 import { useThemeStore } from '../stores/themeStore';
 import { useAuthStore } from '../stores/authStore';
 import { useOrderStore } from '../stores/orderStore';
 import { useContentStore } from '../stores/contentStore';
-import { calculateDistance, calculatePrice, estimateFuelCost } from '../lib/pricing';
+import { calculateDistance, calculatePrice, estimateFuelCost, fuelPriceFor } from '../lib/pricing';
+import { useFuelPriceStore } from '../stores/fuelPriceStore';
 import { cn, formatCurrency, formatDistance, formatDate } from '../lib/utils';
 import { showToast } from '../components/Toast';
 import { VehicleType, OrderType } from '../lib/types';
@@ -47,6 +48,19 @@ export default function Book() {
   const [phone, setPhone] = useState(user?.phone || '');
   const [pinMode, setPinMode] = useState<'pickup' | 'dropoff' | null>(null);
   const [sheetOpen, setSheetOpen] = useState(true);
+  const [customerGps, setCustomerGps] = useState<{ lat: number; lng: number } | null>(null);
+
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    const watch = navigator.geolocation.watchPosition(
+      ({ coords }) => {
+        if (Number.isFinite(coords.latitude) && Number.isFinite(coords.longitude)) setCustomerGps({ lat: coords.latitude, lng: coords.longitude });
+      },
+      () => { /* location is optional; booking still works without it */ },
+      { enableHighAccuracy: true, maximumAge: 15000, timeout: 10000 },
+    );
+    return () => navigator.geolocation.clearWatch(watch);
+  }, []);
 
   // ── Booking phase state ─────────────────────────────────────────
   const [phase, setPhase] = useState<BookPhase>('form');
@@ -84,7 +98,8 @@ export default function Book() {
   // ── Live order + rider data (reactive — refreshes on any change) ─
   const activeOrder = orders.find(o => o.id === orderId);
   const riders = getRiders();
-  const onlineRiders = riders.filter(r => r.availability === 'online' && r.location);
+  const onlineRiders = riders.filter(r => r.status === 'approved' && r.availability === 'online' && r.location);
+  const availableVehicleTypes = Array.from(new Set(onlineRiders.map(r => r.vehicleType)));
   const assignedRider = activeOrder?.riderId
     ? riders.find(r => r.id === activeOrder.riderId)
     : undefined;
@@ -145,9 +160,14 @@ export default function Book() {
     return () => clearInterval(iv);
   }, [phase, orderId]);
 
-  // Auto-open the sheet when the phase changes on mobile
+  // Keep the map visible while a rider is being found. The previous
+  // behaviour expanded the mobile sheet to the full viewport as soon as
+  // live sync changed the order to "searching", which covered the MapLibre
+  // map and made it look like the map had stopped rendering. The collapsed
+  // status bar still gives the customer the live state and can be tapped for
+  // the full details.
   useEffect(() => {
-    if (phase !== 'form') setSheetOpen(true);
+    if (phase === 'searching') setSheetOpen(false);
   }, [phase]);
 
   const resetForm = useCallback(() => {
@@ -158,13 +178,22 @@ export default function Book() {
   }, []);
 
   const distance = pickup && dropoff ? calculateDistance(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng) : 0;
-  const pricing = distance > 0 ? calculatePrice(distance, vehicle, priceRules, manualOverrides, pricingMode) : null;
-  const fuelEst = distance > 0 ? estimateFuelCost(distance, vehicle) : 0;
+  const fuelPrice = useFuelPriceStore(s => s.pricePerLitre);
+  const dieselPrice = useFuelPriceStore(s => s.dieselPricePerLitre);
+  const fuelPrices = { petrol: fuelPrice, diesel: dieselPrice };
+  const pricing = distance > 0 ? calculatePrice(distance, vehicle, priceRules, manualOverrides, pricingMode, fuelPrices) : null;
+  const fuelEst = distance > 0 ? estimateFuelCost(distance, vehicle, fuelPriceFor(vehicle, fuelPrices)) : 0;
+
+  useEffect(() => {
+    if (availableVehicleTypes.length > 0 && !availableVehicleTypes.includes(vehicle)) {
+      setVehicle(availableVehicleTypes[0]);
+    }
+  }, [availableVehicleTypes.join('|'), vehicle]);
 
   const priceForVehicle = useCallback((vt: VehicleType) => {
     if (distance <= 0) return null;
-    return calculatePrice(distance, vt, priceRules, manualOverrides, pricingMode);
-  }, [distance, priceRules, manualOverrides, pricingMode]);
+    return calculatePrice(distance, vt, priceRules, manualOverrides, pricingMode, { petrol: fuelPrice, diesel: dieselPrice });
+  }, [distance, priceRules, manualOverrides, pricingMode, fuelPrice, dieselPrice]);
 
   const handleMapClick = useCallback(async (lat: number, lng: number) => {
     const addr = await reverseGeocode(lat, lng);
@@ -226,6 +255,7 @@ export default function Book() {
   const markers = [
     ...(pickup && Number.isFinite(pickup.lat) && Number.isFinite(pickup.lng) ? [{ lat: pickup.lat, lng: pickup.lng, color: '#10B981', popup: 'Pickup: ' + pickup.address, icon: 'pickup' as const }] : []),
     ...(dropoff && Number.isFinite(dropoff.lat) && Number.isFinite(dropoff.lng) ? [{ lat: dropoff.lat, lng: dropoff.lng, color: '#C41E1E', popup: 'Drop-off: ' + dropoff.address, icon: 'dropoff' as const }] : []),
+    ...(customerGps ? [{ lat: customerGps.lat, lng: customerGps.lng, color: '#2563EB', popup: 'Your current location', icon: 'rider' as const }] : []),
     // Online riders' live locations — bike icons, no popup, no route.
     ...onlineRiders
       .filter(r => r.location && Number.isFinite(r.location.lat) && Number.isFinite(r.location.lng))
@@ -378,7 +408,12 @@ export default function Book() {
       <div>
         <label className={cn('text-sm font-semibold mb-2 block', dk ? 'text-white/70' : 'text-text-light-2')}>Vehicle Type</label>
         <div className="space-y-2">
-          {vehicles.map(v => {
+          {availableVehicleTypes.length === 0 && (
+            <p className={cn('rounded-2xl border px-4 py-3 text-sm', dk ? 'border-white/10 text-white/50' : 'border-surface-light-3 text-text-light-2')}>
+              No approved riders are online right now. Vehicle options will appear when a rider becomes available.
+            </p>
+          )}
+          {vehicles.filter(v => availableVehicleTypes.includes(v.type)).map(v => {
             const vPrice = priceForVehicle(v.type);
             const selected = vehicle === v.type;
             return (
@@ -431,25 +466,46 @@ export default function Book() {
               <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Distance</span>
               <span className={cn('font-semibold', dk ? 'text-white' : 'text-text-light')}>{formatDistance(distance)}</span>
             </div>
-            <div className="flex justify-between">
-              <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Base Fare</span>
-              <span className={dk ? 'text-white/70' : 'text-text-light-2'}>{formatCurrency(pricing.breakdown.baseFare)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Distance Fare</span>
-              <span className={dk ? 'text-white/70' : 'text-text-light-2'}>{formatCurrency(pricing.breakdown.distanceFare)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Fuel Cost</span>
-              <span className={dk ? 'text-white/70' : 'text-text-light-2'}>{formatCurrency(pricing.breakdown.fuelCost)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Service Fee</span>
-              <span className={dk ? 'text-white/70' : 'text-text-light-2'}>{formatCurrency(pricing.breakdown.companyFee)}</span>
-            </div>
-            <p className={cn('text-xs pt-1', dk ? 'text-white/25' : 'text-surface-light-3')}>
-              Est. fuel: {formatCurrency(fuelEst)} ({vehicle})
-            </p>
+            {pricing.breakdown.riderPay !== undefined ? (
+              <>
+                <div className="flex justify-between">
+                  <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Rider Pay</span>
+                  <span className={dk ? 'text-white/70' : 'text-text-light-2'}>{formatCurrency(pricing.breakdown.riderPay)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Fuel</span>
+                  <span className={dk ? 'text-white/70' : 'text-text-light-2'}>{formatCurrency(pricing.breakdown.fuelCost)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Service Fee</span>
+                  <span className={dk ? 'text-white/70' : 'text-text-light-2'}>{formatCurrency(pricing.breakdown.serviceFee ?? 0)}</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex justify-between">
+                  <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Base Fare</span>
+                  <span className={dk ? 'text-white/70' : 'text-text-light-2'}>{formatCurrency(pricing.breakdown.baseFare)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Distance Fare</span>
+                  <span className={dk ? 'text-white/70' : 'text-text-light-2'}>{formatCurrency(pricing.breakdown.distanceFare)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Fuel Cost</span>
+                  <span className={dk ? 'text-white/70' : 'text-text-light-2'}>{formatCurrency(pricing.breakdown.fuelCost)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Service Fee</span>
+                  <span className={dk ? 'text-white/70' : 'text-text-light-2'}>{formatCurrency(pricing.breakdown.companyFee)}</span>
+                </div>
+              </>
+            )}
+            {pricing.breakdown.riderPay === undefined && (
+              <p className={cn('text-xs pt-1', dk ? 'text-white/25' : 'text-surface-light-3')}>
+                Est. fuel: {formatCurrency(fuelEst)} ({vehicle})
+              </p>
+            )}
           </div>
         </motion.div>
       )}
@@ -536,10 +592,6 @@ export default function Book() {
       </div>
       {assignedRider && (
         <div className={cn('flex items-center justify-center gap-4 text-xs', dk ? 'text-white/50' : 'text-text-light-2')}>
-          <span className="flex items-center gap-1">
-            <Star size={12} className="text-yellow-400 fill-yellow-400" />
-            {assignedRider.rating > 0 ? assignedRider.rating.toFixed(1) : 'New'}
-          </span>
           <span>{assignedRider.totalDeliveries || 0} deliveries</span>
           <span className="uppercase">{assignedRider.vehiclePlate}</span>
         </div>
@@ -725,9 +777,10 @@ export default function Book() {
           Hidden during pin-drop, where its own back/Done bar takes over. ── */}
       {!pinMode && (
         <button onClick={() => navigate('/')}
-          className="absolute z-20 w-11 h-11 rounded-full bg-white shadow-lg flex items-center justify-center text-text-light-2"
+          aria-label="Back to home" className="absolute z-20 flex h-11 items-center gap-2 rounded-full bg-white px-3 text-sm font-semibold text-text-light-2 shadow-lg"
           style={{ top: 'calc(env(safe-area-inset-top, 0px) + 12px)', left: 12 }}>
           <ArrowLeftIcon size={20} />
+          <span className="hidden sm:inline">Back</span>
         </button>
       )}
 

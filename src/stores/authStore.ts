@@ -24,6 +24,7 @@ interface AuthStore {
   signupRiderDirect: (data: { name: string; email?: string; phone?: string; vehicleType: VehicleType; vehiclePlate: string; nationalIdUrl: string; photoUrl: string }) => Promise<void>;
   logout: () => void;
   updateProfile: (data: Partial<User>) => void;
+  updateRiderVerification: (data: { nationalIdUrl?: string; photoUrl?: string; selfieUrl?: string }) => Promise<void>;
   addContact: (type: 'email' | 'phone', value: string) => void;
   // Manager actions
   approveRider: (riderId: string) => void;
@@ -35,6 +36,10 @@ interface AuthStore {
   persistRiderLocation: (lat: number, lng: number) => void;
   setRiderAvailability: (status: 'online' | 'offline' | 'busy') => void;
   recordDelivery: (riderId: string, earnedAmount: number) => void;
+  /** Rider reports they have paid the commission shown. */
+  requestCommissionPayment: (amount: number) => void;
+  /** Manager confirms the payment was received; owed resets to zero. */
+  confirmCommissionPayment: (riderId: string) => void;
   // ── Remote sync handlers (called by syncService on incoming events) ──
   /** A rider on another device announced they are online. */
   applyRemoteRiderPresence: (rider: RiderProfile) => void;
@@ -269,6 +274,20 @@ export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
     };
   }),
 
+  updateRiderVerification: async (data) => {
+    const current = get().user;
+    if (!current || current.role !== 'rider') return;
+    const patch = { ...data, status: 'pending' as const };
+    const updated = { ...current, ...patch } as RiderProfile;
+    set(s => ({ user: updated, allUsers: s.allUsers.map(u => u.id === updated.id ? updated : u) }));
+    await usersApi.update(updated.id, {
+      national_id_url: updated.nationalIdUrl || null,
+      photo_url: updated.photoUrl || null,
+      selfie_url: (updated as RiderProfile & { selfieUrl?: string }).selfieUrl || null,
+      status: 'pending',
+    });
+  },
+
   addContact: (type, value) => set(s => {
     if (!s.user) return s;
     const updated = { ...s.user, [type]: value };
@@ -380,6 +399,35 @@ export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
   // correctly if triggered elsewhere (e.g. a manager action) later on.
   // Now writes through to Supabase so the count/earnings persist across
   // devices, not just the browser that completed the delivery.
+  requestCommissionPayment: (amount) => {
+    const me = get().user;
+    if (!me || me.role !== 'rider' || !(amount > 0)) return;
+    const request = { amount, requestedAt: Date.now() };
+    void usersApi.update(me.id, { commission_payment_request: request });
+    set(st => ({
+      user: { ...(st.user as RiderProfile), commissionPaymentRequest: request },
+      allUsers: st.allUsers.map(u => u.id === me.id ? { ...u, commissionPaymentRequest: request } : u),
+    }));
+  },
+
+  confirmCommissionPayment: (riderId) => {
+    const rider = get().allUsers.find((u): u is RiderProfile => u.id === riderId && u.role === 'rider');
+    const request = rider?.commissionPaymentRequest;
+    if (!rider || !request) return;
+    // Settle up to the moment the rider reported paying; later deliveries stay owed.
+    const settledAt = request.requestedAt;
+    void usersApi.update(riderId, {
+      commission_settled_at: new Date(settledAt).toISOString(),
+      commission_payment_request: null,
+    });
+    set(st => ({
+      allUsers: st.allUsers.map(u => u.id === riderId && u.role === 'rider'
+        ? { ...u, commissionSettledAt: settledAt, commissionPaymentRequest: undefined } : u),
+      user: st.user?.id === riderId && st.user.role === 'rider'
+        ? { ...st.user, commissionSettledAt: settledAt, commissionPaymentRequest: undefined } : st.user,
+    }));
+  },
+
   recordDelivery: (riderId, earnedAmount) => {
     const rider = get().allUsers.find(u => u.id === riderId && u.role === 'rider') as RiderProfile | undefined;
     if (!rider) return;

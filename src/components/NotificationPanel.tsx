@@ -19,7 +19,7 @@ export default function NotificationPanel() {
 
   return (
     <div className="relative">
-      <button onClick={() => setOpen(!open)} className={cn('p-2 rounded-xl transition relative', dk ? 'text-white/60 hover:bg-white/5' : 'text-gray-500 hover:bg-gray-100')}>
+      <button type="button" aria-label={`Notifications${unread.length ? `, ${unread.length} unread` : ''}`} aria-expanded={open} onClick={() => setOpen(!open)} className={cn('p-2 rounded-xl transition relative', dk ? 'text-white/60 hover:bg-white/5' : 'text-gray-500 hover:bg-gray-100')}>
         <Bell size={20} />
         {unread.length > 0 && (
           <span className="absolute -top-0.5 -right-0.5 w-5 h-5 rounded-full bg-brand text-white text-[10px] flex items-center justify-center font-bold animate-pulse">
@@ -47,7 +47,7 @@ export default function NotificationPanel() {
                       <CheckCheck size={14} /> Mark all read
                     </button>
                   )}
-                  <button onClick={() => setOpen(false)} className={dk ? 'text-white/30' : 'text-gray-400'}><X size={18} /></button>
+                  <button type="button" aria-label="Close notifications" onClick={() => setOpen(false)} className={dk ? 'text-white/30' : 'text-gray-400'}><X size={18} /></button>
                 </div>
               </div>
               <div className="max-h-80 overflow-y-auto">

@@ -34,7 +34,7 @@ export default function ToastContainer() {
   const colors = { success: 'text-success border-success/20', warning: 'text-warning border-warning/20', info: 'text-info border-info/20', error: 'text-danger border-danger/20' };
 
   return (
-    <div className="toast-container">
+    <div className="toast-container" aria-live="polite" aria-atomic="false">
       {toasts.map(t => {
         const Icon = icons[t.type];
         return (
@@ -45,7 +45,7 @@ export default function ToastContainer() {
               <p className={cn('text-sm font-semibold', dk ? 'text-white' : 'text-gray-900')}>{t.title}</p>
               <p className={cn('text-xs mt-0.5 truncate', dk ? 'text-white/50' : 'text-gray-500')}>{t.message}</p>
             </div>
-            <button onClick={() => setToasts(prev => prev.filter(x => x.id !== t.id))} className={cn('shrink-0', dk ? 'text-white/30 hover:text-white/60' : 'text-gray-400 hover:text-gray-600')}>
+            <button type="button" aria-label={`Dismiss ${t.title}`} onClick={() => setToasts(prev => prev.filter(x => x.id !== t.id))} className={cn('shrink-0', dk ? 'text-white/30 hover:text-white/60' : 'text-gray-400 hover:text-gray-600')}>
               <X size={14} />
             </button>
           </div>

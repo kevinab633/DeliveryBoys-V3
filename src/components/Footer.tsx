@@ -1,28 +1,32 @@
 import { Link } from 'react-router-dom';
 import { MapPin, Phone, Mail, Clock } from 'lucide-react';
 import { useThemeStore } from '../stores/themeStore';
+import { useAuthStore } from '../stores/authStore';
 import { cn } from '../lib/utils';
 
 export default function Footer() {
   const dk = useThemeStore(s => s.theme === 'dark');
+  const user = useAuthStore(s => s.user);
+  const bookingPath = user?.role === 'customer' ? '/book' : '/auth/login?role=customer';
+  const trackingPath = user?.role === 'customer' ? '/track' : '/auth/login?role=customer';
   return (
     <footer className={cn('border-t transition-colors', dk ? 'bg-surface-dark-2 border-white/5' : 'bg-gray-50 border-gray-200')}>
       <div className="max-w-7xl mx-auto px-6 py-14">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10">
           <div>
             <div className="flex items-center gap-2 mb-4">
-              <img src="/images/logo.jpeg" alt="DB" className="h-12 w-12 rounded-full object-cover" />
+              <img src="/images/logo.jpeg" alt="Delivery Boys logo" className="h-12 w-12 rounded-full object-cover" />
               <div>
                 <span className={cn('font-extrabold text-lg', dk ? 'text-white' : 'text-gray-900')}>Delivery</span>
                 <span className="font-extrabold text-lg text-brand ml-1">Boys</span>
               </div>
             </div>
-            <p className={cn('text-sm leading-relaxed', dk ? 'text-white/40' : 'text-gray-500')}>Ghana's most reliable delivery service. We go the extra mile for you.</p>
+            <p className={cn('text-sm leading-relaxed', dk ? 'text-white/40' : 'text-gray-500')}>Delivery services across Ghana. We go the extra mile for you.</p>
           </div>
           <div>
             <h4 className={cn('font-bold mb-4', dk ? 'text-white' : 'text-gray-900')}>Quick Links</h4>
             <div className="space-y-2">
-              {[{n:'Services',p:'/services'},{n:'Book Delivery',p:'/book'},{n:'Track Order',p:'/track'},{n:'Become a Rider',p:'/auth/signup?role=rider'},{n:'About Us',p:'/about'}].map(l=>
+              {[{n:'Services',p:'/services'},{n:'Book Delivery',p:bookingPath},{n:'Track Order',p:trackingPath},{n:'Become a Rider',p:'/auth/signup?role=rider'},{n:'About Us',p:'/about'},{n:'Privacy Policy',p:'/privacy'},{n:'Terms & Conditions',p:'/terms'},{n:'Refund Policy',p:'/refunds'},{n:'Cookies Policy',p:'/cookies'}].map(l=>
                 <Link key={l.p} to={l.p} className={cn('block text-sm transition', dk?'text-white/40 hover:text-brand':'text-gray-500 hover:text-brand')}>{l.n}</Link>
               )}
             </div>

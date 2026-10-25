@@ -23,12 +23,12 @@ export default function About() {
               <h2 className={cn('text-3xl font-extrabold mb-6', dk ? 'text-white' : 'text-gray-900')}>Our Story</h2>
               <div className={cn('space-y-4 leading-relaxed', dk ? 'text-white/60' : 'text-gray-600')}>
                 <p>Delivery Boys was born from a simple observation: people in Ghana needed a faster, more reliable way to send and receive items across the city.</p>
-                <p>Today, we've grown into one of the most trusted delivery services in Ghana, completing thousands of deliveries every month.</p>
+                <p>Today, we continue to grow with riders and customers across Ghana.</p>
                 <p>Our motto: <strong className="text-brand">"We go the extra mile for you!"</strong></p>
               </div>
             </motion.div>
             <motion.div initial={{ opacity: 0, x: 30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}>
-              <img src="/images/img3.jpeg" alt="Banner" className="rounded-2xl shadow-2xl" />
+              <img src="/images/img3.jpeg" alt="Delivery Boys service team" className="rounded-2xl shadow-2xl" />
             </motion.div>
           </div>
         </div>

@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import type { Map as MLMap, Marker as MLMarker } from 'maplibre-gl';
 import type * as LeafletType from 'leaflet';
 import { useThemeStore } from '../stores/themeStore';
-import { cn } from '../lib/utils';
+import { cn, escapeHtml } from '../lib/utils';
+import { MapSkeleton } from './Skeleton';
 
 // Leaflet's stylesheet is REQUIRED: it gives .leaflet-pane its absolute
 // positioning. Without it tiles scatter/fail to place and the SVG overlay
@@ -899,7 +900,8 @@ export default function MapView({
         if (m.popup) {
           marker.setPopup(
             new ml.Popup({ closeButton: true, maxWidth: '260px' }).setHTML(
-              `<div style="font-size:13px;font-weight:600;padding:4px 2px">${m.popup}</div>`,
+              `<div style="font-size:13px;font-weight:600;padding:4px 2px">${escapeHtml(m.popup)}</div>`,
+
             ),
           );
         }
@@ -1234,7 +1236,7 @@ export default function MapView({
           });
           const marker = L.marker([m.lat, m.lng], { icon }).addTo(map);
           if (m.popup) {
-            marker.bindPopup(`<div style="font-size:13px;font-weight:600;padding:4px 2px">${m.popup}</div>`);
+            marker.bindPopup(`<div style="font-size:13px;font-weight:600;padding:4px 2px">${escapeHtml(m.popup)}</div>`);
           }
           leafletMarkersRef.current.push(marker);
         } catch {
@@ -1441,13 +1443,8 @@ export default function MapView({
 
       {/* Loading spinner until initial map style/tiles are ready */}
       {!styleReady && (
-        <div className="absolute inset-0 z-[3] flex items-center justify-center pointer-events-none">
-          <div
-            className={cn(
-              'w-10 h-10 rounded-full border-2 animate-spin',
-              dk ? 'border-white/15 border-t-white/70' : 'border-gray-200 border-t-brand',
-            )}
-          />
+        <div className="absolute inset-0 z-[3] pointer-events-none">
+          <MapSkeleton className="h-full min-h-0 w-full" />
         </div>
       )}
 
@@ -1459,14 +1456,14 @@ export default function MapView({
       {!followPosition && (
         <div className="absolute bottom-4 right-3 z-[10] flex flex-col items-center">
           <div className="db-zoom-wrap">
-            <button className="db-zoom-btn db-zoom-in" title="Zoom in" onClick={handleZoomIn}>
+            <button type="button" className="db-zoom-btn db-zoom-in" aria-label="Zoom in" title="Zoom in" onClick={handleZoomIn}>
               +
             </button>
-            <button className="db-zoom-btn db-zoom-out" title="Zoom out" onClick={handleZoomOut}>
+            <button type="button" className="db-zoom-btn db-zoom-out" aria-label="Zoom out" title="Zoom out" onClick={handleZoomOut}>
               {'\u2212'}
             </button>
           </div>
-          <button className="db-locate-btn" title="My location" onClick={handleLocate}>
+          <button type="button" className="db-locate-btn" aria-label="Center map on my location" title="My location" onClick={handleLocate}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <polygon points="3 11 22 2 13 21 11 13 3 11" />
             </svg>
@@ -1496,7 +1493,7 @@ export default function MapView({
       {/* Center pin when pin-drop mode is active */}
       {pinDropActive && (
         <div className="absolute inset-0 pointer-events-none z-[500] flex items-center justify-center">
-          <div className="relative flex flex-col items-center" style={{ marginTop: '-20px' }}>
+          <div className="db-drop-pin relative flex flex-col items-center" style={{ marginTop: '-20px' }}>
             <div
               style={{
                 width: 32,
