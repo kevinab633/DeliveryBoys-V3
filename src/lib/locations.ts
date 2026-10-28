@@ -46,12 +46,8 @@ async function searchMapbox(
       // Partial-word suggestions while typing.
       `&autocomplete=true` +
       `&limit=8&language=en`;
-    // Strict country filter only for very short queries — longer, more
-    // specific queries (e.g. full institution names) aren't overly
-    // restricted.
-    if (query.length < 4) {
-      url += `&country=gh`;
-    }
+    // Ghana only, for every query. This is a Ghana-only delivery app.
+    url += `&country=gh`;
     if (proximity) {
       url += `&proximity=${proximity.lng},${proximity.lat}`;
     }
@@ -94,10 +90,8 @@ async function searchNominatim(
     let url =
       `https://nominatim.openstreetmap.org/search` +
       `?format=jsonv2&limit=8&q=${encodeURIComponent(query)}`;
-    // Same rule as Mapbox: strict country filter only for short queries.
-    if (query.length < 4) {
-      url += `&countrycodes=gh`;
-    }
+    // Ghana only, for every query (same as Mapbox).
+    url += `&countrycodes=gh`;
     if (proximity) {
       // Bias (not hard-limit) results toward the given point.
       const d = 0.75;
@@ -147,9 +141,9 @@ export async function searchLocations(
   const osm = await searchNominatim(query, proximity);
   if (osm.length > 0) return osm;
 
-  // 3) Nothing from OSM either — return whatever Mapbox had (may be
-  //    empty, or non-Ghana results for very unusual queries).
-  return mapbox.results;
+  // 3) Nothing from OSM either. Only return Mapbox results that are in
+  //    Ghana, so non-Ghana places never reach the customer.
+  return mapbox.ghanaMatch ? mapbox.results : [];
 }
 
 // ── Reverse geocode via Mapbox ────────────────────────────────────
