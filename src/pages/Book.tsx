@@ -197,10 +197,16 @@ export default function Book() {
     return calculatePrice(distance, vt, priceRules, manualOverrides, pricingMode, { petrol: fuelPrice, diesel: dieselPrice });
   }, [distance, priceRules, manualOverrides, pricingMode, fuelPrice, dieselPrice]);
 
-  const handleMapClick = useCallback(async (lat: number, lng: number) => {
-    const addr = await reverseGeocode(lat, lng);
-    if (pinMode === 'pickup') setPickup({ lat, lng, address: addr });
-    else if (pinMode === 'dropoff') setDropoff({ lat, lng, address: addr });
+  const handleMapClick = useCallback((lat: number, lng: number) => {
+    if (pinMode !== 'pickup' && pinMode !== 'dropoff') return;
+    const setPoint = pinMode === 'pickup' ? setPickup : setDropoff;
+    // Store the exact dropped point straight away. The address lookup runs
+    // afterwards and only updates the label if this is still the latest point,
+    // so a slow lookup can never move the pin back to an earlier spot.
+    setPoint({ lat, lng, address: `${lat.toFixed(5)}, ${lng.toFixed(5)}` });
+    reverseGeocode(lat, lng).then(addr => {
+      setPoint(prev => (prev && prev.lat === lat && prev.lng === lng ? { ...prev, address: addr } : prev));
+    });
   }, [pinMode]);
 
   // Minimum schedulable time: 15 minutes from now (for datetime-local)

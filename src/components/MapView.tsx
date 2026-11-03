@@ -824,7 +824,10 @@ export default function MapView({
     const onMoveEnd = () => {
       if (pinDropActiveRef.current && onClickRef.current && map) {
         try {
-          const c = map.getCenter();
+          // The point under the screen centre (where the drop pin is drawn).
+          // getCenter() can differ from it when the camera has padding.
+          const el = containerRef.current;
+          const c = map.unproject([(el?.clientWidth ?? 0) / 2, (el?.clientHeight ?? 0) / 2]);
           onClickRef.current(c.lat, c.lng);
         } catch {
           void 0;
@@ -1184,7 +1187,8 @@ export default function MapView({
 
         const onMoveEnd = () => {
           if (pinDropActiveRef.current && onClickRef.current && mapInstance) {
-            const c = mapInstance.getCenter();
+            const size = mapInstance.getSize();
+            const c = mapInstance.containerPointToLatLng([size.x / 2, size.y / 2]);
             onClickRef.current(c.lat, c.lng);
           }
         };
@@ -1524,8 +1528,9 @@ export default function MapView({
 
       {/* Center pin when pin-drop mode is active */}
       {pinDropActive && (
-        <div className="absolute inset-0 pointer-events-none z-[500] flex items-center justify-center">
-          <div className="db-drop-pin relative flex flex-col items-center" style={{ marginTop: '-20px' }}>
+        <div className="absolute inset-0 pointer-events-none z-[500]">
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-full">
+          <div className="db-drop-pin relative flex flex-col items-center">
             <div
               style={{
                 width: 32,
@@ -1553,6 +1558,7 @@ export default function MapView({
                 marginTop: 2,
               }}
             />
+          </div>
           </div>
         </div>
       )}
