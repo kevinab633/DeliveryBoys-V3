@@ -195,7 +195,7 @@ export function SignupPage() {
               )}
               <label className={cn('flex items-start gap-2 text-xs leading-relaxed', dk ? 'text-white/55' : 'text-gray-500')}>
                 <input type="checkbox" checked={agreed} onChange={e => setAgreed(e.target.checked)} className="mt-0.5 accent-brand" />
-                <span>I agree to the <Link to="/terms" className="font-semibold text-brand">Terms & Conditions</Link> and <Link to="/privacy" className="font-semibold text-brand">Privacy Policy</Link>.</span>
+                <span>I agree to the <Link to={role === 'rider' ? '/terms/rider' : '/terms'} className="font-semibold text-brand">{role === 'rider' ? 'Rider Terms & Conditions' : 'Terms & Conditions'}</Link> and <Link to="/privacy" className="font-semibold text-brand">Privacy Policy</Link>.</span>
               </label>
               {error && <p className="text-red-400 text-sm text-center">{error}</p>}
               <button type="submit" className="w-full bg-brand text-white py-3.5 rounded-full font-bold hover:bg-brand-dark transition flex items-center justify-center gap-2">

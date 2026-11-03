@@ -183,6 +183,7 @@ function AppContent() {
           <Route path="/rider/verification" element={<VerificationPage />} />
           <Route path="/privacy" element={<LegalPage kind="privacy" />} />
           <Route path="/terms" element={<LegalPage kind="terms" />} />
+          <Route path="/terms/rider" element={<LegalPage kind="riderTerms" />} />
           <Route path="/refunds" element={<LegalPage kind="refund" />} />
           <Route path="/cookies" element={<LegalPage kind="cookies" />} />
         </Routes>
