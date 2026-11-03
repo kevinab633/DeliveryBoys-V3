@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bike, Car, Truck, ArrowRight, ArrowLeft as ArrowLeftIcon, Info, CheckCircle2, ChevronUp, ChevronDown, Zap, Calendar, X, AlertTriangle } from 'lucide-react';
+import { Bike, Car, Truck, ArrowRight, ArrowLeft as ArrowLeftIcon, Info, CheckCircle2, ChevronUp, ChevronDown, Zap, Calendar, X, AlertTriangle, MapPin, Package } from 'lucide-react';
 import { useThemeStore } from '../stores/themeStore';
 import { useAuthStore } from '../stores/authStore';
 import { useOrderStore } from '../stores/orderStore';
@@ -48,6 +48,8 @@ export default function Book() {
   const [phone, setPhone] = useState(user?.phone || '');
   const [pinMode, setPinMode] = useState<'pickup' | 'dropoff' | null>(null);
   const [sheetOpen, setSheetOpen] = useState(true);
+  const [focusTarget, setFocusTarget] = useState<{ lat: number; lng: number; key: number; bottomPadding?: number } | null>(null);
+  const [showBreakdown, setShowBreakdown] = useState(false);
   const [customerGps, setCustomerGps] = useState<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
@@ -303,6 +305,18 @@ export default function Book() {
   }, []);
 
   // ── "Use your current location" handlers ─────────────────────────
+  // ── Picked places: the map flies to the chosen place, above the sheet ──
+  const focusOn = useCallback((lat: number, lng: number) => {
+    const isDesktop = typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches;
+    setFocusTarget({ lat, lng, key: Date.now(), bottomPadding: isDesktop ? 0 : Math.round(window.innerHeight * 0.58) });
+  }, []);
+  const selectPickup = useCallback((v: { lat: number; lng: number; address: string }) => {
+    setPickup(v); setPinMode(null); focusOn(v.lat, v.lng);
+  }, [focusOn]);
+  const selectDropoff = useCallback((v: { lat: number; lng: number; address: string }) => {
+    setDropoff(v); setPinMode(null); focusOn(v.lat, v.lng);
+  }, [focusOn]);
+
   const handleUseLocationPickup = useCallback(() => {
     if (!navigator.geolocation) {
       showToast({ title: 'Unavailable', message: 'Geolocation is not supported by your browser', type: 'error' });
@@ -313,6 +327,7 @@ export default function Book() {
         const { latitude, longitude } = pos.coords;
         const address = await reverseGeocode(latitude, longitude);
         setPickup({ lat: latitude, lng: longitude, address });
+        focusOn(latitude, longitude);
       },
       () => {
         showToast({ title: 'Location denied', message: 'Please allow location access in your browser settings', type: 'error' });
@@ -331,6 +346,7 @@ export default function Book() {
         const { latitude, longitude } = pos.coords;
         const address = await reverseGeocode(latitude, longitude);
         setDropoff({ lat: latitude, lng: longitude, address });
+        focusOn(latitude, longitude);
       },
       () => {
         showToast({ title: 'Location denied', message: 'Please allow location access in your browser settings', type: 'error' });
@@ -356,7 +372,43 @@ export default function Book() {
        : 'bg-white border-surface-light-3 text-text-light placeholder:text-surface-light-3',
   );
 
-  // ── Shared form content ──────────────────────────────────────────
+  // ── Shared form content (booking layout: pickup & drop-off, items, vehicle,
+  //    fare, then the confirm button) ─────────────────────────────────
+  const cardCls = cn('rounded-2xl border p-3', dk ? 'bg-surface-dark-3/60 border-white/5' : 'bg-white border-surface-light-3');
+  const sectionTitle = cn('text-sm font-bold', dk ? 'text-white' : 'text-text-light');
+
+  const pickupRow = (
+    <div className="flex items-center gap-3">
+      <div className="w-9 h-9 rounded-full bg-success/15 flex items-center justify-center shrink-0">
+        <MapPin size={17} className="text-success" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <LocationSearch
+          hideLabel label="Pickup Location" value={pickup?.address || ''}
+          onSelect={selectPickup} placeholder="Enter pickup location"
+          onPinClick={handlePinPickup} pinActive={pinMode === 'pickup'}
+          onUseCurrentLocation={handleUseLocationPickup}
+        />
+      </div>
+    </div>
+  );
+
+  const dropoffRow = (
+    <div className="flex items-center gap-3">
+      <div className="w-9 h-9 rounded-full bg-danger/15 flex items-center justify-center shrink-0">
+        <MapPin size={17} className="text-danger" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <LocationSearch
+          hideLabel label="Drop-off Location" value={dropoff?.address || ''}
+          onSelect={selectDropoff} placeholder="Enter drop-off location"
+          onPinClick={handlePinDropoff} pinActive={pinMode === 'dropoff'}
+          onUseCurrentLocation={handleUseLocationDropoff}
+        />
+      </div>
+    </div>
+  );
+
   const formContent = (
     <>
       {/* Book Now / Schedule for Later toggle */}
@@ -384,128 +436,90 @@ export default function Book() {
         </div>
       )}
 
-      <div className="space-y-3">
-        <LocationSearch
-          label="Pickup Location"
-          value={pickup?.address || ''}
-          onSelect={(v) => { setPickup(v); setPinMode(null); }}
-          placeholder="Where to pick up?"
-          onPinClick={handlePinPickup}
-          pinActive={pinMode === 'pickup'}
-          onUseCurrentLocation={handleUseLocationPickup}
-        />
-        <LocationSearch
-          label="Drop-off Location"
-          value={dropoff?.address || ''}
-          onSelect={(v) => { setDropoff(v); setPinMode(null); }}
-          placeholder="Where to deliver?"
-          onPinClick={handlePinDropoff}
-          pinActive={pinMode === 'dropoff'}
-          onUseCurrentLocation={handleUseLocationDropoff}
-        />
-      </div>
+      <section className="space-y-2">
+        <h3 className={sectionTitle}>Pickup &amp; Drop-off</h3>
+        <div className={cardCls}>
+          {pickupRow}
+          <div className={cn('ml-12 my-3 border-t', dk ? 'border-white/5' : 'border-surface-light-2')} />
+          {dropoffRow}
+        </div>
+      </section>
 
-      <div>
-        <label className={cn('text-sm font-semibold mb-2 block', dk ? 'text-white/70' : 'text-text-light-2')}>Vehicle Type</label>
-        <div className="space-y-2">
-          {availableVehicleTypes.length === 0 && (
-            <p className={cn('rounded-2xl border px-4 py-3 text-sm', dk ? 'border-white/10 text-white/50' : 'border-surface-light-3 text-text-light-2')}>
-              No approved riders are online right now. Vehicle options will appear when a rider becomes available.
-            </p>
-          )}
+      <section className="space-y-2">
+        <h3 className={sectionTitle}>Items to Deliver</h3>
+        <div className={cn(cardCls, 'flex items-center gap-3')}>
+          <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center shrink-0">
+            <Package size={20} className="text-orange-500" />
+          </div>
+          <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="What are you sending?"
+            className={cn('flex-1 min-w-0 bg-transparent text-sm font-semibold outline-none',
+              dk ? 'text-white placeholder:text-white/30' : 'text-text-light placeholder:text-surface-light-3')} />
+        </div>
+      </section>
+
+      <section className="space-y-2">
+        <h3 className={sectionTitle}>Vehicle</h3>
+        {availableVehicleTypes.length === 0 && (
+          <p className={cn('rounded-2xl border px-4 py-3 text-sm', dk ? 'border-white/10 text-white/50' : 'border-surface-light-3 text-text-light-2')}>
+            No approved riders are online right now. Vehicle options will appear when a rider becomes available.
+          </p>
+        )}
+        <div className="grid grid-cols-4 gap-2">
           {vehicles.filter(v => availableVehicleTypes.includes(v.type)).map(v => {
-            const vPrice = priceForVehicle(v.type);
             const selected = vehicle === v.type;
             return (
-              <button key={v.type} onClick={() => setVehicle(v.type)}
-                className={cn(
-                  'w-full flex items-center gap-3 p-3 rounded-2xl border transition text-left',
-                  selected
-                    ? 'border-brand bg-brand/8'
-                    : dk ? 'border-white/5 bg-surface-dark-3/50 hover:border-white/10' : 'border-surface-light-3 bg-white hover:border-surface-light-3',
-                )}>
-                <div className={cn(
-                  'w-10 h-10 rounded-full flex items-center justify-center shrink-0',
-                  selected ? 'bg-brand/15' : dk ? 'bg-white/5' : 'bg-surface-light-2',
-                )}>
-                  <v.icon size={20} className={selected ? 'text-brand' : dk ? 'text-white/40' : 'text-surface-light-3'} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className={cn('text-sm font-semibold', dk ? 'text-white' : 'text-text-light')}>{v.label}</p>
-                  <p className={cn('text-xs', dk ? 'text-white/40' : 'text-text-light-2')}>{v.desc}</p>
-                </div>
-                {vPrice && (
-                  <span className={cn('text-sm font-bold shrink-0', selected ? 'text-brand' : dk ? 'text-white/60' : 'text-text-light-2')}>
-                    {formatCurrency(vPrice.breakdown.total)}
-                  </span>
-                )}
+              <button key={v.type} type="button" onClick={() => setVehicle(v.type)}
+                className={cn('flex flex-col items-center gap-1 py-3 rounded-2xl border text-xs font-semibold transition',
+                  selected ? 'border-brand bg-brand/10 text-brand'
+                    : dk ? 'border-white/5 text-white/60 hover:border-white/10' : 'border-surface-light-3 text-text-light-2 hover:border-surface-light-3')}>
+                <v.icon size={20} />
+                {v.label}
               </button>
             );
           })}
         </div>
-      </div>
+      </section>
 
-      <div>
-        <label className={cn('text-sm font-semibold mb-1.5 block', dk ? 'text-white/70' : 'text-text-light-2')}>Package Description</label>
-        <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="What are you sending?" className={inp} />
-      </div>
-      <div>
-        <label className={cn('text-sm font-semibold mb-1.5 block', dk ? 'text-white/70' : 'text-text-light-2')}>Contact Phone</label>
+      <section className="space-y-2">
+        <h3 className={sectionTitle}>Contact Phone</h3>
         <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="Your phone number" className={inp} />
+      </section>
+
+      <div className={cn(cardCls, 'flex items-center justify-between p-4')}>
+        <div>
+          <p className={cn('text-xs', dk ? 'text-white/50' : 'text-text-light-2')}>Estimated Fare</p>
+          <p className={cn('text-xl font-extrabold', dk ? 'text-white' : 'text-text-light')}>
+            {pricing ? formatCurrency(pricing.breakdown.total) : 'Choose pickup and drop-off'}
+          </p>
+        </div>
+        {pricing && (
+          <button type="button" onClick={() => setShowBreakdown(v => !v)} aria-expanded={showBreakdown}
+            aria-label="Show price breakdown"
+            className={cn('w-10 h-10 rounded-full flex items-center justify-center transition',
+              dk ? 'text-white/50 hover:bg-white/5' : 'text-text-light-2 hover:bg-surface-light-2')}>
+            <Info size={18} />
+          </button>
+        )}
       </div>
 
-      {pricing && (
+      {pricing && showBreakdown && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-          className={cn('p-4 rounded-xl border', dk ? 'bg-surface-dark-3/80 border-white/5' : 'bg-surface-light-2 border-surface-light-3')}>
-          <div className="flex items-center gap-2 mb-3">
-            <Info size={16} className="text-brand" />
-            <span className={cn('text-sm font-semibold', dk ? 'text-white' : 'text-text-light')}>Price Breakdown</span>
+          className={cn('p-4 rounded-xl border space-y-1.5 text-sm', dk ? 'bg-surface-dark-3/80 border-white/5' : 'bg-surface-light-2 border-surface-light-3')}>
+          <div className="flex justify-between">
+            <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Distance</span>
+            <span className={cn('font-semibold', dk ? 'text-white' : 'text-text-light')}>{formatDistance(distance)}</span>
           </div>
-          <div className="space-y-1.5 text-sm">
-            <div className="flex justify-between">
-              <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Distance</span>
-              <span className={cn('font-semibold', dk ? 'text-white' : 'text-text-light')}>{formatDistance(distance)}</span>
-            </div>
-            {pricing.breakdown.riderPay !== undefined ? (
-              <>
-                <div className="flex justify-between">
-                  <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Rider Pay</span>
-                  <span className={dk ? 'text-white/70' : 'text-text-light-2'}>{formatCurrency(pricing.breakdown.riderPay)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Fuel</span>
-                  <span className={dk ? 'text-white/70' : 'text-text-light-2'}>{formatCurrency(pricing.breakdown.fuelCost)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Service Fee</span>
-                  <span className={dk ? 'text-white/70' : 'text-text-light-2'}>{formatCurrency(pricing.breakdown.serviceFee ?? 0)}</span>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="flex justify-between">
-                  <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Base Fare</span>
-                  <span className={dk ? 'text-white/70' : 'text-text-light-2'}>{formatCurrency(pricing.breakdown.baseFare)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Distance Fare</span>
-                  <span className={dk ? 'text-white/70' : 'text-text-light-2'}>{formatCurrency(pricing.breakdown.distanceFare)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Fuel Cost</span>
-                  <span className={dk ? 'text-white/70' : 'text-text-light-2'}>{formatCurrency(pricing.breakdown.fuelCost)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Service Fee</span>
-                  <span className={dk ? 'text-white/70' : 'text-text-light-2'}>{formatCurrency(pricing.breakdown.companyFee)}</span>
-                </div>
-              </>
-            )}
-            {pricing.breakdown.riderPay === undefined && (
-              <p className={cn('text-xs pt-1', dk ? 'text-white/25' : 'text-surface-light-3')}>
-                Est. fuel: {formatCurrency(fuelEst)} ({vehicle})
-              </p>
-            )}
+          <div className="flex justify-between">
+            <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Rider pay</span>
+            <span className={dk ? 'text-white/70' : 'text-text-light-2'}>{formatCurrency(pricing.breakdown.riderPay ?? pricing.breakdown.baseFare)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Fuel</span>
+            <span className={dk ? 'text-white/70' : 'text-text-light-2'}>{formatCurrency(pricing.breakdown.fuelCost)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Service fee</span>
+            <span className={dk ? 'text-white/70' : 'text-text-light-2'}>{formatCurrency(pricing.breakdown.serviceFee ?? 0)}</span>
           </div>
         </motion.div>
       )}
@@ -517,16 +531,14 @@ export default function Book() {
       className={cn(
         'w-full py-4 rounded-full font-bold text-base transition flex items-center justify-center gap-2',
         pickup && dropoff
-          ? 'bg-brand text-white hover:bg-brand-dark shadow-lg shadow-brand/25'
+          ? (dk ? 'bg-white text-gray-900 hover:bg-white/90' : 'bg-gray-900 text-white hover:bg-gray-800')
           : dk ? 'bg-surface-dark-3 text-white/20 cursor-not-allowed' : 'bg-surface-light-3 text-surface-light-3 cursor-not-allowed',
       )}>
       {!user
         ? 'Sign In to Book'
         : orderType === 'scheduled'
-          ? <><Calendar size={18} /> {pricing ? `Schedule — ${formatCurrency(pricing.breakdown.total)}` : 'Schedule Delivery'}</>
-          : pricing
-            ? <>Confirm — {formatCurrency(pricing.breakdown.total)} <ArrowRight size={18} /></>
-            : <>Confirm Booking <ArrowRight size={18} /></>
+          ? <><Calendar size={18} /> Schedule Delivery</>
+          : <>Confirm &amp; Book <ArrowRight size={18} /></>
       }
     </button>
   );
@@ -736,7 +748,7 @@ export default function Book() {
       <LocationSearch
         label="Pickup Location"
         value={pickup?.address || ''}
-        onSelect={(v) => { setPickup(v); setPinMode(null); }}
+        onSelect={selectPickup}
         placeholder="Where to pick up?"
         onPinClick={handlePinPickup}
         pinActive={pinMode === 'pickup'}
@@ -771,6 +783,7 @@ export default function Book() {
         onMapClick={pinMode ? handleMapClick : undefined}
         className="absolute inset-0 z-0"
         pinDropActive={!!pinMode}
+        focusTarget={focusTarget ?? undefined}
       />
 
       {/* ── Back button — replaces the hidden navbar's own way home.
@@ -821,10 +834,12 @@ export default function Book() {
           dk ? 'bg-surface-dark-2/95 border-white/5 glass' : 'bg-white/95 border-surface-light-3 glass',
         )}>
           <div className="flex-1 overflow-y-auto p-5 space-y-4">
-            <div className="mb-1">
-              <h1 className={cn('text-xl font-extrabold', dk ? 'text-white' : 'text-text-light')}>{panelTitle}</h1>
-              <p className={cn('text-xs mt-0.5', dk ? 'text-white/40' : 'text-text-light-2')}>{panelSubtitle}</p>
-            </div>
+            {phase !== 'form' && (
+              <div className="mb-1">
+                <h1 className={cn('text-xl font-extrabold', dk ? 'text-white' : 'text-text-light')}>{panelTitle}</h1>
+                <p className={cn('text-xs mt-0.5', dk ? 'text-white/40' : 'text-text-light-2')}>{panelSubtitle}</p>
+              </div>
+            )}
             {panelContent}
           </div>
           {phase === 'form' && (
@@ -843,7 +858,7 @@ export default function Book() {
           dk ? 'bg-surface-dark-2 border-t border-white/5' : 'bg-white border-t border-surface-light-3',
         )}
         animate={{
-          height: pinMode ? '0px' : sheetOpen ? `calc(100dvh - env(safe-area-inset-top, 0px) - 3.5rem)` : `${SHEET_COLLAPSED}px`,
+          height: pinMode ? '0px' : sheetOpen ? '58dvh' : `${SHEET_COLLAPSED}px`,
           opacity: pinMode ? 0 : 1,
         }}
         style={{ pointerEvents: pinMode ? 'none' : 'auto' }}
@@ -881,9 +896,11 @@ export default function Book() {
         {sheetOpen && (
           <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
             <div className="flex-1 px-4 pb-4 space-y-4 overflow-y-auto">
-              <div className="mb-1">
-                <h1 className={cn('text-lg font-extrabold', dk ? 'text-white' : 'text-text-light')}>{panelTitle}</h1>
-              </div>
+              {phase !== 'form' && (
+                <div className="mb-1">
+                  <h1 className={cn('text-lg font-extrabold', dk ? 'text-white' : 'text-text-light')}>{panelTitle}</h1>
+                </div>
+              )}
               {panelContent}
             </div>
             {phase === 'form' && (

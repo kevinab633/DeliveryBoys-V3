@@ -70,6 +70,10 @@ export interface MapViewProps {
    *  resumed, so the parent can show/hide its Re-centre button only
    *  while it's actually needed. */
   onFollowPausedChange?: (paused: boolean) => void;
+  /** Fly the camera to a place the user picked (search result, Enter key or
+   *  GPS). Change `key` for every new pick. `bottomPadding` (px) keeps the
+   *  place above a bottom sheet. */
+  focusTarget?: { lat: number; lng: number; key: number; bottomPadding?: number };
 }
 
 // ── Mapbox style + token ───────────────────────────────────────────────
@@ -534,6 +538,7 @@ export default function MapView({
   onEngineChange,
   congestionRoute,
   recenterSignal,
+  focusTarget,
   onFollowPausedChange,
 }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1399,6 +1404,33 @@ export default function MapView({
       { enableHighAccuracy: true },
     );
   }, [engine, ml]);
+
+  // ── Picked-place focus: fly to the chosen place, clear of the bottom sheet.
+  useEffect(() => {
+    if (!focusTarget) return;
+    const { lat, lng, bottomPadding = 0 } = focusTarget;
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    if (engine === 'maplibre') {
+      const map = mapRef.current;
+      if (!map || !styleReady) return;
+      try {
+        map.flyTo({
+          center: [lng, lat], zoom: 16, duration: 900,
+          padding: { top: 60, bottom: bottomPadding, left: 0, right: 0 },
+        });
+      } catch { void 0; }
+    } else {
+      const map = leafletMapRef.current;
+      if (!map) return;
+      try {
+        // Shift the camera so the place sits in the visible area above the sheet.
+        const centre = map.project([lat, lng], 16).add([0, bottomPadding / 2]);
+        map.flyTo(map.unproject(centre, 16), 16);
+      } catch { void 0; }
+    }
+    // Only a new pick (key change) should move the camera.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusTarget?.key]);
 
   const hasPosition = /\b(absolute|fixed|relative|sticky)\b/.test(className);
 
