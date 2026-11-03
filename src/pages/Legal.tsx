@@ -28,19 +28,70 @@ const pages = {
     intro: 'Last updated: October 2026. Please read these terms before you register or accept orders.',
     sections: [
       ['1. Agreement', 'These terms govern the relationship between Delivery Boys Delivery Service and you, the rider. By registering or accepting orders, you agree to them.'],
-      ['2. Eligibility', 'You must be at least 18 years old and legally allowed to work in Ghana. You must provide a valid ID, a phone number, and your driver\'s licence and vehicle documents. All information must be true and kept up to date.'],
-      ['3. Independent contractor', 'You are not our employee. You choose when to work and which orders to accept. You are responsible for your own tax, insurance and licence.'],
-      ['4. Vehicle and equipment', 'You must use a roadworthy motorbike, bicycle or car, and provide your own phone, helmet and delivery bag. Fuel, data and maintenance costs are your liabilities. Delivery Boys provides a 50% discount on customised helmets and delivery bags.'],
-      ['5. Accepting and delivering orders', 'Pick up and deliver promptly to the address given. Do not open, damage or tamper with packages. Confirm delivery in the app using the code or signature. Do not cancel a delivery after pickup unless it is an emergency.'],
-      ['6. Earnings and payments', 'The delivery fare for each order is calculated by the Delivery Boys app and includes fuel and the service charge. You receive the fare minus the Delivery Boys commission for that order. The commission is GHS 5.00 plus 10% of your delivery pay above the GHS 15.00 base rate. For trips up to 4 km, the commission is GHS 5.00. For longer trips, it increases by GHS 0.25 for each km beyond 4 km. For example: 4 km is GHS 5.00, 10 km is GHS 6.50, and 20 km is GHS 9.00. The exact commission for each ride is shown on your dashboard. Pay the commission shown there through the account provided within 24 hours of a completed delivery. Failure to pay the commission shown on your dashboard leads to a 50% fine, and termination of your contract after 48 hours. We may deduct commission, fines for proven misconduct, and cash collected but not remitted.'],
-      ['7. Prohibited items', 'Do not carry illegal goods, weapons, drugs or hazardous materials. Report suspicious packages to the Delivery Boys team immediately.'],
-      ['8. Conduct', 'Be polite and professional, and wear your uniform or ID. Never harass, threaten or discriminate against anyone. No alcohol or drugs while working. Fraud or fake deliveries lead to immediate termination.'],
-      ['9. Safety and traffic laws', 'Obey all traffic laws, and never use your phone while riding. Report accidents or incidents to the Delivery Boys team within 1 hour.'],
-      ['10. Loss, damage and liability', 'You are responsible for packages lost or damaged through your negligence. We are not liable for your injury, vehicle damage or fines unless insurance or the law says otherwise.'],
-      ['11. Customer data and privacy', 'Customer information is for delivery only. Do not save, share or misuse it. We track your location during service as explained in our privacy policy.'],
+      ['2. Eligibility', [
+        'You must be at least 18 years old and legally allowed to work in Ghana.',
+        "You must provide a valid ID, a phone number, and your driver's licence and vehicle documents.",
+        'All information must be true and kept up to date.',
+      ]],
+      ['3. Independent contractor', [
+        'You are not our employee.',
+        'You choose when to work and which orders to accept.',
+        'You are responsible for your own tax, insurance and licence.',
+      ]],
+      ['4. Vehicle and equipment', [
+        'You must use a roadworthy motorbike, bicycle or car.',
+        'Provide your own phone, helmet and delivery bag.',
+        'Fuel, data and maintenance costs are your liabilities.',
+        'Delivery Boys provides a 50% discount on customised helmets and delivery bags.',
+      ]],
+      ['5. Accepting and delivering orders', [
+        'Pick up and deliver promptly to the address given.',
+        'Do not open, damage or tamper with packages.',
+        'Confirm delivery in the app using the code or signature.',
+        'Do not cancel a delivery after pickup unless it is an emergency.',
+      ]],
+      ['6. Earnings and payments', [
+        'Fare: the app calculates the delivery fare for each order. It includes fuel and the service charge.',
+        'You receive: the fare minus the Delivery Boys commission for that order.',
+        'Commission: GHS 5.00 plus 10% of your delivery pay above the GHS 15.00 base rate.',
+        'Up to 4 km: the commission is GHS 5.00.',
+        'Longer trips: the commission increases by GHS 0.25 for each km beyond 4 km.',
+        'Examples: 4 km is GHS 5.00, 10 km is GHS 6.50, and 20 km is GHS 9.00.',
+        'Your dashboard: the exact commission for each ride is shown there.',
+        'Payment: pay the commission shown on your dashboard through the account provided, within 24 hours of a completed delivery.',
+        'Late payment: failure to pay leads to a 50% fine and termination of your contract after 48 hours.',
+        'Deductions: we may deduct commission, fines for proven misconduct, and cash collected but not remitted.',
+      ]],
+      ['7. Prohibited items', [
+        'Do not carry illegal goods, weapons, drugs or hazardous materials.',
+        'Report suspicious packages to the Delivery Boys team immediately.',
+      ]],
+      ['8. Conduct', [
+        'Be polite and professional, and wear your uniform or ID.',
+        'Never harass, threaten or discriminate against anyone.',
+        'No alcohol or drugs while working.',
+        'Fraud or fake deliveries lead to immediate termination.',
+      ]],
+      ['9. Safety and traffic laws', [
+        'Obey all traffic laws, and never use your phone while riding.',
+        'Report accidents or incidents to the Delivery Boys team within 1 hour.',
+      ]],
+      ['10. Loss, damage and liability', [
+        'You are responsible for packages lost or damaged through your negligence.',
+        'We are not liable for your injury, vehicle damage or fines unless insurance or the law says otherwise.',
+      ]],
+      ['11. Customer data and privacy', [
+        'Customer information is for delivery only.',
+        'Do not save, share or misuse it.',
+        'We track your location during service as explained in our privacy policy.',
+      ]],
       ['12. Changes to these terms', 'We may update these terms and will notify you in the app. Continued use means acceptance.'],
       ['13. Governing law', 'These terms are governed by the laws of Ghana. Disputes will be resolved by the courts or arbitration in Ghana.'],
-      ['14. Contact', 'Email: support.deliveryboysgh@gmail.com. Phone: 0544188778 / 0505551497. Address: Accra, Ghana.'],
+      ['14. Contact', [
+        'Email: support.deliveryboysgh@gmail.com',
+        'Phone: 0544188778 / 0505551497',
+        'Address: Accra, Ghana',
+      ]],
     ],
   },
   refund: {
@@ -70,12 +121,25 @@ type LegalKey = keyof typeof pages;
 export default function LegalPage({ kind }: { kind: LegalKey }) {
   const dk = useThemeStore(s => s.theme === 'dark');
   const page = pages[kind];
-  return <main className="min-h-screen px-4 pb-20 pt-28 sm:px-6"><article className="mx-auto max-w-3xl">
+  return <main className="min-h-screen px-4 pb-20 pt-28 sm:px-6"><article className="mx-auto max-w-2xl">
     <Link to="/" className="text-sm font-bold text-brand">← Back to Delivery Boys</Link>
     <p className="mt-8 text-sm font-bold uppercase tracking-[.14em] text-brand">Delivery Boys</p>
     <h1 className={cn('mt-2 text-4xl font-black md:text-5xl', dk ? 'text-white' : 'text-gray-900')}>{page.title}</h1>
     <p className={cn('mt-5 max-w-2xl text-lg leading-relaxed', dk ? 'text-white/60' : 'text-gray-600')}>{page.intro}</p>
-    <div className="mt-10 space-y-5">{page.sections.map(([heading, body]) => <section key={heading} className={cn('rounded-2xl border p-5', dk ? 'border-white/10 bg-surface-dark-2' : 'border-gray-200 bg-white')}><h2 className={cn('text-lg font-bold', dk ? 'text-white' : 'text-gray-900')}>{heading}</h2><p className={cn('mt-2 text-sm leading-relaxed', dk ? 'text-white/55' : 'text-gray-600')}>{body}</p></section>)}</div>
+    <div className="mt-10 space-y-6">{page.sections.map(([heading, body]) => <section key={heading} className={cn('rounded-2xl border p-6 md:p-7', dk ? 'border-white/10 bg-surface-dark-2' : 'border-gray-200 bg-white')}>
+      <h2 className={cn('text-xl font-bold', dk ? 'text-white' : 'text-gray-900')}>{heading}</h2>
+      {typeof body === 'string' ? (
+        <p className={cn('mt-3 text-base leading-7', dk ? 'text-white/70' : 'text-gray-700')}>{body}</p>
+      ) : (
+        <ul className="mt-4 space-y-3">{body.map(item => {
+          const m = /^([^:]{1,30}):\s(.*)$/.exec(item);
+          return <li key={item} className={cn('flex gap-3 text-base leading-7', dk ? 'text-white/70' : 'text-gray-700')}>
+            <span aria-hidden="true" className="mt-[0.7rem] h-1.5 w-1.5 shrink-0 rounded-full bg-brand" />
+            <span>{m ? <><strong className={dk ? 'text-white' : 'text-gray-900'}>{m[1]}:</strong> {m[2]}</> : item}</span>
+          </li>;
+        })}</ul>
+      )}
+    </section>)}</div>
     <p className={cn('mt-8 text-xs', dk ? 'text-white/35' : 'text-gray-500')}>Questions? Contact support.deliveryboys.gh@gmail.com. This page provides general product information and is not legal advice.</p>
   </article></main>;
 }
