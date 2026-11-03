@@ -224,19 +224,6 @@ function CustomerHomePage() {
   const { getContent } = useContentStore();
   const { user } = useAuthStore();
   const [legacyHeroOpacity, setLegacyHeroOpacity] = useState(1);
-  const [typedTagline, setTypedTagline] = useState('');
-  useEffect(() => {
-    if (user?.role === 'customer') return;
-    const tagline = 'We go the extra mile for you';
-    let index = 0;
-    const timer = window.setInterval(() => {
-      index += 1;
-      setTypedTagline(tagline.slice(0, index));
-      if (index >= tagline.length) window.clearInterval(timer);
-    }, 58);
-    return () => window.clearInterval(timer);
-  }, [user?.role]);
-
   useEffect(() => {
     const updateFade = () => {
       const distance = Math.max(window.innerHeight * 0.7, 1);
@@ -276,7 +263,7 @@ function CustomerHomePage() {
                 {user?.role === 'customer' ? (
                   `Welcome back, ${user.name.split(' ')[0]}`
                 ) : (
-                  <><span className="hero-typewriter">{typedTagline}</span><span className="hero-typewriter-cursor" aria-hidden="true" /></>
+                  'We go the extra mile for you'
                 )}
               </h1>
               {/* Primary CTAs */}

@@ -6,7 +6,6 @@ import { useAuthStore } from '../stores/authStore';
 import { useThemeStore } from '../stores/themeStore';
 import { cn } from '../lib/utils';
 import { VehicleType } from '../lib/types';
-import MicroSlatsBackdrop from '../components/MicroSlatsBackdrop';
 import supabase from '../lib/supabase';
 
 export function LoginPage() {
@@ -35,7 +34,6 @@ export function LoginPage() {
 
   return (
     <div className="relative isolate pt-20 min-h-screen flex items-center justify-center overflow-hidden px-4">
-      <MicroSlatsBackdrop />
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
         className={cn('relative z-10 w-full max-w-md p-8 rounded-2xl border', dk ? 'bg-surface-dark-2 border-white/5' : 'bg-white border-gray-200 shadow-xl')}>
         <div className="text-center mb-8">
@@ -144,7 +142,6 @@ export function SignupPage() {
 
   return (
     <div className="relative isolate pt-20 min-h-screen flex items-center justify-center overflow-hidden px-4 py-12">
-      <MicroSlatsBackdrop />
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
         className={cn('relative z-10 w-full max-w-md p-8 rounded-2xl border', dk ? 'bg-surface-dark-2 border-white/5' : 'bg-white border-gray-200 shadow-xl')}>
         <div className="text-center mb-8">
@@ -232,7 +229,6 @@ export function ManagerLoginPage() {
 
   return (
     <div className="relative isolate pt-20 min-h-screen flex items-center justify-center overflow-hidden px-4">
-      <MicroSlatsBackdrop />
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
         className={cn('relative z-10 w-full max-w-md p-8 rounded-2xl border', dk ? 'bg-surface-dark-2 border-white/5' : 'bg-white border-gray-200 shadow-xl')}>
         <div className="text-center mb-8">
