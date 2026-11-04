@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import supabase from './supabase';
 import { Order, OrderStatus, RiderProfile } from './types';
+import { calculateDistance } from './pricing';
 import { useOrderStore } from '../stores/orderStore';
 import { useAuthStore } from '../stores/authStore';
 import { fireBrowserNotification } from './browserNotify';
@@ -124,7 +125,16 @@ export function rowToOrder(row: any): Order {
       lng: typeof dropoffData.lng === 'number' ? dropoffData.lng : -0.1824,
       address: dropoffData.address || 'Accra',
     },
-    distance: typeof pickupData.distance === 'number' ? pickupData.distance : 5.0,
+    // Commission and earnings depend on distance. If a saved row has no distance,
+    // work it out from its coordinates instead of guessing a fixed 5 km.
+    distance: typeof pickupData.distance === 'number'
+      ? pickupData.distance
+      : calculateDistance(
+          typeof pickupData.lat === 'number' ? pickupData.lat : 5.6037,
+          typeof pickupData.lng === 'number' ? pickupData.lng : -0.187,
+          typeof dropoffData.lat === 'number' ? dropoffData.lat : 5.556,
+          typeof dropoffData.lng === 'number' ? dropoffData.lng : -0.1824,
+        ),
     price: Number(row.price) || 25,
     status: (row.status as OrderStatus) || 'pending',
     vehicleType: row.vehicle_type || 'motorcycle',
