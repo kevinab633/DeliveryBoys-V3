@@ -387,7 +387,7 @@ function CustomerHomePage() {
       {/* ===== WHY CHOOSE US ===== */}
       <section className={cn('py-28', dk ? 'bg-surface-dark' : 'bg-white')}>
         <div className="max-w-7xl mx-auto px-6">
-          <div className="grid lg:grid-cols-2 gap-16 items-center">
+          <div className="max-w-3xl">
             <div>
               <span className="inline-block px-4 py-1.5 rounded-full bg-brand/8 text-brand text-sm font-semibold mb-4">Why Choose Us</span>
               <h2 className={cn('text-4xl font-black tracking-tight mb-8', dk ? 'text-white' : 'text-gray-900')}>We Go The Extra Mile</h2>
@@ -412,12 +412,6 @@ function CustomerHomePage() {
                 ))}
               </div>
             </div>
-            <motion.div initial={{ opacity: 0, x: 40 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}>
-              <div className="relative">
-                <div className="absolute -inset-6 bg-brand/5 rounded-3xl blur-2xl" />
-                <img src="/images/img2.jpeg" alt="Delivery Boys Flyer" className="relative rounded-3xl shadow-2xl w-full max-w-md mx-auto" />
-              </div>
-            </motion.div>
           </div>
         </div>
       </section>

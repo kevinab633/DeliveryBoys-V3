@@ -59,6 +59,7 @@ export default function Book() {
   const [desc, setDesc] = useState('');
   const [itemCategory, setItemCategory] = useState('');
   const [categoryOpen, setCategoryOpen] = useState(false);
+  const [showItemNotice, setShowItemNotice] = useState(false);
   const [phone, setPhone] = useState(user?.phone || '');
   const [pinMode, setPinMode] = useState<'pickup' | 'dropoff' | null>(null);
   const [sheetOpen, setSheetOpen] = useState(true);
@@ -479,7 +480,25 @@ export default function Book() {
       </section>
 
       <section className="space-y-2">
-        <h3 className={sectionTitle}>Items to Deliver</h3>
+        <div className="flex items-center justify-between">
+          <h3 className={sectionTitle}>Items to Deliver</h3>
+          <button type="button" onClick={() => setShowItemNotice(v => !v)} aria-expanded={showItemNotice}
+            aria-label="Delivery notice" title="Delivery notice"
+            className={cn('w-8 h-8 rounded-full flex items-center justify-center transition',
+              dk ? 'text-white/50 hover:bg-white/5' : 'text-text-light-2 hover:bg-surface-light-2')}>
+            <Info size={18} />
+          </button>
+        </div>
+        {showItemNotice && (
+          <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
+            className={cn('p-4 rounded-xl border text-xs leading-relaxed space-y-2',
+              dk ? 'bg-surface-dark-3/80 border-white/5 text-white/70' : 'bg-surface-light-2 border-surface-light-3 text-text-light-2')}>
+            <p className={cn('font-bold uppercase tracking-wide', dk ? 'text-white' : 'text-text-light')}>Please note</p>
+            <p>Delivery Boys handles all orders with reasonable care. Prices may vary due to item value and weight.</p>
+            <p>However, we are not responsible for spillage or damage resulting from improper packaging of food items by the sender.</p>
+            <p>Any delivery-related damage or spillage should be reported immediately for review.</p>
+          </motion.div>
+        )}
         <div className={cardCls}>
           <button type="button" onClick={() => setCategoryOpen(v => !v)} aria-expanded={categoryOpen}
             className="w-full flex items-center gap-3 text-left">
