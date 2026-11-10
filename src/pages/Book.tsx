@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bike, Car, Truck, ArrowRight, ArrowLeft as ArrowLeftIcon, Info, CheckCircle2, ChevronUp, ChevronDown, Zap, Calendar, X, AlertTriangle, MapPin, Package } from 'lucide-react';
+import { Bike, Car, Truck, ArrowRight, ArrowLeft as ArrowLeftIcon, Info, CheckCircle2, ChevronUp, ChevronDown, Zap, Calendar, X, AlertTriangle, MapPin, Package, Smartphone, ShoppingBasket, Shirt, FileText } from 'lucide-react';
 import { useThemeStore } from '../stores/themeStore';
 import { useAuthStore } from '../stores/authStore';
 import { useOrderStore } from '../stores/orderStore';
@@ -23,6 +23,18 @@ const vehicles: { type: VehicleType; icon: typeof Bike; label: string; desc: str
 ];
 
 const SHEET_COLLAPSED = 160;
+// Open sheet height (% of the screen): tall enough to show the whole form.
+const SHEET_OPEN_VH = 66;
+// Collapsed height once both pickup and drop-off are chosen: route summary + Confirm.
+const ROUTE_PEEK_PX = 232;
+const openSheetPx = () => Math.round(window.innerHeight * SHEET_OPEN_VH / 100);
+
+const ITEM_CATEGORIES: { id: string; label: string; icon: typeof Smartphone; hint: string }[] = [
+  { id: 'electronics', label: 'Electronics', icon: Smartphone, hint: 'e.g. phone, charger, laptop' },
+  { id: 'grocery', label: 'Grocery', icon: ShoppingBasket, hint: 'e.g. 2 bags of rice, vegetables' },
+  { id: 'clothing', label: 'Clothing', icon: Shirt, hint: 'e.g. 3 shirts, shoes' },
+  { id: 'documents', label: 'Documents & Others', icon: FileText, hint: 'e.g. envelope, parcel, keys' },
+];
 // Navbar is h-16 = 4rem. We use 4.5rem to give a little breathing room.
 const NAV_HEIGHT_REM = 4.5;
 
@@ -45,6 +57,8 @@ export default function Book() {
   const [dropoff, setDropoff] = useState<{ lat: number; lng: number; address: string } | null>(null);
   const [vehicle, setVehicle] = useState<VehicleType>('motorcycle');
   const [desc, setDesc] = useState('');
+  const [itemCategory, setItemCategory] = useState('');
+  const [categoryOpen, setCategoryOpen] = useState(false);
   const [phone, setPhone] = useState(user?.phone || '');
   const [pinMode, setPinMode] = useState<'pickup' | 'dropoff' | null>(null);
   const [sheetOpen, setSheetOpen] = useState(true);
@@ -180,6 +194,16 @@ export default function Book() {
   }, []);
 
   const distance = pickup && dropoff ? calculateDistance(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng) : 0;
+
+  // Both places chosen: the sheet drops down so the whole route shows.
+  // (Done on the pin screen raises it again; see the Done button.)
+  const routeReady = !!(pickup && dropoff);
+  const routeReadyRef = useRef(false);
+  useEffect(() => {
+    if (routeReady && !routeReadyRef.current && phase === 'form') setSheetOpen(false);
+    routeReadyRef.current = routeReady;
+  }, [routeReady, phase]);
+  const sheetCollapsedPx = routeReady && phase === 'form' ? ROUTE_PEEK_PX : SHEET_COLLAPSED;
   const fuelPrice = useFuelPriceStore(s => s.pricePerLitre);
   const dieselPrice = useFuelPriceStore(s => s.dieselPricePerLitre);
   const fuelPrices = { petrol: fuelPrice, diesel: dieselPrice };
@@ -216,6 +240,9 @@ export default function Book() {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   })();
 
+  const selectedCategory = ITEM_CATEGORIES.find(c => c.id === itemCategory);
+  const itemDescription = [selectedCategory?.label, desc.trim()].filter(Boolean).join(': ');
+
   const handleBook = () => {
     if (!pickup || !dropoff || !user) { navigate('/auth/login'); return; }
 
@@ -234,7 +261,7 @@ export default function Book() {
 
     const order = createOrder({
       customerId: user.id, customerName: user.name, customerPhone: phone || user.phone || '',
-      pickup, dropoff, vehicleType: vehicle, packageDescription: desc,
+      pickup, dropoff, vehicleType: vehicle, packageDescription: itemDescription,
       orderType, scheduledFor,
     });
     setOrderId(order.id);
@@ -312,16 +339,16 @@ export default function Book() {
 
   // ── "Use your current location" handlers ─────────────────────────
   // ── Picked places: the map flies to the chosen place, above the sheet ──
-  const focusOn = useCallback((lat: number, lng: number) => {
+  const focusOn = useCallback((lat: number, lng: number, sheetWillBeOpen = true) => {
     const isDesktop = typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches;
-    setFocusTarget({ lat, lng, key: Date.now(), bottomPadding: isDesktop ? 0 : Math.round(window.innerHeight * 0.58) });
+    setFocusTarget({ lat, lng, key: Date.now(), bottomPadding: isDesktop ? 0 : sheetWillBeOpen ? openSheetPx() : ROUTE_PEEK_PX });
   }, []);
   const selectPickup = useCallback((v: { lat: number; lng: number; address: string }) => {
-    setPickup(v); setPinMode(null); focusOn(v.lat, v.lng);
-  }, [focusOn]);
+    setPickup(v); setPinMode(null); focusOn(v.lat, v.lng, !dropoff);
+  }, [focusOn, dropoff]);
   const selectDropoff = useCallback((v: { lat: number; lng: number; address: string }) => {
-    setDropoff(v); setPinMode(null); focusOn(v.lat, v.lng);
-  }, [focusOn]);
+    setDropoff(v); setPinMode(null); focusOn(v.lat, v.lng, !pickup);
+  }, [focusOn, pickup]);
 
   const handleUseLocationPickup = useCallback(() => {
     if (!navigator.geolocation) {
@@ -453,14 +480,43 @@ export default function Book() {
 
       <section className="space-y-2">
         <h3 className={sectionTitle}>Items to Deliver</h3>
-        <div className={cn(cardCls, 'flex items-center gap-3')}>
-          <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center shrink-0">
-            <Package size={20} className="text-orange-500" />
-          </div>
-          <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="What are you sending?"
-            className={cn('flex-1 min-w-0 bg-transparent text-sm font-semibold outline-none',
-              dk ? 'text-white placeholder:text-white/30' : 'text-text-light placeholder:text-surface-light-3')} />
+        <div className={cardCls}>
+          <button type="button" onClick={() => setCategoryOpen(v => !v)} aria-expanded={categoryOpen}
+            className="w-full flex items-center gap-3 text-left">
+            <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center shrink-0">
+              {selectedCategory
+                ? <selectedCategory.icon size={20} className="text-orange-500" />
+                : <Package size={20} className="text-orange-500" />}
+            </div>
+            <span className={cn('flex-1 min-w-0 text-sm font-semibold', dk ? 'text-white' : 'text-text-light')}>
+              {selectedCategory ? selectedCategory.label : 'Choose item category'}
+            </span>
+            {selectedCategory
+              ? <span className="text-xs font-bold text-success">Change</span>
+              : <ChevronDown size={18} className={dk ? 'text-white/40' : 'text-text-light-2'} />}
+          </button>
+          {categoryOpen && (
+            <div className="grid grid-cols-2 gap-2 mt-3">
+              {ITEM_CATEGORIES.map(c => {
+                const selected = itemCategory === c.id;
+                return (
+                  <button key={c.id} type="button"
+                    onClick={() => { setItemCategory(c.id); setCategoryOpen(false); }}
+                    className={cn('flex flex-col items-start gap-1.5 p-3 rounded-xl border text-left transition',
+                      selected ? 'border-brand bg-brand/10'
+                        : dk ? 'border-white/5 hover:border-white/10' : 'border-surface-light-3 hover:border-brand/40')}>
+                    <c.icon size={18} className={selected ? 'text-brand' : dk ? 'text-white/60' : 'text-text-light-2'} />
+                    <span className={cn('text-xs font-bold', selected ? 'text-brand' : dk ? 'text-white' : 'text-text-light')}>{c.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
+        {selectedCategory && (
+          <input value={desc} onChange={e => setDesc(e.target.value)} placeholder={`Describe it (${selectedCategory.hint})`}
+            className={inp} />
+        )}
       </section>
 
       <section className="space-y-2">
@@ -749,7 +805,22 @@ export default function Book() {
     : 'Your order was cancelled automatically';
 
   // Collapsed mobile bar content per phase
-  const collapsedBar = phase === 'form' ? (
+  const routeSummary = (
+    <div className="px-4 pb-4 space-y-3">
+      <div className="flex items-end justify-between">
+        <div>
+          <p className={cn('text-xs', dk ? 'text-white/50' : 'text-text-light-2')}>Estimated Fare</p>
+          <p className={cn('text-lg font-extrabold', dk ? 'text-white' : 'text-text-light')}>
+            {pricing ? formatCurrency(pricing.breakdown.total) : '—'}
+          </p>
+        </div>
+        <p className={cn('text-xs font-semibold', dk ? 'text-white/50' : 'text-text-light-2')}>{formatDistance(distance)}</p>
+      </div>
+      {confirmButton}
+    </div>
+  );
+
+  const collapsedBar = phase === 'form' && routeReady ? routeSummary : phase === 'form' ? (
     <div className="px-4 pb-3 space-y-2">
       <LocationSearch
         label="Pickup Location"
@@ -790,6 +861,7 @@ export default function Book() {
         className="absolute inset-0 z-0"
         pinDropActive={!!pinMode}
         focusTarget={focusTarget ?? undefined}
+        fitBottomPadding={typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches ? 0 : routeReady ? ROUTE_PEEK_PX : openSheetPx()}
       />
 
       {/* ── Back button — replaces the hidden navbar's own way home.
@@ -811,7 +883,7 @@ export default function Book() {
         <>
           <div className="absolute z-20 flex items-center gap-3"
             style={{ top: 'calc(env(safe-area-inset-top, 0px) + 12px)', left: 12, right: 12 }}>
-            <button onClick={() => setPinMode(null)}
+            <button onClick={() => { setPinMode(null); setSheetOpen(true); }}
               className="w-11 h-11 rounded-full bg-white shadow-lg flex items-center justify-center text-text-light-2 shrink-0">
               <ArrowLeftIcon size={20} />
             </button>
@@ -823,7 +895,7 @@ export default function Book() {
             </div>
           </div>
           <div className="absolute z-20 left-4 right-4" style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)' }}>
-            <button onClick={() => setPinMode(null)}
+            <button onClick={() => { setPinMode(null); setSheetOpen(true); }}
               className="w-full bg-brand text-white py-4 rounded-full font-bold text-base shadow-xl shadow-brand/30">
               Done
             </button>
@@ -864,7 +936,7 @@ export default function Book() {
           dk ? 'bg-surface-dark-2 border-t border-white/5' : 'bg-white border-t border-surface-light-3',
         )}
         animate={{
-          height: pinMode ? '0px' : sheetOpen ? '58dvh' : `${SHEET_COLLAPSED}px`,
+          height: pinMode ? '0px' : sheetOpen ? `${SHEET_OPEN_VH}dvh` : `${sheetCollapsedPx}px`,
           opacity: pinMode ? 0 : 1,
         }}
         style={{ pointerEvents: pinMode ? 'none' : 'auto' }}

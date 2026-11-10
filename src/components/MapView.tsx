@@ -74,6 +74,9 @@ export interface MapViewProps {
    *  GPS). Change `key` for every new pick. `bottomPadding` (px) keeps the
    *  place above a bottom sheet. */
   focusTarget?: { lat: number; lng: number; key: number; bottomPadding?: number };
+  /** Pixels covered at the bottom by a sheet. The route fit keeps the whole
+   *  route above it, so it is visible when the sheet is collapsed. */
+  fitBottomPadding?: number;
 }
 
 // ── Mapbox style + token ───────────────────────────────────────────────
@@ -423,7 +426,7 @@ async function fetchDirectionsRoute(
 }
 
 // ── Fit camera to points helper ────────────────────────────────────────
-function fitToMapLibre(map: MLMap, pts: [number, number][]) {
+function fitToMapLibre(map: MLMap, pts: [number, number][], bottomPad = 0) {
   if (!pts || pts.length < 2) return;
   let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
   pts.forEach(([lat, lng]) => {
@@ -437,7 +440,7 @@ function fitToMapLibre(map: MLMap, pts: [number, number][]) {
   if (Number.isFinite(minLng) && Number.isFinite(maxLng)) {
     try {
       map.fitBounds([[minLng, minLat], [maxLng, maxLat]], {
-        padding: 60, maxZoom: 16, duration: 800,
+        padding: { top: 60, bottom: 60 + bottomPad, left: 60, right: 60 }, maxZoom: 16, duration: 800,
       });
     } catch {
       void 0;
@@ -467,17 +470,6 @@ function markerSpec(
         </div>
       </div>`,
       w: 44, h: 44, anchor: 'center',
-    };
-  }
-  if (type === 'bike') {
-    return {
-      html: `<div style="position:relative;width:34px;height:34px;display:flex;align-items:center;justify-content:center">
-        <div style="position:absolute;inset:-5px;border-radius:50%;background:${color}30;animation:pulse-ring 2.4s ease-out infinite"></div>
-        <div style="width:24px;height:24px;background:${color};border:2.5px solid white;border-radius:50%;box-shadow:0 3px 12px rgba(0,0,0,0.35);position:relative;z-index:2;display:flex;align-items:center;justify-content:center">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="18.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/></svg>
-        </div>
-      </div>`,
-      w: 34, h: 34, anchor: 'center',
     };
   }
   if (type === 'pickup') {
@@ -539,9 +531,12 @@ export default function MapView({
   congestionRoute,
   recenterSignal,
   focusTarget,
+  fitBottomPadding = 0,
   onFollowPausedChange,
 }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const fitBottomRef = useRef(fitBottomPadding);
+  fitBottomRef.current = fitBottomPadding;
   const [engine, setEngine] = useState<'maplibre' | 'leaflet'>(() =>
     isWebGL2Supported() ? 'maplibre' : 'leaflet',
   );
@@ -1043,7 +1038,7 @@ export default function MapView({
           ...validMarkers.map((m) => [m.lat, m.lng] as [number, number]),
           ...pts,
         ];
-        fitToMapLibre(mapRef.current, all);
+        fitToMapLibre(mapRef.current, all, fitBottomRef.current);
       }
     })();
 
@@ -1307,7 +1302,7 @@ export default function MapView({
         ];
         if (allPts.length >= 2) {
           try {
-            map.fitBounds(L.latLngBounds(allPts), { padding: [50, 50], maxZoom: 16 });
+            map.fitBounds(L.latLngBounds(allPts), { paddingTopLeft: [50, 50], paddingBottomRight: [50, 50 + fitBottomRef.current], maxZoom: 16 });
           } catch {
             void 0;
           }
