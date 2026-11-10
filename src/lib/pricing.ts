@@ -137,7 +137,17 @@ export function formulaPricing(
   const companyShare = round2(r.companyShareAboveBase * Math.max(0, riderPay - r.riderBaseFare));
   const companyFee = round2(r.companyFlatFee + companyShare);
   const total = round2(riderPay + fuelCost + r.companyFlatFee);
-  return { riderPay: round2(riderPay), fuelCost, companyShare, companyFee, serviceFee: r.companyFlatFee, total };
+  // The customer's total is unchanged. The service fee shown to the customer
+  // is the company's commission, and the rider-pay line shows the rider's pay
+  // after the commission's share above the base. Together they add up to the total.
+  return {
+    riderPay: round2(riderPay - companyShare),
+    fuelCost,
+    companyShare,
+    companyFee,
+    serviceFee: companyFee,
+    total,
+  };
 }
 
 export function calculatePrice(
