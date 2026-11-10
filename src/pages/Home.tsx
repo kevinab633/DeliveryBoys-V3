@@ -1,7 +1,7 @@
 import { Link, Navigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Package, UtensilsCrossed, ShoppingCart, FileText, Building2, Zap, Bike, ArrowRight, Shield, Clock, MapPin, TrendingUp, TrendingDown, Minus, Star, ChevronRight, Power, PowerOff, DollarSign, CheckCircle2, Wallet } from 'lucide-react';
+import { Package, Bike, ArrowRight, Shield, Clock, MapPin, TrendingUp, TrendingDown, Minus, Star, ChevronRight, Power, PowerOff, DollarSign, CheckCircle2, Wallet } from 'lucide-react';
 import { useThemeStore } from '../stores/themeStore';
 import { useContentStore } from '../stores/contentStore';
 import { useAuthStore } from '../stores/authStore';
@@ -10,16 +10,8 @@ import { cn, formatCurrency } from '../lib/utils';
 import { riderEarningsForOrder } from '../lib/pricing';
 import { RiderProfile } from '../lib/types';
 import CommissionCard from '../components/CommissionCard';
+import { services } from '../lib/services';
 
-const services = [
-  { icon: Package, name: 'Parcel Delivery', desc: 'Send and receive parcels of all sizes safely and securely.', features: ['Delivery options', 'Careful handling', 'Real-time tracking', 'Delivery updates'], img: '/images/parcel-delivery.jpg' },
-  { icon: UtensilsCrossed, name: 'Food Delivery', desc: 'Hot meals delivered fresh from your favorite restaurants.', features: ['Temperature-controlled', 'Fast pickup', 'Multiple restaurants', 'Contactless delivery'], img: '/images/food-delivery.jpg' },
-  { icon: ShoppingCart, name: 'Grocery Delivery', desc: 'Fresh groceries delivered right to your doorstep.', features: ['Market shopping', 'Scheduled deliveries', 'Order updates', 'Bulk discounts'], img: '/images/grocery-delivery.jpg' },
-  { icon: FileText, name: 'Document Delivery', desc: 'Confidential document courier services.', features: ['Confidential handling', 'Proof of delivery', 'Express options', 'Corporate accounts'], img: '/images/document-delivery.jpg' },
-  { icon: Building2, name: 'Corporate Deliveries', desc: 'Tailored delivery solutions for businesses.', features: ['Dedicated manager', 'Volume discounts', 'Monthly invoicing', 'Custom SLA'], img: '/images/corporate-delivery.jpg' },
-  { icon: Zap, name: 'Express / Same-Day', desc: 'Fast delivery options when available.', features: ['Estimated delivery window', 'Priority handling', 'Live GPS tracking', 'Status updates'], img: '/images/express-delivery.jpg' },
-  { icon: Bike, name: 'On-Demand Delivery', desc: 'Request a rider anytime for immediate pickups.', features: ['Instant dispatch', '7 days a week', 'Flexible scheduling', 'Pay per delivery'], img: '/images/ondemand-delivery.jpg' },
-];
 
 
 
@@ -348,14 +340,11 @@ function CustomerHomePage() {
               </div>
               <div>
                 <h3 className={cn('text-3xl font-extrabold mb-4', dk ? 'text-white' : 'text-gray-900')}>{s.name}</h3>
-                <p className={cn('mb-6', dk ? 'text-white/60' : 'text-gray-600')}>{s.desc}</p>
-                <ul className="space-y-2 mb-6">
-                  {s.features.map(f => (
-                    <li key={f} className={cn('flex items-center gap-2 text-sm', dk ? 'text-white/70' : 'text-gray-600')}>
-                      <span className="w-1.5 h-1.5 rounded-full bg-brand" /> {f}
-                    </li>
+                <div className="space-y-3 mb-6">
+                  {s.paragraphs.map((p, j) => (
+                    <p key={j} className={cn(dk ? 'text-white/60' : 'text-gray-600')}>{p}</p>
                   ))}
-                </ul>
+                </div>
                 <Link to={user ? '/book' : '/auth/login?role=customer'} className="inline-flex items-center gap-2 bg-brand text-white px-6 py-3 rounded-full font-bold text-sm hover:bg-brand-dark transition">
                   Book This Service <ArrowRight size={16} />
                 </Link>
