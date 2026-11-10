@@ -114,7 +114,8 @@ export const PAY_RATES = {
   riderBaseKm: 4,
   riderPerKmAfterBase: 2.5,
   companyFlatFee: 5,
-  companyShareAboveBase: 0.1,
+  /** Commission: the share of the total fare the company keeps. */
+  commissionRate: 0.15,
 };
 
 /** Orders created before this moment keep the old 75% rider earnings. */
@@ -130,20 +131,17 @@ export function formulaPricing(
   fuelPricePerLitre: number = FUEL_PRICE_PER_LITER
 ) {
   const r = PAY_RATES;
-  const riderPay = distance <= r.riderBaseKm
+  const grossRiderPay = distance <= r.riderBaseKm
     ? r.riderBaseFare
     : r.riderBaseFare + r.riderPerKmAfterBase * (distance - r.riderBaseKm);
   const fuelCost = round2((distance + r.approachKm) * (FUEL_CONSUMPTION[vehicleType] / 100) * fuelPricePerLitre);
-  const companyShare = round2(r.companyShareAboveBase * Math.max(0, riderPay - r.riderBaseFare));
-  const companyFee = round2(r.companyFlatFee + companyShare);
-  const total = round2(riderPay + fuelCost + r.companyFlatFee);
-  // The customer's total is unchanged. The service fee shown to the customer
-  // is the company's commission, and the rider-pay line shows the rider's pay
-  // after the commission's share above the base. Together they add up to the total.
+  const total = round2(grossRiderPay + fuelCost + r.companyFlatFee);
+  // Commission is a share of the total fare. The service fee shown to the
+  // customer is this commission; the rider-pay line is what is left for the rider.
+  const companyFee = round2(total * r.commissionRate);
   return {
-    riderPay: round2(riderPay - companyShare),
+    riderPay: round2(total - fuelCost - companyFee),
     fuelCost,
-    companyShare,
     companyFee,
     serviceFee: companyFee,
     total,
@@ -183,16 +181,21 @@ export function calculatePrice(
 }
 
 /** What the rider receives for an order.
- *  - Orders from 2026-10-13 (all vehicles): fare minus the company fee.
+ *  - Orders from 2026-10-13: fare minus the commission saved on the order
+ *    (falls back to the formula for orders saved without one).
  *  - Older orders: 75% of the fare, as before. */
 export function riderEarningsForOrder(order: {
   price: number;
   distance: number;
   vehicleType: VehicleType;
   createdAt: number;
+  commission?: number;
 }): number {
   if (order.createdAt >= PRICING_EFFECTIVE_AT) {
-    return round2(order.price - formulaPricing(order.distance, order.vehicleType).companyFee);
+    const commission = typeof order.commission === 'number'
+      ? order.commission
+      : formulaPricing(order.distance, order.vehicleType).companyFee;
+    return round2(order.price - commission);
   }
   return order.price * 0.75;
 }

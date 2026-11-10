@@ -179,7 +179,7 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
     // Same inputs as the booking screen, so the stored price matches what the customer saw.
     const content = useContentStore.getState();
     const fuels = useFuelPriceStore.getState();
-    const { price } = calculatePrice(distance, data.vehicleType, content.priceRules, content.manualOverrides, content.pricingMode, { petrol: fuels.pricePerLitre, diesel: fuels.dieselPricePerLitre });
+    const { price, breakdown } = calculatePrice(distance, data.vehicleType, content.priceRules, content.manualOverrides, content.pricingMode, { petrol: fuels.pricePerLitre, diesel: fuels.dieselPricePerLitre });
     const orderType: OrderType = data.orderType || 'instant';
     const baseOrder: Order = {
       // NOTE: the Supabase `orders.id` column is a real `uuid` — a
@@ -195,6 +195,7 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
       packageDescription: data.packageDescription,
       distance,
       price,
+      commission: breakdown.companyFee,
       status: 'pending',
       orderType,
       scheduledFor: orderType === 'scheduled' ? data.scheduledFor : undefined,
