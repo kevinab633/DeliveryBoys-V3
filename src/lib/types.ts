@@ -57,8 +57,6 @@ export interface Order {
   dropoff: Location;
   distance: number; // km
   price: number;
-  /** Company commission for this order, fixed when the order is booked. */
-  commission?: number;
   status: OrderStatus;
   vehicleType: VehicleType;
   packageDescription: string;
