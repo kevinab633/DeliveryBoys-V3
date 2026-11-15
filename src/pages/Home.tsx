@@ -264,15 +264,15 @@ function CustomerHomePage() {
               {/* Primary CTAs */}
               <div className="flex flex-col sm:flex-row gap-3 mb-6">
                 <Link to="/book"
-                  className="inline-flex items-center justify-center gap-2 bg-brand text-white px-8 py-4 rounded-full font-bold text-lg hover:bg-brand-dark transition shadow-xl shadow-brand/25 group">
-                  <BookCalendarIcon size={22} />
+                  className="inline-flex items-center justify-start gap-3 bg-brand text-white pl-8 pr-6 py-4 rounded-full font-bold text-lg hover:bg-brand-dark transition shadow-xl shadow-brand/25 group">
+                  <BookCalendarIcon size={24} />
                   {getContent('home.cta.primary', 'Book a Delivery')}
-                  <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                  <ArrowRight size={20} className="ml-auto group-hover:translate-x-1 transition-transform" />
                 </Link>
                 <Link to="/my-orders"
-                  className={cn('liquid-glass-btn inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-bold text-lg group',
+                  className={cn('liquid-glass-btn inline-flex items-center justify-start gap-3 pl-8 pr-8 py-4 rounded-2xl font-bold text-lg group',
                     dk ? 'text-white hover:text-brand' : 'text-gray-800 hover:text-brand')}>
-                  <MapPin size={22} />
+                  <MapPin size={24} className="shrink-0" />
                   Track Orders
                 </Link>
               </div>
@@ -467,19 +467,20 @@ function CustomerHomePage() {
 
 // ── Role switch: riders get the rider home; everyone else keeps the
 //    customer/visitor page completely unchanged. ─────────────────────
-/** The calendar-plus icon, drawn as a mask so it takes the text colour
- *  (white on the red button, dark/light in the outline button). */
-function BookCalendarIcon({ size = 22 }: { size?: number }) {
-  const url = 'url(/icons/book-delivery.png)';
+/** The calendar-plus icon, drawn as an SVG with the same 24px grid and
+ *  2px stroke as the other icons, so it lines up with the map pin. */
+function BookCalendarIcon({ size = 24 }: { size?: number }) {
   return (
-    <span aria-hidden="true" className="inline-block shrink-0"
-      style={{
-        width: size, height: size, backgroundColor: 'currentColor',
-        WebkitMaskImage: url, maskImage: url,
-        WebkitMaskRepeat: 'no-repeat', maskRepeat: 'no-repeat',
-        WebkitMaskPosition: 'center', maskPosition: 'center',
-        WebkitMaskSize: 'contain', maskSize: 'contain',
-      }} />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0">
+      <path d="M21 13V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h7" />
+      <path d="M3 10h18" />
+      <path d="M8 3v3" />
+      <path d="M16 3v3" />
+      <circle cx="17" cy="17" r="4" />
+      <path d="M17 15v4" />
+      <path d="M15 17h4" />
+    </svg>
   );
 }
 
