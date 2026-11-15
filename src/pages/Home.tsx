@@ -262,7 +262,7 @@ function CustomerHomePage() {
               <div className="flex flex-col sm:flex-row gap-3 mb-6">
                 <Link to={user ? '/book' : '/auth/signup'}
                   className="inline-flex items-center justify-center gap-2 bg-brand text-white px-8 py-4 rounded-full font-bold text-lg hover:bg-brand-dark transition shadow-xl shadow-brand/25 group">
-                  <Package size={22} />
+                  <BookCalendarIcon size={22} />
                   {user ? getContent('home.cta.primary', 'Book a Delivery') : 'Get Started'}
                   <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
                 </Link>
@@ -270,7 +270,7 @@ function CustomerHomePage() {
                   <Link to="/my-orders"
                     className={cn('inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-bold text-lg border-2 transition group',
                       dk ? 'border-white/15 text-white hover:border-brand hover:text-brand' : 'border-gray-200 text-gray-700 hover:border-brand hover:text-brand')}>
-                    <Package size={22} />
+                    <MapPin size={22} />
                     Track Orders
                   </Link>
                 ) : (
@@ -432,7 +432,7 @@ function CustomerHomePage() {
                 </Link>
                 {user?.role === 'customer' ? (
                   <Link to="/my-orders" className="inline-flex items-center gap-2 border-2 border-white/25 text-white px-8 py-4 rounded-2xl font-bold text-lg hover:bg-white/10 transition">
-                    <Package size={20} /> Track Orders
+                    <MapPin size={20} /> Track Orders
                   </Link>
                 ) : (
                   <Link to="/auth/signup?role=rider" className="inline-flex items-center gap-2 border-2 border-white/25 text-white px-8 py-4 rounded-2xl font-bold text-lg hover:bg-white/10 transition">
@@ -450,6 +450,22 @@ function CustomerHomePage() {
 
 // ── Role switch: riders get the rider home; everyone else keeps the
 //    customer/visitor page completely unchanged. ─────────────────────
+/** The calendar-plus icon, drawn as a mask so it takes the text colour
+ *  (white on the red button, dark/light in the outline button). */
+function BookCalendarIcon({ size = 22 }: { size?: number }) {
+  const url = 'url(/icons/book-delivery.png)';
+  return (
+    <span aria-hidden="true" className="inline-block shrink-0"
+      style={{
+        width: size, height: size, backgroundColor: 'currentColor',
+        WebkitMaskImage: url, maskImage: url,
+        WebkitMaskRepeat: 'no-repeat', maskRepeat: 'no-repeat',
+        WebkitMaskPosition: 'center', maskPosition: 'center',
+        WebkitMaskSize: 'contain', maskSize: 'contain',
+      }} />
+  );
+}
+
 export default function Home() {
   const { user } = useAuthStore();
   if (user?.role === 'rider') return <RiderHomePage />;
