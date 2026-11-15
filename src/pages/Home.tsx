@@ -251,12 +251,48 @@ function CustomerHomePage() {
           <div className="grid lg:grid-cols-2 gap-16 items-center">
             {/* Left - Text */}
             <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8 }}>
+              {user?.role === 'customer' ? (
+<>
+              {/* Customer: the layout from the approved mockup */}
+              <p className={cn('text-2xl sm:text-3xl font-semibold mb-1', dk ? 'text-white/90' : 'text-gray-900')}>Welcome back,</p>
+              <h1 className={cn('text-5xl sm:text-6xl md:text-7xl font-black leading-[1.02] tracking-tight', dk ? 'text-white' : 'text-gray-900')}>
+                {user.name.split(' ')[0]}
+              </h1>
+              <p className={cn('mt-3 text-lg font-medium', dk ? 'text-white/60' : 'text-gray-600')}>Fast. Safe. Reliable.</p>
+              <div className="mt-3 mb-8 h-1 w-14 rounded-full bg-brand" />
+
+              <div className="space-y-4 max-w-md">
+                <Link to="/book"
+                  className="group flex w-full items-center gap-4 rounded-2xl bg-brand px-5 py-5 text-white shadow-xl shadow-brand/25 transition hover:bg-brand-dark">
+                  <span className="h-12 w-px shrink-0 bg-white/50" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-xl font-bold">{getContent('home.cta.primary', 'Book a Delivery')}</span>
+                    <span className="block text-sm text-white/80">Send packages, documents &amp; more</span>
+                  </span>
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-black/25">
+                    <ArrowRight size={20} className="transition-transform group-hover:translate-x-1" />
+                  </span>
+                </Link>
+
+                <Link to="/my-orders"
+                  className={cn('group flex w-full items-center gap-4 rounded-2xl border px-5 py-5 transition',
+                    dk ? 'border-white/10 bg-surface-dark-3/80 text-white hover:border-white/20' : 'border-gray-200 bg-white text-gray-900 shadow-sm hover:border-gray-300')}>
+                  <MapPin size={28} className="shrink-0" />
+                  <span className={cn('h-12 w-px shrink-0', dk ? 'bg-white/20' : 'bg-gray-300')} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-xl font-bold">Track Orders</span>
+                    <span className={cn('block text-sm', dk ? 'text-white/60' : 'text-gray-500')}>Real-time updates on your delivery</span>
+                  </span>
+                  <span className={cn('flex h-11 w-11 shrink-0 items-center justify-center rounded-full', dk ? 'bg-white/10' : 'bg-gray-100')}>
+                    <ArrowRight size={20} className="transition-transform group-hover:translate-x-1" />
+                  </span>
+                </Link>
+              </div>
+</>
+              ) : (
+<>
               <h1 className={cn('text-5xl sm:text-6xl md:text-7xl font-black leading-[1.05] tracking-tight mb-3', dk ? 'text-white' : 'text-gray-900')}>
-                {user?.role === 'customer' ? (
-                  `Welcome back, ${user.name.split(' ')[0]}`
-                ) : (
-                  'We go the extra mile for you'
-                )}
+                We go the extra mile for you
               </h1>
               {/* Primary CTAs */}
               <div className="flex flex-col sm:flex-row gap-3 mb-6">
@@ -266,22 +302,15 @@ function CustomerHomePage() {
                   {user ? getContent('home.cta.primary', 'Book a Delivery') : 'Get Started'}
                   <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
                 </Link>
-                {user?.role === 'customer' ? (
-                  <Link to="/my-orders"
-                    className={cn('liquid-glass-btn inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-bold text-lg group',
-                      dk ? 'text-white hover:text-brand' : 'text-gray-800 hover:text-brand')}>
-                    <MapPin size={22} />
-                    Track Orders
-                  </Link>
-                ) : (
-                  <Link to="/auth/signup?role=rider"
-                    className={cn('liquid-glass-btn inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-bold text-lg group',
-                      dk ? 'text-white hover:text-brand' : 'text-gray-800 hover:text-brand')}>
-                    <Bike size={22} />
-                    {getContent('home.cta.secondary', 'Become a Rider')}
-                  </Link>
-                )}
+                <Link to="/auth/signup?role=rider"
+                  className={cn('liquid-glass-btn inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-bold text-lg group',
+                    dk ? 'text-white hover:text-brand' : 'text-gray-800 hover:text-brand')}>
+                  <Bike size={22} />
+                  {getContent('home.cta.secondary', 'Become a Rider')}
+                </Link>
               </div>
+</>
+              )}
 
             </motion.div>
 
