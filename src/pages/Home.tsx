@@ -261,31 +261,19 @@ function CustomerHomePage() {
               <p className={cn('mt-3 text-lg font-medium', dk ? 'text-white/60' : 'text-gray-600')}>Fast. Safe. Reliable.</p>
               <div className="mt-3 mb-8 h-1 w-14 rounded-full bg-brand" />
 
-              <div className="space-y-4 max-w-md">
+              {/* Primary CTAs */}
+              <div className="flex flex-col sm:flex-row gap-3 mb-6">
                 <Link to="/book"
-                  className="group flex w-full items-center gap-4 rounded-2xl bg-brand px-5 py-5 text-white shadow-xl shadow-brand/25 transition hover:bg-brand-dark">
-                  <span className="h-12 w-px shrink-0 bg-white/50" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-xl font-bold">{getContent('home.cta.primary', 'Book a Delivery')}</span>
-                    <span className="block text-sm text-white/80">Send packages, documents &amp; more</span>
-                  </span>
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-black/25">
-                    <ArrowRight size={20} className="transition-transform group-hover:translate-x-1" />
-                  </span>
+                  className="inline-flex items-center justify-center gap-2 bg-brand text-white px-8 py-4 rounded-full font-bold text-lg hover:bg-brand-dark transition shadow-xl shadow-brand/25 group">
+                  <BookCalendarIcon size={22} />
+                  {getContent('home.cta.primary', 'Book a Delivery')}
+                  <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
                 </Link>
-
                 <Link to="/my-orders"
-                  className={cn('group flex w-full items-center gap-4 rounded-2xl border px-5 py-5 transition',
-                    dk ? 'border-white/10 bg-surface-dark-3/80 text-white hover:border-white/20' : 'border-gray-200 bg-white text-gray-900 shadow-sm hover:border-gray-300')}>
-                  <MapPin size={28} className="shrink-0" />
-                  <span className={cn('h-12 w-px shrink-0', dk ? 'bg-white/20' : 'bg-gray-300')} />
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-xl font-bold">Track Orders</span>
-                    <span className={cn('block text-sm', dk ? 'text-white/60' : 'text-gray-500')}>Real-time updates on your delivery</span>
-                  </span>
-                  <span className={cn('flex h-11 w-11 shrink-0 items-center justify-center rounded-full', dk ? 'bg-white/10' : 'bg-gray-100')}>
-                    <ArrowRight size={20} className="transition-transform group-hover:translate-x-1" />
-                  </span>
+                  className={cn('liquid-glass-btn inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-bold text-lg group',
+                    dk ? 'text-white hover:text-brand' : 'text-gray-800 hover:text-brand')}>
+                  <MapPin size={22} />
+                  Track Orders
                 </Link>
               </div>
 </>
