@@ -36,7 +36,7 @@ export default function Footer() {
             <div className="space-y-3">
               {[
                 { icon: Phone, text: '+233 544 188 778' },
-                { icon: Mail, text: 'support.deliveryboys.gh@gmail.com' },
+                { icon: Mail, text: 'support.deliveryboysgh@gmail.com' },
                 { icon: MapPin, text: 'Accra, Ghana' },
                 { icon: Clock, text: 'Mon-Sun: 6AM - 10PM' },
               ].map((c,i) => (

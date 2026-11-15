@@ -140,7 +140,7 @@ export default function LegalPage({ kind }: { kind: LegalKey }) {
         })}</ul>
       )}
     </section>)}</div>
-    <p className={cn('mt-8 text-xs', dk ? 'text-white/35' : 'text-gray-500')}>Questions? Contact support.deliveryboys.gh@gmail.com. This page provides general product information and is not legal advice.</p>
+    <p className={cn('mt-8 text-xs', dk ? 'text-white/35' : 'text-gray-500')}>Questions? Contact support.deliveryboysgh@gmail.com. This page provides general product information and is not legal advice.</p>
   </article></main>;
 }
 
