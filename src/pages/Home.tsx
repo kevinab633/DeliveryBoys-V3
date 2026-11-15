@@ -268,15 +268,15 @@ function CustomerHomePage() {
                 </Link>
                 {user?.role === 'customer' ? (
                   <Link to="/my-orders"
-                    className={cn('inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-bold text-lg border-2 transition group',
-                      dk ? 'border-white/15 text-white hover:border-brand hover:text-brand' : 'border-gray-200 text-gray-700 hover:border-brand hover:text-brand')}>
+                    className={cn('liquid-glass-btn inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-bold text-lg group',
+                      dk ? 'text-white hover:text-brand' : 'text-gray-800 hover:text-brand')}>
                     <MapPin size={22} />
                     Track Orders
                   </Link>
                 ) : (
                   <Link to="/auth/signup?role=rider"
-                    className={cn('inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-bold text-lg border-2 transition group',
-                      dk ? 'border-white/15 text-white hover:border-brand hover:text-brand' : 'border-gray-200 text-gray-700 hover:border-brand hover:text-brand')}>
+                    className={cn('liquid-glass-btn inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-bold text-lg group',
+                      dk ? 'text-white hover:text-brand' : 'text-gray-800 hover:text-brand')}>
                     <Bike size={22} />
                     {getContent('home.cta.secondary', 'Become a Rider')}
                   </Link>
