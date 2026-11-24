@@ -33,7 +33,8 @@ const ITEM_CATEGORIES: { id: string; label: string; icon: typeof Smartphone; hin
   { id: 'electronics', label: 'Electronics', icon: Smartphone, hint: 'e.g. phone, charger, laptop' },
   { id: 'grocery', label: 'Grocery', icon: ShoppingBasket, hint: 'e.g. 2 bags of rice, vegetables' },
   { id: 'clothing', label: 'Clothing', icon: Shirt, hint: 'e.g. 3 shirts, shoes' },
-  { id: 'documents', label: 'Documents & Others', icon: FileText, hint: 'e.g. envelope, parcel, keys' },
+  { id: 'documents', label: 'Documents', icon: FileText, hint: 'e.g. contracts, certificates, invoices' },
+  { id: 'others', label: 'Others', icon: Package, hint: 'e.g. gifts, keys, personal belongings' },
 ];
 // Navbar is h-16 = 4rem. We use 4.5rem to give a little breathing room.
 const NAV_HEIGHT_REM = 4.5;
