@@ -1,7 +1,7 @@
 import { Link, Navigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Package, Bike, ArrowRight, Shield, Clock, MapPin, TrendingUp, TrendingDown, Minus, Star, ChevronRight, Power, PowerOff, DollarSign, CheckCircle2, Wallet } from 'lucide-react';
+import { Bike, ArrowRight, Shield, Clock, MapPin, TrendingUp, TrendingDown, Minus, Star, ChevronRight, Power, PowerOff, CheckCircle2, Wallet } from 'lucide-react';
 import { useThemeStore } from '../stores/themeStore';
 import { useContentStore } from '../stores/contentStore';
 import { useAuthStore } from '../stores/authStore';
@@ -9,7 +9,6 @@ import { useOrderStore } from '../stores/orderStore';
 import { cn, formatCurrency } from '../lib/utils';
 import { riderEarningsForOrder } from '../lib/pricing';
 import { RiderProfile } from '../lib/types';
-import CommissionCard from '../components/CommissionCard';
 import { services } from '../lib/services';
 
 
@@ -38,15 +37,10 @@ function RiderHomePage() {
   const rider = user as RiderProfile;
 
   // ── Real stats from the rider's profile + order history ─────────
-  const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
-  const todayStart = startOfToday.getTime();
   const weekAgo = Date.now() - 7 * 86400000;
   const prevWeekStart = Date.now() - 14 * 86400000;
 
   const myDelivered = orders.filter(o => o.riderId === rider.id && o.status === 'delivered');
-  const todayDelivered = myDelivered.filter(o => (o.deliveredAt ?? 0) >= todayStart);
-  const todayEarnings = todayDelivered.reduce((s, o) => s + riderEarningsForOrder(o), 0);
   const weekEarnings = myDelivered.filter(o => (o.deliveredAt ?? 0) >= weekAgo).reduce((s, o) => s + riderEarningsForOrder(o), 0);
   const prevWeekEarnings = myDelivered
     .filter(o => (o.deliveredAt ?? 0) >= prevWeekStart && (o.deliveredAt ?? 0) < weekAgo)
@@ -97,28 +91,12 @@ function RiderHomePage() {
                 {rider.availability === 'online' ? <><Power size={22} /> Online — Tap to Go Offline</> : <><PowerOff size={22} /> Go Online</>}
               </button>
               <Link to="/rider/dashboard"
-                className={cn('inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-bold text-lg border-2 transition group',
-                  dk ? 'border-white/15 text-white hover:border-brand hover:text-brand' : 'border-gray-200 text-gray-700 hover:border-brand hover:text-brand')}>
+                className={cn('liquid-glass-btn inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-bold text-lg group',
+                  dk ? 'text-white hover:text-brand' : 'text-gray-800 hover:text-brand')}>
                 Go to Dashboard <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
               </Link>
             </div>
 
-            {/* Quick stats — today */}
-            <div className="grid grid-cols-3 gap-3 max-w-xl">
-              <div className={card}>
-                <Package size={18} className="text-brand mb-2" />
-                <p className={cn('text-2xl font-extrabold', dk ? 'text-white' : 'text-gray-900')}>{todayDelivered.length}</p>
-                <p className={cn('text-xs', dk ? 'text-white/40' : 'text-gray-500')}>Deliveries today</p>
-              </div>
-              <div className={card}>
-                <DollarSign size={18} className="text-success mb-2" />
-                <p className={cn('text-2xl font-extrabold', dk ? 'text-white' : 'text-gray-900')}>{formatCurrency(todayEarnings)}</p>
-                <p className={cn('text-xs', dk ? 'text-white/40' : 'text-gray-500')}>Earned today</p>
-              </div>
-              <div className="col-span-3">
-                <CommissionCard rider={rider} orders={orders} dk={dk} />
-              </div>
-            </div>
           </motion.div>
         </div>
       </section>
@@ -214,7 +192,7 @@ function RiderHomePage() {
 function CustomerHomePage() {
   const dk = useThemeStore(s => s.theme === 'dark');
   const { getContent } = useContentStore();
-  const { user } = useAuthStore();
+  const { user, hasAccount } = useAuthStore();
   const [legacyHeroOpacity, setLegacyHeroOpacity] = useState(1);
   useEffect(() => {
     const updateFade = () => {
@@ -284,7 +262,7 @@ function CustomerHomePage() {
               </h1>
               {/* Primary CTAs */}
               <div className="flex flex-col sm:flex-row gap-3 mb-6">
-                <Link to={user ? '/book' : '/auth/signup'}
+                <Link to={user ? '/book' : hasAccount ? '/auth/login?role=customer' : '/auth/signup'}
                   className="inline-flex items-center justify-center gap-2 bg-brand text-white px-8 py-4 rounded-full font-bold text-lg hover:bg-brand-dark transition shadow-xl shadow-brand/25 group">
                   <BookCalendarIcon size={22} />
                   {user ? getContent('home.cta.primary', 'Book a Delivery') : 'Get Started'}
@@ -444,7 +422,7 @@ function CustomerHomePage() {
               <h2 className="text-4xl md:text-5xl font-black text-white mb-4 tracking-tight">Ready to Send a Delivery?</h2>
               <p className="text-white/75 text-lg mb-10 max-w-xl mx-auto">Book now and get matched with a verified rider in seconds. Available 7 days a week.</p>
               <div className="flex flex-wrap justify-center gap-4">
-                <Link to={user ? '/book' : '/auth/signup'} className="inline-flex items-center gap-2 bg-white text-brand px-8 py-4 rounded-2xl font-bold text-lg hover:bg-white/90 transition shadow-xl group">
+                <Link to={user ? '/book' : hasAccount ? '/auth/login?role=customer' : '/auth/signup'} className="inline-flex items-center gap-2 bg-white text-brand px-8 py-4 rounded-2xl font-bold text-lg hover:bg-white/90 transition shadow-xl group">
                   {user ? 'Book Now' : 'Get Started'} <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
                 </Link>
                 {user?.role === 'customer' ? (

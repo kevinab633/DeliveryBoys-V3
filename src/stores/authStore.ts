@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { User, RiderProfile, UserRole, RiderStatus, VehicleType } from '../lib/types';
-import { generateId, generateOTP } from '../lib/utils';
+import { generateId, generateOTP, nameFromEmail } from '../lib/utils';
 import { usersApi } from '../lib/usersApi';
 import { useThemeStore } from './themeStore';
 
@@ -9,6 +9,9 @@ interface AuthStore {
   user: User | RiderProfile | null;
   allUsers: (User | RiderProfile)[];
   usersLoaded: boolean;
+  /** Set once anyone has signed in or signed up on this device, so a
+   *  signed-out returning user is sent to sign-in, not sign-up. */
+  hasAccount: boolean;
   otpPending: { contact: string; otp: string; role: UserRole; method: 'email' | 'phone' } | null;
   /** Fetches every account from Supabase and merges it into allUsers —
    *  call this once on app startup, same pattern as orderStore's init(). */
@@ -68,6 +71,7 @@ export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
   user: null,
   allUsers: [DEFAULT_MANAGER, ...DEMO_RIDERS],
   usersLoaded: false,
+  hasAccount: false,
   otpPending: null,
 
   // Merges real Supabase accounts into local state on startup. The demo
@@ -149,7 +153,7 @@ export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
     if (!user) {
       user = {
         id: generateId(),
-        name: emailOrPhone.split('@')[0] || 'User',
+        name: nameFromEmail(method === 'email' ? emailOrPhone : '') || 'User',
         [method]: emailOrPhone,
         role,
         createdAt: Date.now(),
@@ -161,7 +165,16 @@ export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
       // Found (remotely or locally) but not yet merged into local allUsers.
       set(s => (s.allUsers.some(u => u.id === user!.id) ? s : { allUsers: [...s.allUsers, user!] }));
     }
-    set({ user, otpPending: null });
+    // Name comes from the email until the user edits it: a blank name or the
+    // raw email prefix is replaced with a readable name. Typed names are kept.
+    if (user.email && (!user.name || user.name.toLowerCase() === user.email.split('@')[0].toLowerCase())) {
+      const derived = nameFromEmail(user.email);
+      if (derived) {
+        user = { ...user, name: derived };
+        void usersApi.upsert(user);
+      }
+    }
+    set({ user, otpPending: null, hasAccount: true });
   },
 
   signupDirect: async (data) => {
@@ -174,7 +187,7 @@ export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
       createdAt: Date.now(),
       verified: true,
     };
-    set(s => ({ allUsers: [...s.allUsers, newUser], user: newUser, otpPending: null }));
+    set(s => ({ allUsers: [...s.allUsers, newUser], user: newUser, otpPending: null, hasAccount: true }));
     await usersApi.upsert(newUser);
   },
 
@@ -197,7 +210,7 @@ export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
       nationalIdUrl: data.nationalIdUrl,
       photoUrl: data.photoUrl,
     };
-    set(s => ({ allUsers: [...s.allUsers, newRider], user: newRider, otpPending: null }));
+    set(s => ({ allUsers: [...s.allUsers, newRider], user: newRider, otpPending: null, hasAccount: true }));
     // Riders are typically outdoors in daylight, where light mode is far
     // easier to read than dark — so default new rider accounts to light
     // the moment they sign up. This only happens once, here, at account
