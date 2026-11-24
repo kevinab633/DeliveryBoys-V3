@@ -15,6 +15,8 @@ interface Props {
   onPinClick?: () => void;
   pinActive?: boolean;
   onUseCurrentLocation?: () => void;
+  /** The customer's position: results near it are ranked first. */
+  nearby?: { lat: number; lng: number };
 }
 
 function toSelection(r: SearchResult) {
@@ -23,7 +25,7 @@ function toSelection(r: SearchResult) {
 
 export default function LocationSearch({
   label, hideLabel, value, onSelect, placeholder,
-  onPinClick, pinActive, onUseCurrentLocation,
+  onPinClick, pinActive, onUseCurrentLocation, nearby,
 }: Props) {
   const [query, setQuery] = useState(value);
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -51,6 +53,9 @@ export default function LocationSearch({
   }, []);
 
   // Debounced async search
+  const nearbyRef = useRef(nearby);
+  nearbyRef.current = nearby;
+
   const handleSearch = useCallback((q: string) => {
     setQuery(q);
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -67,7 +72,7 @@ export default function LocationSearch({
     setShow(true);
 
     debounceRef.current = setTimeout(async () => {
-      const r = await searchLocations(q);
+      const r = await searchLocations(q, nearbyRef.current);
       setResults(r);
       setShow(true);
       setLoading(false);
@@ -93,7 +98,7 @@ export default function LocationSearch({
     if (debounceRef.current) clearTimeout(debounceRef.current);
     setLoading(true);
     setShow(true);
-    const found = await searchLocations(query);
+    const found = await searchLocations(query, nearbyRef.current);
     setLoading(false);
     setResults(found);
     if (found.length > 0) handleSelect(toSelection(found[0]));

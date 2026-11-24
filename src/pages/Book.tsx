@@ -422,6 +422,7 @@ export default function Book() {
           onSelect={selectPickup} placeholder="Enter pickup location"
           onPinClick={handlePinPickup} pinActive={pinMode === 'pickup'}
           onUseCurrentLocation={handleUseLocationPickup}
+          nearby={customerGps ?? undefined}
         />
       </div>
     </div>
@@ -438,6 +439,7 @@ export default function Book() {
           onSelect={selectDropoff} placeholder="Enter drop-off location"
           onPinClick={handlePinDropoff} pinActive={pinMode === 'dropoff'}
           onUseCurrentLocation={handleUseLocationDropoff}
+          nearby={customerGps ?? undefined}
         />
       </div>
     </div>
@@ -849,6 +851,7 @@ export default function Book() {
         onPinClick={handlePinPickup}
         pinActive={pinMode === 'pickup'}
         onUseCurrentLocation={handleUseLocationPickup}
+        nearby={customerGps ?? undefined}
       />
       <button onClick={() => setSheetOpen(true)}
         className={cn('w-full flex items-center justify-center gap-1 py-2 text-xs font-semibold rounded-xl transition',
