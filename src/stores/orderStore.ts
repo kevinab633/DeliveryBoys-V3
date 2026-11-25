@@ -6,6 +6,8 @@ import { formatDate, generateOrderCode } from '../lib/utils';
 import { syncService } from '../lib/syncService';
 import { calculatePrice, calculateDistance, riderEarningsForOrder } from '../lib/pricing';
 import { useFuelPriceStore } from './fuelPriceStore';
+import { useDiscountStore } from './discountStore';
+import { discountPercentFor } from '../lib/discounts';
 import { useContentStore } from './contentStore';
 import { useAuthStore } from './authStore';
 import { useNotificationStore } from './notificationStore';
@@ -179,7 +181,10 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
     // Same inputs as the booking screen, so the stored price matches what the customer saw.
     const content = useContentStore.getState();
     const fuels = useFuelPriceStore.getState();
-    const { price } = calculatePrice(distance, data.vehicleType, content.priceRules, content.manualOverrides, content.pricingMode, { petrol: fuels.pricePerLitre, diesel: fuels.dieselPricePerLitre });
+    // Discount depends on how many deliveries this customer has completed.
+    const completed = get().orders.filter(o => o.customerId === data.customerId && o.status === 'delivered').length;
+    const discountPct = discountPercentFor(completed, useDiscountStore.getState().settings);
+    const { price, breakdown } = calculatePrice(distance, data.vehicleType, content.priceRules, content.manualOverrides, content.pricingMode, { petrol: fuels.pricePerLitre, diesel: fuels.dieselPricePerLitre }, discountPct);
     const orderType: OrderType = data.orderType || 'instant';
     const baseOrder: Order = {
       // NOTE: the Supabase `orders.id` column is a real `uuid` — a
@@ -195,6 +200,8 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
       packageDescription: data.packageDescription,
       distance,
       price,
+      commission: breakdown.companyFee,
+      discountPct: breakdown.discountPct,
       status: 'pending',
       orderType,
       scheduledFor: orderType === 'scheduled' ? data.scheduledFor : undefined,

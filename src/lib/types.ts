@@ -57,6 +57,10 @@ export interface Order {
   dropoff: Location;
   distance: number; // km
   price: number;
+  /** Company commission for this order (after any discount), saved at booking. */
+  commission?: number;
+  /** Discount percentage applied at booking, if any. */
+  discountPct?: number;
   status: OrderStatus;
   vehicleType: VehicleType;
   packageDescription: string;

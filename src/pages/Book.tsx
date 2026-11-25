@@ -7,6 +7,8 @@ import { useAuthStore } from '../stores/authStore';
 import { useOrderStore } from '../stores/orderStore';
 import { useContentStore } from '../stores/contentStore';
 import { calculateDistance, calculatePrice, estimateFuelCost, fuelPriceFor } from '../lib/pricing';
+import { discountPercentFor } from '../lib/discounts';
+import { useDiscountStore } from '../stores/discountStore';
 import { useFuelPriceStore } from '../stores/fuelPriceStore';
 import { cn, formatCurrency, formatDistance, formatDate } from '../lib/utils';
 import { showToast } from '../components/Toast';
@@ -209,7 +211,12 @@ export default function Book() {
   const fuelPrice = useFuelPriceStore(s => s.pricePerLitre);
   const dieselPrice = useFuelPriceStore(s => s.dieselPricePerLitre);
   const fuelPrices = { petrol: fuelPrice, diesel: dieselPrice };
-  const pricing = distance > 0 ? calculatePrice(distance, vehicle, priceRules, manualOverrides, pricingMode, fuelPrices) : null;
+  // Discount from the manager's settings, using this customer's completed deliveries.
+  const discountSettings = useDiscountStore(s => s.settings);
+  const discountPct = user
+    ? discountPercentFor(orders.filter(o => o.customerId === user.id && o.status === 'delivered').length, discountSettings)
+    : 0;
+  const pricing = distance > 0 ? calculatePrice(distance, vehicle, priceRules, manualOverrides, pricingMode, fuelPrices, discountPct) : null;
   const fuelEst = distance > 0 ? estimateFuelCost(distance, vehicle, fuelPriceFor(vehicle, fuelPrices)) : 0;
 
   useEffect(() => {
@@ -220,8 +227,8 @@ export default function Book() {
 
   const priceForVehicle = useCallback((vt: VehicleType) => {
     if (distance <= 0) return null;
-    return calculatePrice(distance, vt, priceRules, manualOverrides, pricingMode, { petrol: fuelPrice, diesel: dieselPrice });
-  }, [distance, priceRules, manualOverrides, pricingMode, fuelPrice, dieselPrice]);
+    return calculatePrice(distance, vt, priceRules, manualOverrides, pricingMode, { petrol: fuelPrice, diesel: dieselPrice }, discountPct);
+  }, [distance, priceRules, manualOverrides, pricingMode, fuelPrice, dieselPrice, discountPct]);
 
   const handleMapClick = useCallback((lat: number, lng: number) => {
     if (pinMode !== 'pickup' && pinMode !== 'dropoff') return;
@@ -593,6 +600,12 @@ export default function Book() {
             <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Distance</span>
             <span className={cn('font-semibold', dk ? 'text-white' : 'text-text-light')}>{formatDistance(distance)}</span>
           </div>
+          {pricing.breakdown.discountPct ? (
+            <div className="flex justify-between text-success font-semibold">
+              <span>Discount ({pricing.breakdown.discountPct}%)</span>
+              <span>−{formatCurrency(pricing.breakdown.discountAmount ?? 0)}</span>
+            </div>
+          ) : null}
           <div className="flex justify-between">
             <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Rider pay</span>
             <span className={dk ? 'text-white/70' : 'text-text-light-2'}>{formatCurrency(pricing.breakdown.riderPay ?? pricing.breakdown.baseFare)}</span>
