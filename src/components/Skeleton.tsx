@@ -1,3 +1,6 @@
+import { useEffect, useState } from 'react';
+import { Loader2 } from 'lucide-react';
+import { useThemeStore } from '../stores/themeStore';
 import { cn } from '../lib/utils';
 
 export function Skeleton({ className, rounded = 'md' }: { className?: string; rounded?: 'sm' | 'md' | 'lg' | 'pill' }) {
@@ -43,11 +46,22 @@ export function ListSkeleton({ rows = 4 }: { rows?: number }) {
 }
 
 export function MapSkeleton({ className }: { className?: string }) {
+  const dk = useThemeStore(s => s.theme === 'dark');
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setSlow(true), 10000);
+    return () => clearTimeout(t);
+  }, []);
   return (
-    <div className={cn('db-map-skeleton relative overflow-hidden', className)} aria-label="Loading map">
-      <div className="absolute inset-0 db-map-grid" />
-      <div className="absolute left-1/3 top-1/3 h-20 w-20 rounded-full border-4 border-brand/15" />
-      <Skeleton className="absolute bottom-4 left-4 h-3 w-28" rounded="pill" />
+    <div role="status" aria-live="polite" aria-label="Loading map"
+      className={cn('db-map-skeleton relative overflow-hidden flex flex-col items-center justify-center gap-3 px-6 text-center', className)}>
+      <Loader2 size={32} className="animate-spin text-brand" aria-hidden="true" />
+      <p className={cn('text-sm font-semibold', dk ? 'text-white/70' : 'text-gray-700')}>Loading map…</p>
+      {slow && (
+        <p className={cn('text-xs max-w-xs', dk ? 'text-white/45' : 'text-gray-500')}>
+          This is taking longer than usual. Check your internet connection; the map will appear when it loads.
+        </p>
+      )}
     </div>
   );
 }

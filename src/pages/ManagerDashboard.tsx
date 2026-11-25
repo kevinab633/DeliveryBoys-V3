@@ -7,6 +7,8 @@ import { useAuthStore } from '../stores/authStore';
 import { useOrderStore } from '../stores/orderStore';
 import { useContentStore } from '../stores/contentStore';
 import { useFuelPriceStore } from '../stores/fuelPriceStore';
+import { useDiscountStore } from '../stores/discountStore';
+import { DiscountSettings } from '../lib/discounts';
 import { cn, formatCurrency, formatDate, timeAgo } from '../lib/utils';
 import { RiderProfile, PriceRule } from '../lib/types';
 import MapView from '../components/MapView';
@@ -16,8 +18,10 @@ type Tab = 'overview' | 'orders' | 'riders' | 'map' | 'pricing' | 'content';
 export default function ManagerDashboard() {
   const dk = useThemeStore(s => s.theme === 'dark');
   const { user, getRiders, getCustomers, approveRider, rejectRider, suspendRider } = useAuthStore();
+  // Hooks must all run before the early return below (signing out makes user null).
+  const confirmCommissionPayment = useAuthStore(st => st.confirmCommissionPayment);
   const { orders, getTotalRevenue } = useOrderStore();
-  const { content, updateContent, priceRules, updatePriceRule, pricingMode, setPricingMode, manualOverrides, setManualOverride, removeManualOverride } = useContentStore();
+  const { content, updateContent, pricingMode, setPricingMode, manualOverrides, setManualOverride, removeManualOverride } = useContentStore();
   const fuelPrice = useFuelPriceStore(st => st.pricePerLitre);
   const dieselPrice = useFuelPriceStore(st => st.dieselPricePerLitre);
   const fuelUpdatedAt = useFuelPriceStore(st => st.updatedAt);
@@ -28,6 +32,22 @@ export default function ManagerDashboard() {
   const [fuelSaving, setFuelSaving] = useState<'petrol' | 'diesel' | null>(null);
   const [fuelMessage, setFuelMessage] = useState<{ ok: boolean; text: string } | null>(null);
   useEffect(() => { setPetrolDraft(fuelPrice.toFixed(2)); }, [fuelPrice]);
+
+  const discounts = useDiscountStore(st => st.settings);
+  const saveDiscountSettings = useDiscountStore(st => st.save);
+  const [discountDraft, setDiscountDraft] = useState<DiscountSettings>(discounts);
+  const [discountSaving, setDiscountSaving] = useState(false);
+  const [discountMessage, setDiscountMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  useEffect(() => { setDiscountDraft(discounts); }, [discounts]);
+
+  const handleSaveDiscounts = async () => {
+    setDiscountSaving(true);
+    const result = await saveDiscountSettings(discountDraft);
+    setDiscountSaving(false);
+    setDiscountMessage(result.ok
+      ? { ok: true, text: 'Discounts saved. New bookings will use them.' }
+      : { ok: false, text: `Could not save: ${result.error ?? 'unknown error'}` });
+  };
   useEffect(() => { setDieselDraft(dieselPrice.toFixed(2)); }, [dieselPrice]);
 
   const handleSaveFuel = async (fuel: 'petrol' | 'diesel') => {
@@ -79,7 +99,6 @@ export default function ManagerDashboard() {
   const pendingRiders = riders.filter(r => r.status === 'pending');
   const onlineRiders = riders.filter(r => r.availability === 'online' && r.status === 'approved');
   const pendingCommission = riders.filter(r => r.commissionPaymentRequest);
-  const confirmCommissionPayment = useAuthStore(st => st.confirmCommissionPayment);
 
   const card = cn('app-card p-6', dk ? '' : 'bg-white');
   const inp = cn('w-full px-4 py-2.5 rounded-xl text-sm border transition', dk ? 'bg-surface-dark-3 border-white/10 text-white placeholder:text-white/30' : 'bg-gray-50 border-gray-200 text-gray-900');
@@ -280,6 +299,72 @@ export default function ManagerDashboard() {
                 )}
               </div>
               <div className={card}>
+                <h3 className={cn('font-bold mb-1', dk ? 'text-white' : 'text-gray-900')}>Discounts</h3>
+                <p className={cn('text-xs mb-4', dk ? 'text-white/40' : 'text-gray-500')}>
+                  The percentage comes off the whole fare: the customer pays less, and the commission and the rider's share (fuel included) each give up the same percentage. Sign-up offer counts every booking, cancelled ones included.
+                </p>
+                <div className="space-y-4">
+                  <div className={cn('p-4 rounded-xl border', dk ? 'border-white/5' : 'border-gray-100')}>
+                    <div className="flex items-center justify-between mb-3">
+                      <p className={cn('text-sm font-semibold', dk ? 'text-white' : 'text-gray-900')}>First sign-up offer</p>
+                      <button type="button" aria-pressed={discountDraft.signup.active}
+                        onClick={() => setDiscountDraft({ ...discountDraft, signup: { ...discountDraft.signup, active: !discountDraft.signup.active } })}
+                        className={cn('px-4 py-1.5 rounded-full text-xs font-bold transition',
+                          discountDraft.signup.active ? 'bg-success text-white' : dk ? 'bg-surface-dark-3 text-white/50' : 'bg-gray-100 text-gray-500')}>
+                        {discountDraft.signup.active ? 'On' : 'Off'}
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <label className={cn('text-xs font-semibold', dk ? 'text-white/60' : 'text-gray-600')}>Discount (%)
+                        <input type="number" min={0} max={100} step="0.5" value={discountDraft.signup.pct}
+                          onChange={e => setDiscountDraft({ ...discountDraft, signup: { ...discountDraft.signup, pct: Number(e.target.value) } })}
+                          className={cn(inp, 'mt-1')} />
+                      </label>
+                      <label className={cn('text-xs font-semibold', dk ? 'text-white/60' : 'text-gray-600')}>For the first (bookings)
+                        <input type="number" min={0} max={100} step="1" value={discountDraft.signup.deliveries}
+                          onChange={e => setDiscountDraft({ ...discountDraft, signup: { ...discountDraft.signup, deliveries: Number(e.target.value) } })}
+                          className={cn(inp, 'mt-1')} />
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className={cn('p-4 rounded-xl border', dk ? 'border-white/5' : 'border-gray-100')}>
+                    <div className="flex items-center justify-between mb-3">
+                      <p className={cn('text-sm font-semibold', dk ? 'text-white' : 'text-gray-900')}>Seasonal discount</p>
+                      <button type="button" aria-pressed={discountDraft.seasonal.active}
+                        onClick={() => setDiscountDraft({ ...discountDraft, seasonal: { ...discountDraft.seasonal, active: !discountDraft.seasonal.active } })}
+                        className={cn('px-4 py-1.5 rounded-full text-xs font-bold transition',
+                          discountDraft.seasonal.active ? 'bg-success text-white' : dk ? 'bg-surface-dark-3 text-white/50' : 'bg-gray-100 text-gray-500')}>
+                        {discountDraft.seasonal.active ? 'On' : 'Off'}
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <label className={cn('text-xs font-semibold', dk ? 'text-white/60' : 'text-gray-600')}>Name (e.g. Christmas)
+                        <input type="text" value={discountDraft.seasonal.label}
+                          onChange={e => setDiscountDraft({ ...discountDraft, seasonal: { ...discountDraft.seasonal, label: e.target.value } })}
+                          className={cn(inp, 'mt-1')} />
+                      </label>
+                      <label className={cn('text-xs font-semibold', dk ? 'text-white/60' : 'text-gray-600')}>Discount (%)
+                        <input type="number" min={0} max={100} step="0.5" value={discountDraft.seasonal.pct}
+                          onChange={e => setDiscountDraft({ ...discountDraft, seasonal: { ...discountDraft.seasonal, pct: Number(e.target.value) } })}
+                          className={cn(inp, 'mt-1')} />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 mt-4 flex-wrap">
+                  <button type="button" onClick={handleSaveDiscounts} disabled={discountSaving}
+                    className="bg-brand text-white px-5 py-2.5 rounded-full text-sm font-bold disabled:opacity-60">
+                    {discountSaving ? 'Saving…' : 'Save discounts'}
+                  </button>
+                  {discountMessage && (
+                    <p className={cn('text-xs font-semibold', discountMessage.ok ? 'text-success' : 'text-danger')}>{discountMessage.text}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className={card}>
                 <h3 className={cn('font-bold mb-4', dk ? 'text-white' : 'text-gray-900')}>Pricing Mode</h3>
                 <div className="flex gap-3">
                   {(['auto', 'manual', 'hybrid'] as const).map(m => (
@@ -293,29 +378,6 @@ export default function ManagerDashboard() {
                 <p className={cn('text-xs mt-2', dk ? 'text-white/30' : 'text-gray-400')}>
                   Auto: algorithm-based · Manual: fixed prices by distance · Hybrid: auto with manual overrides
                 </p>
-              </div>
-
-              <div className={card}>
-                <h3 className={cn('font-bold mb-4', dk ? 'text-white' : 'text-gray-900')}>Price Rules</h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead><tr className={dk ? 'text-white/40' : 'text-gray-500'}>
-                      <th className="text-left p-2">Vehicle</th><th className="p-2">Range (km)</th><th className="p-2">Base</th><th className="p-2">/km Rate</th><th className="p-2">Fuel</th><th className="p-2">Margin</th>
-                    </tr></thead>
-                    <tbody>
-                      {priceRules.map(r => (
-                        <tr key={r.id} className={cn('border-t', dk ? 'border-white/5' : 'border-gray-100')}>
-                          <td className={cn('p-2 capitalize font-medium', dk ? 'text-white' : 'text-gray-900')}>{r.vehicleType}</td>
-                          <td className={cn('p-2 text-center', dk ? 'text-white/60' : 'text-gray-600')}>{r.minDistance}-{r.maxDistance}</td>
-                          <td className="p-2 text-center"><input type="number" step="0.5" value={r.baseFare} onChange={e => updatePriceRule(r.id, { baseFare: +e.target.value })} className={cn('w-16 text-center rounded-lg py-1 border', dk ? 'bg-surface-dark-3 border-white/10 text-white' : 'bg-gray-50 border-gray-200')} /></td>
-                          <td className="p-2 text-center"><input type="number" step="0.1" value={r.perKmRate} onChange={e => updatePriceRule(r.id, { perKmRate: +e.target.value })} className={cn('w-16 text-center rounded-lg py-1 border', dk ? 'bg-surface-dark-3 border-white/10 text-white' : 'bg-gray-50 border-gray-200')} /></td>
-                          <td className="p-2 text-center"><input type="number" step="0.1" value={r.fuelSurcharge} onChange={e => updatePriceRule(r.id, { fuelSurcharge: +e.target.value })} className={cn('w-16 text-center rounded-lg py-1 border', dk ? 'bg-surface-dark-3 border-white/10 text-white' : 'bg-gray-50 border-gray-200')} /></td>
-                          <td className="p-2 text-center"><input type="number" step="0.05" value={r.companyMargin} onChange={e => updatePriceRule(r.id, { companyMargin: +e.target.value })} className={cn('w-16 text-center rounded-lg py-1 border', dk ? 'bg-surface-dark-3 border-white/10 text-white' : 'bg-gray-50 border-gray-200')} /></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
               </div>
 
               {(pricingMode === 'manual' || pricingMode === 'hybrid') && (

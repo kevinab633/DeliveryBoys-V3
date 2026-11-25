@@ -42,16 +42,12 @@ async function searchMapbox(
       `?access_token=${TOKEN}` +
       // Wider type net so named places (universities, campuses,
       // landmarks, businesses) come back alongside plain addresses.
-      `&types=poi,address,place,locality,neighborhood` +
+      `&types=poi,address,place,locality,neighborhood,district` +
       // Partial-word suggestions while typing.
       `&autocomplete=true` +
-      `&limit=8&language=en`;
-    // Strict country filter only for very short queries — longer, more
-    // specific queries (e.g. full institution names) aren't overly
-    // restricted.
-    if (query.length < 4) {
-      url += `&country=gh`;
-    }
+      `&limit=10&language=en`;
+    // Ghana only, for every query. This is a Ghana-only delivery app.
+    url += `&country=gh`;
     if (proximity) {
       url += `&proximity=${proximity.lng},${proximity.lat}`;
     }
@@ -59,7 +55,7 @@ async function searchMapbox(
     if (!res.ok) return { results: [], ghanaMatch: false };
     const json = await res.json();
     const features: any[] = json?.features ?? [];
-    const results = features.map((f: any) => {
+    const results = features.filter(isGhanaFeature).map((f: any) => {
       const [lng, lat] = f.center as [number, number];
       const placeType: string = f.place_type?.[0] ?? 'area';
       let type: SearchResult['type'] = 'area';
@@ -75,7 +71,7 @@ async function searchMapbox(
         type,
       };
     });
-    return { results, ghanaMatch: features.some(isGhanaFeature) };
+    return { results, ghanaMatch: results.length > 0 };
   } catch {
     return { results: [], ghanaMatch: false };
   }
@@ -93,11 +89,9 @@ async function searchNominatim(
   try {
     let url =
       `https://nominatim.openstreetmap.org/search` +
-      `?format=jsonv2&limit=8&q=${encodeURIComponent(query)}`;
-    // Same rule as Mapbox: strict country filter only for short queries.
-    if (query.length < 4) {
-      url += `&countrycodes=gh`;
-    }
+      `?format=jsonv2&limit=10&q=${encodeURIComponent(query)}`;
+    // Ghana only, for every query (same as Mapbox).
+    url += `&countrycodes=gh`;
     if (proximity) {
       // Bias (not hard-limit) results toward the given point.
       const d = 0.75;
@@ -131,25 +125,49 @@ async function searchNominatim(
   }
 }
 
-// ── Forward geocode: Mapbox first, Nominatim as fallback ──────────
+// ── Forward geocode: both sources together, merged ───────────────
+// Mapbox (autocomplete, good for partial words) and OpenStreetMap (good for
+// local place names) are queried in parallel and merged, so a place one
+// source doesn't know still shows up from the other.
+
+function distanceMetres(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const R = 6371000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const h = Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+const normName = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+
 export async function searchLocations(
   query: string,
   proximity?: { lng: number; lat: number },
 ): Promise<SearchResult[]> {
   if (!query || query.length < 2) return [];
 
-  // 1) Mapbox is the primary source whenever the token is present.
-  const mapbox = await searchMapbox(query, proximity);
-  if (mapbox.results.length > 0 && mapbox.ghanaMatch) return mapbox.results;
+  const [mapbox, osm] = await Promise.all([
+    searchMapbox(query, proximity),
+    searchNominatim(query, proximity),
+  ]);
 
-  // 2) Fall back to OpenStreetMap Nominatim when Mapbox is unavailable,
-  //    errored, returned nothing, or only returned non-Ghana matches.
-  const osm = await searchNominatim(query, proximity);
-  if (osm.length > 0) return osm;
+  // Mapbox's order is already relevance + proximity, so it goes first.
+  // OSM results follow, nearest first when we know where the customer is.
+  const osmSorted = proximity
+    ? [...osm].sort((x, y) => distanceMetres(x, proximity) - distanceMetres(y, proximity))
+    : osm;
 
-  // 3) Nothing from OSM either — return whatever Mapbox had (may be
-  //    empty, or non-Ghana results for very unusual queries).
-  return mapbox.results;
+  const merged: SearchResult[] = [];
+  for (const r of [...mapbox.results, ...osmSorted]) {
+    // Same name within ~150 m is the same place listed twice: keep the first.
+    const duplicate = merged.some(m =>
+      normName(m.name) === normName(r.name) && distanceMetres(m, r) < 150);
+    if (!duplicate) merged.push(r);
+    if (merged.length >= 12) break;
+  }
+  return merged;
 }
 
 // ── Reverse geocode via Mapbox ────────────────────────────────────

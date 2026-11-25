@@ -11,9 +11,9 @@ export default function Profile() {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(user?.name || '');
   const [addingEmail, setAddingEmail] = useState(false);
-  const [addingPhone, setAddingPhone] = useState(false);
+  const [editingPhone, setEditingPhone] = useState(false);
+  const [phoneDraft, setPhoneDraft] = useState('');
   const [newEmail, setNewEmail] = useState('');
-  const [newPhone, setNewPhone] = useState('');
 
   if (!user) return <div className="pt-20 min-h-screen flex items-center justify-center"><p>Please sign in.</p></div>;
 
@@ -69,22 +69,30 @@ export default function Profile() {
                 </div>
               </div>
 
-              {/* Phone */}
+              {/* Phone: can be added or edited */}
               <div className={cn('p-4 rounded-xl border', dk ? 'border-white/5' : 'border-gray-100')}>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
                     <Phone size={16} className="text-brand" />
                     <span className={cn('text-sm font-medium', dk ? 'text-white/70' : 'text-gray-700')}>Phone</span>
                   </div>
-                  {user.phone ? (
-                    <span className={cn('text-sm', dk ? 'text-white' : 'text-gray-900')}>{user.phone}</span>
-                  ) : addingPhone ? (
-                    <div className="flex gap-2">
-                      <input value={newPhone} onChange={e => setNewPhone(e.target.value)} placeholder="0544188778" className={cn(inp, 'w-48')} />
-                      <button onClick={() => { addContact('phone', newPhone); setAddingPhone(false); }} className="bg-brand text-white px-3 py-1.5 rounded-full text-xs font-bold">Add</button>
+                  {editingPhone ? (
+                    <div className="flex items-center gap-2">
+                      <input value={phoneDraft} onChange={e => setPhoneDraft(e.target.value)} placeholder="0544188778" className={cn(inp, 'w-40')} />
+                      <button onClick={() => { if (phoneDraft.trim()) addContact('phone', phoneDraft.trim()); setEditingPhone(false); }}
+                        className="bg-brand text-white px-3 py-1.5 rounded-full text-xs font-bold">Save</button>
+                      <button onClick={() => setEditingPhone(false)}
+                        className={cn('px-2 py-1.5 text-xs font-bold', dk ? 'text-white/50' : 'text-gray-500')}>Cancel</button>
+                    </div>
+                  ) : user.phone ? (
+                    <div className="flex items-center gap-3">
+                      <span className={cn('text-sm', dk ? 'text-white' : 'text-gray-900')}>{user.phone}</span>
+                      <button onClick={() => { setPhoneDraft(user.phone || ''); setEditingPhone(true); }}
+                        className="text-brand text-sm font-bold">Edit</button>
                     </div>
                   ) : (
-                    <button onClick={() => setAddingPhone(true)} className="flex items-center gap-1 text-brand text-sm font-bold"><Plus size={14} /> Add</button>
+                    <button onClick={() => { setPhoneDraft(''); setEditingPhone(true); }}
+                      className="flex items-center gap-1 text-brand text-sm font-bold"><Plus size={14} /> Add</button>
                   )}
                 </div>
               </div>

@@ -1,13 +1,16 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bike, Car, Truck, ArrowRight, ArrowLeft as ArrowLeftIcon, Info, CheckCircle2, ChevronUp, ChevronDown, Zap, Calendar, X, AlertTriangle } from 'lucide-react';
+import { Bike, Car, Truck, ArrowRight, ArrowLeft as ArrowLeftIcon, Info, CheckCircle2, ChevronUp, ChevronDown, Zap, Calendar, X, AlertTriangle, MapPin, Package, Smartphone, ShoppingBasket, Shirt, FileText } from 'lucide-react';
 import { useThemeStore } from '../stores/themeStore';
 import { useAuthStore } from '../stores/authStore';
 import { useOrderStore } from '../stores/orderStore';
 import { useContentStore } from '../stores/contentStore';
 import { calculateDistance, calculatePrice, estimateFuelCost, fuelPriceFor } from '../lib/pricing';
+import { discountPercentFor } from '../lib/discounts';
+import { useDiscountStore } from '../stores/discountStore';
 import { useFuelPriceStore } from '../stores/fuelPriceStore';
+import { syncService } from '../lib/syncService';
 import { cn, formatCurrency, formatDistance, formatDate } from '../lib/utils';
 import { showToast } from '../components/Toast';
 import { VehicleType, OrderType } from '../lib/types';
@@ -23,6 +26,19 @@ const vehicles: { type: VehicleType; icon: typeof Bike; label: string; desc: str
 ];
 
 const SHEET_COLLAPSED = 160;
+// Open sheet height (% of the screen): tall enough to show the whole form.
+const SHEET_OPEN_VH = 66;
+// Collapsed height once both pickup and drop-off are chosen: route summary + Confirm.
+const ROUTE_PEEK_PX = 232;
+const openSheetPx = () => Math.round(window.innerHeight * SHEET_OPEN_VH / 100);
+
+const ITEM_CATEGORIES: { id: string; label: string; icon: typeof Smartphone; hint: string }[] = [
+  { id: 'electronics', label: 'Electronics', icon: Smartphone, hint: 'e.g. phone, charger, laptop' },
+  { id: 'grocery', label: 'Grocery', icon: ShoppingBasket, hint: 'e.g. 2 bags of rice, vegetables' },
+  { id: 'clothing', label: 'Clothing', icon: Shirt, hint: 'e.g. 3 shirts, shoes' },
+  { id: 'documents', label: 'Documents', icon: FileText, hint: 'e.g. contracts, certificates, invoices' },
+  { id: 'others', label: 'Others', icon: Package, hint: 'e.g. gifts, keys, personal belongings' },
+];
 // Navbar is h-16 = 4rem. We use 4.5rem to give a little breathing room.
 const NAV_HEIGHT_REM = 4.5;
 
@@ -45,9 +61,14 @@ export default function Book() {
   const [dropoff, setDropoff] = useState<{ lat: number; lng: number; address: string } | null>(null);
   const [vehicle, setVehicle] = useState<VehicleType>('motorcycle');
   const [desc, setDesc] = useState('');
+  const [itemCategory, setItemCategory] = useState('');
+  const [categoryOpen, setCategoryOpen] = useState(false);
+  const [showItemNotice, setShowItemNotice] = useState(false);
   const [phone, setPhone] = useState(user?.phone || '');
   const [pinMode, setPinMode] = useState<'pickup' | 'dropoff' | null>(null);
   const [sheetOpen, setSheetOpen] = useState(true);
+  const [focusTarget, setFocusTarget] = useState<{ lat: number; lng: number; key: number; bottomPadding?: number } | null>(null);
+  const [showBreakdown, setShowBreakdown] = useState(false);
   const [customerGps, setCustomerGps] = useState<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
@@ -75,19 +96,28 @@ export default function Book() {
   }, []);
 
   // ── Back button intercept ────────────────────────────────────────
-  const sheetOpenRef = useRef(sheetOpen);
-  sheetOpenRef.current = sheetOpen;
-
+  // One history entry per open sheet. Device back (Android, and the iPhone edge
+  // swipe) first closes the sheet; the next back leaves the page. Closing the sheet
+  // with its own button removes that entry, so back never does nothing.
+  const sheetEntryRef = useRef(false);
+  const pendingBackRef = useRef(0);
   useEffect(() => {
-    if (sheetOpen) {
+    if (sheetOpen && !sheetEntryRef.current) {
       window.history.pushState({ sheetOpen: true }, '');
+      sheetEntryRef.current = true;
+    } else if (!sheetOpen && sheetEntryRef.current) {
+      sheetEntryRef.current = false;
+      pendingBackRef.current += 1;
+      window.history.back();
     }
   }, [sheetOpen]);
 
   useEffect(() => {
     const handler = () => {
-      if (sheetOpenRef.current) {
-        // Collapse the sheet instead of navigating back
+      if (pendingBackRef.current > 0) { pendingBackRef.current -= 1; return; }
+      if (sheetEntryRef.current) {
+        // Device back used up the sheet's entry: collapse the sheet, stay on the page.
+        sheetEntryRef.current = false;
         setSheetOpen(false);
       }
     };
@@ -178,10 +208,33 @@ export default function Book() {
   }, []);
 
   const distance = pickup && dropoff ? calculateDistance(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng) : 0;
+
+  // Both places chosen: the sheet drops down so the whole route shows.
+  // (Done on the pin screen raises it again; see the Done button.)
+  const routeReady = !!(pickup && dropoff);
+  const routeReadyRef = useRef(false);
+  useEffect(() => {
+    if (routeReady && !routeReadyRef.current && phase === 'form') setSheetOpen(false);
+    routeReadyRef.current = routeReady;
+  }, [routeReady, phase]);
+  const sheetCollapsedPx = routeReady && phase === 'form' ? ROUTE_PEEK_PX : SHEET_COLLAPSED;
   const fuelPrice = useFuelPriceStore(s => s.pricePerLitre);
   const dieselPrice = useFuelPriceStore(s => s.dieselPricePerLitre);
   const fuelPrices = { petrol: fuelPrice, diesel: dieselPrice };
-  const pricing = distance > 0 ? calculatePrice(distance, vehicle, priceRules, manualOverrides, pricingMode, fuelPrices) : null;
+  // Discount from the manager's settings. Counts every booking this customer has made
+  // (cancelled ones too). The server count is used when it loads; the local list is the fallback.
+  const discountSettings = useDiscountStore(s => s.settings);
+  const [serverBookingCount, setServerBookingCount] = useState<number | null>(null);
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    syncService.countCustomerBookings(user.id).then(n => { if (!cancelled) setServerBookingCount(n); });
+    return () => { cancelled = true; };
+  }, [user?.id]);
+  const localBookingCount = user ? orders.filter(o => o.customerId === user.id).length : 0;
+  const bookingCount = Math.max(serverBookingCount ?? 0, localBookingCount);
+  const discountPct = user ? discountPercentFor(bookingCount, discountSettings) : 0;
+  const pricing = distance > 0 ? calculatePrice(distance, vehicle, priceRules, manualOverrides, pricingMode, fuelPrices, discountPct) : null;
   const fuelEst = distance > 0 ? estimateFuelCost(distance, vehicle, fuelPriceFor(vehicle, fuelPrices)) : 0;
 
   useEffect(() => {
@@ -192,13 +245,19 @@ export default function Book() {
 
   const priceForVehicle = useCallback((vt: VehicleType) => {
     if (distance <= 0) return null;
-    return calculatePrice(distance, vt, priceRules, manualOverrides, pricingMode, { petrol: fuelPrice, diesel: dieselPrice });
-  }, [distance, priceRules, manualOverrides, pricingMode, fuelPrice, dieselPrice]);
+    return calculatePrice(distance, vt, priceRules, manualOverrides, pricingMode, { petrol: fuelPrice, diesel: dieselPrice }, discountPct);
+  }, [distance, priceRules, manualOverrides, pricingMode, fuelPrice, dieselPrice, discountPct]);
 
-  const handleMapClick = useCallback(async (lat: number, lng: number) => {
-    const addr = await reverseGeocode(lat, lng);
-    if (pinMode === 'pickup') setPickup({ lat, lng, address: addr });
-    else if (pinMode === 'dropoff') setDropoff({ lat, lng, address: addr });
+  const handleMapClick = useCallback((lat: number, lng: number) => {
+    if (pinMode !== 'pickup' && pinMode !== 'dropoff') return;
+    const setPoint = pinMode === 'pickup' ? setPickup : setDropoff;
+    // Store the exact dropped point straight away. The address lookup runs
+    // afterwards and only updates the label if this is still the latest point,
+    // so a slow lookup can never move the pin back to an earlier spot.
+    setPoint({ lat, lng, address: `${lat.toFixed(5)}, ${lng.toFixed(5)}` });
+    reverseGeocode(lat, lng).then(addr => {
+      setPoint(prev => (prev && prev.lat === lat && prev.lng === lng ? { ...prev, address: addr } : prev));
+    });
   }, [pinMode]);
 
   // Minimum schedulable time: 15 minutes from now (for datetime-local)
@@ -207,6 +266,9 @@ export default function Book() {
     const pad = (n: number) => String(n).padStart(2, '0');
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   })();
+
+  const selectedCategory = ITEM_CATEGORIES.find(c => c.id === itemCategory);
+  const itemDescription = [selectedCategory?.label, desc.trim()].filter(Boolean).join(': ');
 
   const handleBook = () => {
     if (!pickup || !dropoff || !user) { navigate('/auth/login'); return; }
@@ -226,8 +288,8 @@ export default function Book() {
 
     const order = createOrder({
       customerId: user.id, customerName: user.name, customerPhone: phone || user.phone || '',
-      pickup, dropoff, vehicleType: vehicle, packageDescription: desc,
-      orderType, scheduledFor,
+      pickup, dropoff, vehicleType: vehicle, packageDescription: itemDescription,
+      orderType, scheduledFor, discountPct,
     });
     setOrderId(order.id);
 
@@ -303,6 +365,18 @@ export default function Book() {
   }, []);
 
   // ── "Use your current location" handlers ─────────────────────────
+  // ── Picked places: the map flies to the chosen place, above the sheet ──
+  const focusOn = useCallback((lat: number, lng: number, sheetWillBeOpen = true) => {
+    const isDesktop = typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches;
+    setFocusTarget({ lat, lng, key: Date.now(), bottomPadding: isDesktop ? 0 : sheetWillBeOpen ? openSheetPx() : ROUTE_PEEK_PX });
+  }, []);
+  const selectPickup = useCallback((v: { lat: number; lng: number; address: string }) => {
+    setPickup(v); setPinMode(null); focusOn(v.lat, v.lng, !dropoff);
+  }, [focusOn, dropoff]);
+  const selectDropoff = useCallback((v: { lat: number; lng: number; address: string }) => {
+    setDropoff(v); setPinMode(null); focusOn(v.lat, v.lng, !pickup);
+  }, [focusOn, pickup]);
+
   const handleUseLocationPickup = useCallback(() => {
     if (!navigator.geolocation) {
       showToast({ title: 'Unavailable', message: 'Geolocation is not supported by your browser', type: 'error' });
@@ -313,6 +387,7 @@ export default function Book() {
         const { latitude, longitude } = pos.coords;
         const address = await reverseGeocode(latitude, longitude);
         setPickup({ lat: latitude, lng: longitude, address });
+        focusOn(latitude, longitude);
       },
       () => {
         showToast({ title: 'Location denied', message: 'Please allow location access in your browser settings', type: 'error' });
@@ -331,6 +406,7 @@ export default function Book() {
         const { latitude, longitude } = pos.coords;
         const address = await reverseGeocode(latitude, longitude);
         setDropoff({ lat: latitude, lng: longitude, address });
+        focusOn(latitude, longitude);
       },
       () => {
         showToast({ title: 'Location denied', message: 'Please allow location access in your browser settings', type: 'error' });
@@ -356,7 +432,45 @@ export default function Book() {
        : 'bg-white border-surface-light-3 text-text-light placeholder:text-surface-light-3',
   );
 
-  // ── Shared form content ──────────────────────────────────────────
+  // ── Shared form content (booking layout: pickup & drop-off, items, vehicle,
+  //    fare, then the confirm button) ─────────────────────────────────
+  const cardCls = cn('rounded-2xl border p-3', dk ? 'bg-surface-dark-3/60 border-white/5' : 'bg-white border-surface-light-3');
+  const sectionTitle = cn('text-sm font-bold', dk ? 'text-white' : 'text-text-light');
+
+  const pickupRow = (
+    <div className="flex items-center gap-3">
+      <div className="w-9 h-9 rounded-full bg-success/15 flex items-center justify-center shrink-0">
+        <MapPin size={17} className="text-success" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <LocationSearch
+          hideLabel label="Pickup Location" value={pickup?.address || ''}
+          onSelect={selectPickup} placeholder="Enter pickup location"
+          onPinClick={handlePinPickup} pinActive={pinMode === 'pickup'}
+          onUseCurrentLocation={handleUseLocationPickup}
+          nearby={customerGps ?? undefined}
+        />
+      </div>
+    </div>
+  );
+
+  const dropoffRow = (
+    <div className="flex items-center gap-3">
+      <div className="w-9 h-9 rounded-full bg-danger/15 flex items-center justify-center shrink-0">
+        <MapPin size={17} className="text-danger" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <LocationSearch
+          hideLabel label="Drop-off Location" value={dropoff?.address || ''}
+          onSelect={selectDropoff} placeholder="Enter drop-off location"
+          onPinClick={handlePinDropoff} pinActive={pinMode === 'dropoff'}
+          onUseCurrentLocation={handleUseLocationDropoff}
+          nearby={customerGps ?? undefined}
+        />
+      </div>
+    </div>
+  );
+
   const formContent = (
     <>
       {/* Book Now / Schedule for Later toggle */}
@@ -384,128 +498,149 @@ export default function Book() {
         </div>
       )}
 
-      <div className="space-y-3">
-        <LocationSearch
-          label="Pickup Location"
-          value={pickup?.address || ''}
-          onSelect={(v) => { setPickup(v); setPinMode(null); }}
-          placeholder="Where to pick up?"
-          onPinClick={handlePinPickup}
-          pinActive={pinMode === 'pickup'}
-          onUseCurrentLocation={handleUseLocationPickup}
-        />
-        <LocationSearch
-          label="Drop-off Location"
-          value={dropoff?.address || ''}
-          onSelect={(v) => { setDropoff(v); setPinMode(null); }}
-          placeholder="Where to deliver?"
-          onPinClick={handlePinDropoff}
-          pinActive={pinMode === 'dropoff'}
-          onUseCurrentLocation={handleUseLocationDropoff}
-        />
-      </div>
+      <section className="space-y-2">
+        <h3 className={sectionTitle}>Pickup &amp; Drop-off</h3>
+        <div className={cardCls}>
+          {pickupRow}
+          <div className={cn('ml-12 my-3 border-t', dk ? 'border-white/5' : 'border-surface-light-2')} />
+          {dropoffRow}
+        </div>
+      </section>
 
-      <div>
-        <label className={cn('text-sm font-semibold mb-2 block', dk ? 'text-white/70' : 'text-text-light-2')}>Vehicle Type</label>
-        <div className="space-y-2">
-          {availableVehicleTypes.length === 0 && (
-            <p className={cn('rounded-2xl border px-4 py-3 text-sm', dk ? 'border-white/10 text-white/50' : 'border-surface-light-3 text-text-light-2')}>
-              No approved riders are online right now. Vehicle options will appear when a rider becomes available.
-            </p>
+      <section className="space-y-2">
+        <div className="flex items-center justify-between">
+          <h3 className={sectionTitle}>Items to Deliver</h3>
+          <button type="button" onClick={() => setShowItemNotice(v => !v)} aria-expanded={showItemNotice}
+            aria-label="Delivery notice" title="Delivery notice"
+            className={cn('w-8 h-8 rounded-full flex items-center justify-center transition',
+              dk ? 'text-white/50 hover:bg-white/5' : 'text-text-light-2 hover:bg-surface-light-2')}>
+            <Info size={18} />
+          </button>
+        </div>
+        {showItemNotice && (
+          <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
+            className={cn('p-4 rounded-xl border text-xs leading-relaxed space-y-2',
+              dk ? 'bg-surface-dark-3/80 border-white/5 text-white/70' : 'bg-surface-light-2 border-surface-light-3 text-text-light-2')}>
+            <p className={cn('font-bold uppercase tracking-wide', dk ? 'text-white' : 'text-text-light')}>Please note</p>
+            <p>Delivery Boys handles all orders with reasonable care. Prices may vary due to item value and weight.</p>
+            <p>However, we are not responsible for spillage or damage resulting from improper packaging of food items by the sender.</p>
+            <p>Any delivery-related damage or spillage should be reported immediately for review.</p>
+          </motion.div>
+        )}
+        <div className={cardCls}>
+          <button type="button" onClick={() => setCategoryOpen(v => !v)} aria-expanded={categoryOpen}
+            className="w-full flex items-center gap-3 text-left">
+            <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center shrink-0">
+              {selectedCategory
+                ? <selectedCategory.icon size={20} className="text-orange-500" />
+                : <Package size={20} className="text-orange-500" />}
+            </div>
+            <span className={cn('flex-1 min-w-0 text-sm font-semibold', dk ? 'text-white' : 'text-text-light')}>
+              {selectedCategory ? selectedCategory.label : 'Choose item category'}
+            </span>
+            {selectedCategory
+              ? <span className="text-xs font-bold text-success">Change</span>
+              : <ChevronDown size={18} className={dk ? 'text-white/40' : 'text-text-light-2'} />}
+          </button>
+          {categoryOpen && (
+            <div className="grid grid-cols-2 gap-2 mt-3">
+              {ITEM_CATEGORIES.map(c => {
+                const selected = itemCategory === c.id;
+                return (
+                  <button key={c.id} type="button"
+                    onClick={() => { setItemCategory(c.id); setCategoryOpen(false); }}
+                    className={cn('flex flex-col items-start gap-1.5 p-3 rounded-xl border text-left transition',
+                      selected ? 'border-brand bg-brand/10'
+                        : dk ? 'border-white/5 hover:border-white/10' : 'border-surface-light-3 hover:border-brand/40')}>
+                    <c.icon size={18} className={selected ? 'text-brand' : dk ? 'text-white/60' : 'text-text-light-2'} />
+                    <span className={cn('text-xs font-bold', selected ? 'text-brand' : dk ? 'text-white' : 'text-text-light')}>{c.label}</span>
+                  </button>
+                );
+              })}
+            </div>
           )}
+        </div>
+        {selectedCategory && (
+          <input value={desc} onChange={e => setDesc(e.target.value)} placeholder={`Describe it (${selectedCategory.hint})`}
+            className={inp} />
+        )}
+      </section>
+
+      <section className="space-y-2">
+        <h3 className={sectionTitle}>Vehicle</h3>
+        {availableVehicleTypes.length === 0 && (
+          <p className={cn('rounded-2xl border px-4 py-3 text-sm', dk ? 'border-white/10 text-white/50' : 'border-surface-light-3 text-text-light-2')}>
+            No approved riders are online right now. Vehicle options will appear when a rider becomes available.
+          </p>
+        )}
+        <div className="grid grid-cols-4 gap-2">
           {vehicles.filter(v => availableVehicleTypes.includes(v.type)).map(v => {
-            const vPrice = priceForVehicle(v.type);
             const selected = vehicle === v.type;
             return (
-              <button key={v.type} onClick={() => setVehicle(v.type)}
-                className={cn(
-                  'w-full flex items-center gap-3 p-3 rounded-2xl border transition text-left',
-                  selected
-                    ? 'border-brand bg-brand/8'
-                    : dk ? 'border-white/5 bg-surface-dark-3/50 hover:border-white/10' : 'border-surface-light-3 bg-white hover:border-surface-light-3',
-                )}>
-                <div className={cn(
-                  'w-10 h-10 rounded-full flex items-center justify-center shrink-0',
-                  selected ? 'bg-brand/15' : dk ? 'bg-white/5' : 'bg-surface-light-2',
-                )}>
-                  <v.icon size={20} className={selected ? 'text-brand' : dk ? 'text-white/40' : 'text-surface-light-3'} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className={cn('text-sm font-semibold', dk ? 'text-white' : 'text-text-light')}>{v.label}</p>
-                  <p className={cn('text-xs', dk ? 'text-white/40' : 'text-text-light-2')}>{v.desc}</p>
-                </div>
-                {vPrice && (
-                  <span className={cn('text-sm font-bold shrink-0', selected ? 'text-brand' : dk ? 'text-white/60' : 'text-text-light-2')}>
-                    {formatCurrency(vPrice.breakdown.total)}
-                  </span>
-                )}
+              <button key={v.type} type="button" onClick={() => setVehicle(v.type)}
+                className={cn('flex flex-col items-center gap-1 py-3 rounded-2xl border text-xs font-semibold transition',
+                  selected ? 'border-brand bg-brand/10 text-brand'
+                    : dk ? 'border-white/5 text-white/60 hover:border-white/10' : 'border-surface-light-3 text-text-light-2 hover:border-surface-light-3')}>
+                <v.icon size={20} />
+                {v.label}
               </button>
             );
           })}
         </div>
-      </div>
+      </section>
 
-      <div>
-        <label className={cn('text-sm font-semibold mb-1.5 block', dk ? 'text-white/70' : 'text-text-light-2')}>Package Description</label>
-        <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="What are you sending?" className={inp} />
-      </div>
-      <div>
-        <label className={cn('text-sm font-semibold mb-1.5 block', dk ? 'text-white/70' : 'text-text-light-2')}>Contact Phone</label>
+      <section className="space-y-2">
+        <h3 className={sectionTitle}>Contact Phone</h3>
         <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="Your phone number" className={inp} />
+      </section>
+
+      <div className={cn(cardCls, 'flex items-center justify-between p-4')}>
+        <div>
+          <p className={cn('text-xs', dk ? 'text-white/50' : 'text-text-light-2')}>Estimated Fare</p>
+          <p className={cn('text-xl font-extrabold', dk ? 'text-white' : 'text-text-light')}>
+            {pricing ? formatCurrency(pricing.breakdown.total) : 'Choose pickup and drop-off'}
+          </p>
+          {pricing && pricing.breakdown.discountPct ? (
+            <p className="text-xs font-semibold text-success">
+              <span className="line-through opacity-60">{formatCurrency(pricing.breakdown.total + (pricing.breakdown.discountAmount ?? 0))}</span>
+              {' '}· {pricing.breakdown.discountPct}% discount applied
+            </p>
+          ) : null}
+        </div>
+        {pricing && (
+          <button type="button" onClick={() => setShowBreakdown(v => !v)} aria-expanded={showBreakdown}
+            aria-label="Show price breakdown"
+            className={cn('w-10 h-10 rounded-full flex items-center justify-center transition',
+              dk ? 'text-white/50 hover:bg-white/5' : 'text-text-light-2 hover:bg-surface-light-2')}>
+            <Info size={18} />
+          </button>
+        )}
       </div>
 
-      {pricing && (
+      {pricing && showBreakdown && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-          className={cn('p-4 rounded-xl border', dk ? 'bg-surface-dark-3/80 border-white/5' : 'bg-surface-light-2 border-surface-light-3')}>
-          <div className="flex items-center gap-2 mb-3">
-            <Info size={16} className="text-brand" />
-            <span className={cn('text-sm font-semibold', dk ? 'text-white' : 'text-text-light')}>Price Breakdown</span>
+          className={cn('p-4 rounded-xl border space-y-1.5 text-sm', dk ? 'bg-surface-dark-3/80 border-white/5' : 'bg-surface-light-2 border-surface-light-3')}>
+          <div className="flex justify-between">
+            <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Distance</span>
+            <span className={cn('font-semibold', dk ? 'text-white' : 'text-text-light')}>{formatDistance(distance)}</span>
           </div>
-          <div className="space-y-1.5 text-sm">
-            <div className="flex justify-between">
-              <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Distance</span>
-              <span className={cn('font-semibold', dk ? 'text-white' : 'text-text-light')}>{formatDistance(distance)}</span>
+          {pricing.breakdown.discountPct ? (
+            <div className="flex justify-between text-success font-semibold">
+              <span>Discount ({pricing.breakdown.discountPct}%)</span>
+              <span>−{formatCurrency(pricing.breakdown.discountAmount ?? 0)}</span>
             </div>
-            {pricing.breakdown.riderPay !== undefined ? (
-              <>
-                <div className="flex justify-between">
-                  <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Rider Pay</span>
-                  <span className={dk ? 'text-white/70' : 'text-text-light-2'}>{formatCurrency(pricing.breakdown.riderPay)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Fuel</span>
-                  <span className={dk ? 'text-white/70' : 'text-text-light-2'}>{formatCurrency(pricing.breakdown.fuelCost)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Service Fee</span>
-                  <span className={dk ? 'text-white/70' : 'text-text-light-2'}>{formatCurrency(pricing.breakdown.serviceFee ?? 0)}</span>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="flex justify-between">
-                  <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Base Fare</span>
-                  <span className={dk ? 'text-white/70' : 'text-text-light-2'}>{formatCurrency(pricing.breakdown.baseFare)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Distance Fare</span>
-                  <span className={dk ? 'text-white/70' : 'text-text-light-2'}>{formatCurrency(pricing.breakdown.distanceFare)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Fuel Cost</span>
-                  <span className={dk ? 'text-white/70' : 'text-text-light-2'}>{formatCurrency(pricing.breakdown.fuelCost)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Service Fee</span>
-                  <span className={dk ? 'text-white/70' : 'text-text-light-2'}>{formatCurrency(pricing.breakdown.companyFee)}</span>
-                </div>
-              </>
-            )}
-            {pricing.breakdown.riderPay === undefined && (
-              <p className={cn('text-xs pt-1', dk ? 'text-white/25' : 'text-surface-light-3')}>
-                Est. fuel: {formatCurrency(fuelEst)} ({vehicle})
-              </p>
-            )}
+          ) : null}
+          <div className="flex justify-between">
+            <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Rider pay</span>
+            <span className={dk ? 'text-white/70' : 'text-text-light-2'}>{formatCurrency(pricing.breakdown.riderPay ?? pricing.breakdown.baseFare)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Fuel</span>
+            <span className={dk ? 'text-white/70' : 'text-text-light-2'}>{formatCurrency(pricing.breakdown.fuelCost)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className={dk ? 'text-white/50' : 'text-text-light-2'}>Service fee</span>
+            <span className={dk ? 'text-white/70' : 'text-text-light-2'}>{formatCurrency(pricing.breakdown.serviceFee ?? 0)}</span>
           </div>
         </motion.div>
       )}
@@ -517,16 +652,14 @@ export default function Book() {
       className={cn(
         'w-full py-4 rounded-full font-bold text-base transition flex items-center justify-center gap-2',
         pickup && dropoff
-          ? 'bg-brand text-white hover:bg-brand-dark shadow-lg shadow-brand/25'
+          ? (dk ? 'bg-white text-gray-900 hover:bg-white/90' : 'bg-gray-900 text-white hover:bg-gray-800')
           : dk ? 'bg-surface-dark-3 text-white/20 cursor-not-allowed' : 'bg-surface-light-3 text-surface-light-3 cursor-not-allowed',
       )}>
       {!user
         ? 'Sign In to Book'
         : orderType === 'scheduled'
-          ? <><Calendar size={18} /> {pricing ? `Schedule — ${formatCurrency(pricing.breakdown.total)}` : 'Schedule Delivery'}</>
-          : pricing
-            ? <>Confirm — {formatCurrency(pricing.breakdown.total)} <ArrowRight size={18} /></>
-            : <>Confirm Booking <ArrowRight size={18} /></>
+          ? <><Calendar size={18} /> Schedule Delivery</>
+          : <>Confirm &amp; Book <ArrowRight size={18} /></>
       }
     </button>
   );
@@ -731,16 +864,32 @@ export default function Book() {
     : 'Your order was cancelled automatically';
 
   // Collapsed mobile bar content per phase
-  const collapsedBar = phase === 'form' ? (
+  const routeSummary = (
+    <div className="px-4 pb-4 space-y-3">
+      <div className="flex items-end justify-between">
+        <div>
+          <p className={cn('text-xs', dk ? 'text-white/50' : 'text-text-light-2')}>Estimated Fare</p>
+          <p className={cn('text-lg font-extrabold', dk ? 'text-white' : 'text-text-light')}>
+            {pricing ? formatCurrency(pricing.breakdown.total) : '—'}
+          </p>
+        </div>
+        <p className={cn('text-xs font-semibold', dk ? 'text-white/50' : 'text-text-light-2')}>{formatDistance(distance)}</p>
+      </div>
+      {confirmButton}
+    </div>
+  );
+
+  const collapsedBar = phase === 'form' && routeReady ? routeSummary : phase === 'form' ? (
     <div className="px-4 pb-3 space-y-2">
       <LocationSearch
         label="Pickup Location"
         value={pickup?.address || ''}
-        onSelect={(v) => { setPickup(v); setPinMode(null); }}
+        onSelect={selectPickup}
         placeholder="Where to pick up?"
         onPinClick={handlePinPickup}
         pinActive={pinMode === 'pickup'}
         onUseCurrentLocation={handleUseLocationPickup}
+        nearby={customerGps ?? undefined}
       />
       <button onClick={() => setSheetOpen(true)}
         className={cn('w-full flex items-center justify-center gap-1 py-2 text-xs font-semibold rounded-xl transition',
@@ -771,6 +920,8 @@ export default function Book() {
         onMapClick={pinMode ? handleMapClick : undefined}
         className="absolute inset-0 z-0"
         pinDropActive={!!pinMode}
+        focusTarget={focusTarget ?? undefined}
+        fitBottomPadding={typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches ? 0 : routeReady ? ROUTE_PEEK_PX : openSheetPx()}
       />
 
       {/* ── Back button — replaces the hidden navbar's own way home.
@@ -792,7 +943,7 @@ export default function Book() {
         <>
           <div className="absolute z-20 flex items-center gap-3"
             style={{ top: 'calc(env(safe-area-inset-top, 0px) + 12px)', left: 12, right: 12 }}>
-            <button onClick={() => setPinMode(null)}
+            <button onClick={() => { setPinMode(null); setSheetOpen(true); }}
               className="w-11 h-11 rounded-full bg-white shadow-lg flex items-center justify-center text-text-light-2 shrink-0">
               <ArrowLeftIcon size={20} />
             </button>
@@ -804,7 +955,7 @@ export default function Book() {
             </div>
           </div>
           <div className="absolute z-20 left-4 right-4" style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)' }}>
-            <button onClick={() => setPinMode(null)}
+            <button onClick={() => { setPinMode(null); setSheetOpen(true); }}
               className="w-full bg-brand text-white py-4 rounded-full font-bold text-base shadow-xl shadow-brand/30">
               Done
             </button>
@@ -821,10 +972,12 @@ export default function Book() {
           dk ? 'bg-surface-dark-2/95 border-white/5 glass' : 'bg-white/95 border-surface-light-3 glass',
         )}>
           <div className="flex-1 overflow-y-auto p-5 space-y-4">
-            <div className="mb-1">
-              <h1 className={cn('text-xl font-extrabold', dk ? 'text-white' : 'text-text-light')}>{panelTitle}</h1>
-              <p className={cn('text-xs mt-0.5', dk ? 'text-white/40' : 'text-text-light-2')}>{panelSubtitle}</p>
-            </div>
+            {phase !== 'form' && (
+              <div className="mb-1">
+                <h1 className={cn('text-xl font-extrabold', dk ? 'text-white' : 'text-text-light')}>{panelTitle}</h1>
+                <p className={cn('text-xs mt-0.5', dk ? 'text-white/40' : 'text-text-light-2')}>{panelSubtitle}</p>
+              </div>
+            )}
             {panelContent}
           </div>
           {phase === 'form' && (
@@ -843,7 +996,7 @@ export default function Book() {
           dk ? 'bg-surface-dark-2 border-t border-white/5' : 'bg-white border-t border-surface-light-3',
         )}
         animate={{
-          height: pinMode ? '0px' : sheetOpen ? `calc(100dvh - env(safe-area-inset-top, 0px) - 3.5rem)` : `${SHEET_COLLAPSED}px`,
+          height: pinMode ? '0px' : sheetOpen ? `${SHEET_OPEN_VH}dvh` : `${sheetCollapsedPx}px`,
           opacity: pinMode ? 0 : 1,
         }}
         style={{ pointerEvents: pinMode ? 'none' : 'auto' }}
@@ -881,9 +1034,11 @@ export default function Book() {
         {sheetOpen && (
           <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
             <div className="flex-1 px-4 pb-4 space-y-4 overflow-y-auto">
-              <div className="mb-1">
-                <h1 className={cn('text-lg font-extrabold', dk ? 'text-white' : 'text-text-light')}>{panelTitle}</h1>
-              </div>
+              {phase !== 'form' && (
+                <div className="mb-1">
+                  <h1 className={cn('text-lg font-extrabold', dk ? 'text-white' : 'text-text-light')}>{panelTitle}</h1>
+                </div>
+              )}
               {panelContent}
             </div>
             {phase === 'form' && (

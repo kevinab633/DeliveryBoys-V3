@@ -56,3 +56,11 @@ export function escapeHtml(value: unknown): string {
 export function cn(...classes: (string | boolean | undefined | null)[]): string {
   return classes.filter(Boolean).join(' ');
 }
+
+/** A readable name from an email, e.g. "kofi.asante@gmail.com" -> "Kofi Asante".
+ *  Digits are dropped. Returns '' when the email gives nothing usable. */
+export function nameFromEmail(email?: string | null): string {
+  const local = (email || '').split('@')[0] || '';
+  const words = local.replace(/[0-9]+/g, ' ').split(/[._\-+\s]+/).filter(Boolean);
+  return words.map(w => w[0].toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+}

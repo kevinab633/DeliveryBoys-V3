@@ -35,7 +35,7 @@ export default function Contact() {
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
             {[{ icon: Phone, t: 'Call Us', v: '+233 544 188 778', l: 'tel:+233544188778' },
               { icon: MessageCircle, t: 'WhatsApp', v: '+233 544 188 778', l: 'https://wa.me/233544188778' },
-              { icon: Mail, t: 'Email', v: 'support.deliveryboys.gh@gmail.com', l: 'mailto:support.deliveryboys.gh@gmail.com' },
+              { icon: Mail, t: 'Email', v: 'support.deliveryboysgh@gmail.com', l: 'mailto:support.deliveryboysgh@gmail.com' },
               { icon: Clock, t: 'Hours', v: 'Mon-Sun: 6AM-10PM', l: '' }].map((c, i) => (
               <motion.div key={c.t} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.1 }}
                 className={cn('p-6 rounded-2xl border text-center', dk ? 'bg-surface-dark-3 border-white/5' : 'bg-white border-gray-200')}>

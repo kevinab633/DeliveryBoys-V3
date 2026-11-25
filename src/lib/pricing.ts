@@ -106,6 +106,10 @@ export interface PriceBreakdown {
   /** What the rider receives: rider pay minus the company share, plus fuel.
    *  Equals total minus companyFee. */
   riderEarnings?: number;
+  /** Discount applied to this fare, in percent (only when one applies). */
+  discountPct?: number;
+  /** Discount taken off the fare, in GHS. */
+  discountAmount?: number;
 }
 
 export const PAY_RATES = {
@@ -137,7 +141,17 @@ export function formulaPricing(
   const companyShare = round2(r.companyShareAboveBase * Math.max(0, riderPay - r.riderBaseFare));
   const companyFee = round2(r.companyFlatFee + companyShare);
   const total = round2(riderPay + fuelCost + r.companyFlatFee);
-  return { riderPay: round2(riderPay), fuelCost, companyShare, companyFee, serviceFee: r.companyFlatFee, total };
+  // The customer's total is unchanged. The service fee shown to the customer
+  // is the company's commission, and the rider-pay line shows the rider's pay
+  // after the commission's share above the base. Together they add up to the total.
+  return {
+    riderPay: round2(riderPay - companyShare),
+    fuelCost,
+    companyShare,
+    companyFee,
+    serviceFee: companyFee,
+    total,
+  };
 }
 
 export function calculatePrice(
@@ -146,7 +160,8 @@ export function calculatePrice(
   _rules: PriceRule[] = DEFAULT_RULES,
   manualOverrides?: Record<string, number>,
   pricingMode: 'auto' | 'manual' | 'hybrid' = 'auto',
-  fuelPrices: FuelPrices = DEFAULT_FUEL_PRICES
+  fuelPrices: FuelPrices = DEFAULT_FUEL_PRICES,
+  discountPct = 0,
 ): { price: number; breakdown: PriceBreakdown } {
   // Same formula for every vehicle; fuel consumption and fuel type set the difference.
   const m = formulaPricing(distance, vehicleType, fuelPriceFor(vehicleType, fuelPrices));
@@ -155,6 +170,32 @@ export function calculatePrice(
   if ((pricingMode === 'manual' || pricingMode === 'hybrid') && manualOverrides) {
     const key = `${vehicleType}-${Math.floor(distance)}`;
     if (manualOverrides[key]) total = manualOverrides[key];
+  }
+
+  const pct = Math.min(100, Math.max(0, Number.isFinite(discountPct) ? discountPct : 0));
+  if (pct > 0) {
+    // The discount takes the same share off the fare, the commission and the
+    // rider's share (fuel included). The three still add up to the total.
+    const f = 1 - pct / 100;
+    const discountedTotal = round2(total * f);
+    const fuelCost = round2(m.fuelCost * f);
+    const riderPay = round2(m.riderPay * f);
+    const companyFee = round2(discountedTotal - fuelCost - riderPay);
+    return {
+      price: discountedTotal,
+      breakdown: {
+        baseFare: riderPay,
+        distanceFare: 0,
+        fuelCost,
+        companyFee,
+        total: discountedTotal,
+        riderPay,
+        serviceFee: companyFee,
+        riderEarnings: round2(discountedTotal - companyFee),
+        discountPct: pct,
+        discountAmount: round2(total - discountedTotal),
+      },
+    };
   }
 
   return {
@@ -173,14 +214,20 @@ export function calculatePrice(
 }
 
 /** What the rider receives for an order.
- *  - Orders from 2026-10-13 (all vehicles): fare minus the company fee.
+ *  - Orders with a saved commission: fare minus that commission (already
+ *    reduced by any discount, so this is correct at any fuel price).
+ *  - Orders from 2026-10-13 without one: fare minus the formula's company fee.
  *  - Older orders: 75% of the fare, as before. */
 export function riderEarningsForOrder(order: {
   price: number;
   distance: number;
   vehicleType: VehicleType;
   createdAt: number;
+  commission?: number;
 }): number {
+  if (typeof order.commission === 'number') {
+    return round2(order.price - order.commission);
+  }
   if (order.createdAt >= PRICING_EFFECTIVE_AT) {
     return round2(order.price - formulaPricing(order.distance, order.vehicleType).companyFee);
   }

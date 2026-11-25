@@ -342,17 +342,21 @@ p { text-wrap: pretty; }
   .liquid-glass-mark, .liquid-glass-menu { backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
 }
 @media (prefers-reduced-motion: reduce) { .liquid-glass-mark, .liquid-glass-menu { transition: none; } }
-
-.hero-typewriter { display: inline; }
-.hero-typewriter-cursor {
-  display: inline-block;
-  width: .08em;
-  height: .82em;
-  margin-left: .12em;
-  vertical-align: -.04em;
-  border-radius: 999px;
-  background: var(--color-brand);
-  animation: typewriter-caret 750ms steps(1, end) infinite;
+/* Glass buttons: the same glass as the logo mark, but the button keeps its own size and corners. */
+.liquid-glass-btn {
+  position: relative;
+  isolation: isolate;
+  border: 1px solid rgba(255,255,255,.24);
+  background: rgba(255,255,255,.38);
+  box-shadow: 0 10px 24px rgba(15,23,42,.12);
+  backdrop-filter: blur(26px) saturate(180%);
+  -webkit-backdrop-filter: blur(26px) saturate(180%);
+  transition: transform 180ms var(--m3-easing-emphasized, ease), box-shadow 180ms ease, background-color 180ms ease;
 }
-@keyframes typewriter-caret { 50% { opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { .hero-typewriter-cursor { animation: none; } }
+.liquid-glass-btn:hover { transform: translateY(-1px); background: rgba(255,255,255,.48); box-shadow: 0 14px 30px rgba(15,23,42,.16); }
+.liquid-glass-btn:active { transform: scale(.97); }
+.theme-dark .liquid-glass-btn { border-color: rgba(255,255,255,.14); background: rgba(27,27,34,.48); box-shadow: 0 12px 28px rgba(0,0,0,.30); }
+.theme-dark .liquid-glass-btn:hover { background: rgba(39,39,48,.58); }
+@media (max-width: 640px) and (pointer: coarse) { .liquid-glass-btn { backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); } }
+@media (prefers-reduced-motion: reduce) { .liquid-glass-btn { transition: none; } }
+

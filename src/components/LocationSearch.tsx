@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, type KeyboardEvent } from 'react';
 import { MapPin, Search, Navigation, X, LocateFixed, Clock, Loader2 } from 'lucide-react';
 import { searchLocations, SearchResult } from '../lib/locations';
 import { useRecentLocationsStore } from '../stores/recentLocationsStore';
@@ -7,17 +7,25 @@ import { cn } from '../lib/utils';
 
 interface Props {
   label: string;
+  /** Hide the visible label (the parent shows its own). */
+  hideLabel?: boolean;
   value: string;
   onSelect: (result: { lat: number; lng: number; address: string }) => void;
   placeholder?: string;
   onPinClick?: () => void;
   pinActive?: boolean;
   onUseCurrentLocation?: () => void;
+  /** The customer's position: results near it are ranked first. */
+  nearby?: { lat: number; lng: number };
+}
+
+function toSelection(r: SearchResult) {
+  return { lat: r.lat, lng: r.lng, address: r.name + (r.address !== r.name ? ', ' + r.address.replace(r.name + ', ', '') : '') };
 }
 
 export default function LocationSearch({
-  label, value, onSelect, placeholder,
-  onPinClick, pinActive, onUseCurrentLocation,
+  label, hideLabel, value, onSelect, placeholder,
+  onPinClick, pinActive, onUseCurrentLocation, nearby,
 }: Props) {
   const [query, setQuery] = useState(value);
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -45,6 +53,9 @@ export default function LocationSearch({
   }, []);
 
   // Debounced async search
+  const nearbyRef = useRef(nearby);
+  nearbyRef.current = nearby;
+
   const handleSearch = useCallback((q: string) => {
     setQuery(q);
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -61,7 +72,7 @@ export default function LocationSearch({
     setShow(true);
 
     debounceRef.current = setTimeout(async () => {
-      const r = await searchLocations(q);
+      const r = await searchLocations(q, nearbyRef.current);
       setResults(r);
       setShow(true);
       setLoading(false);
@@ -76,6 +87,21 @@ export default function LocationSearch({
       // Show recents/location panel when empty
       setShow(true);
     }
+  };
+
+  // Enter picks the best match for what was typed (the first result), so the
+  // map goes straight to that place, even when the search was general.
+  const handleKeyDown = async (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    if (!query || query.length < 2) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    setLoading(true);
+    setShow(true);
+    const found = await searchLocations(query, nearbyRef.current);
+    setLoading(false);
+    setResults(found);
+    if (found.length > 0) handleSelect(toSelection(found[0]));
   };
 
   const handleSelect = (r: { lat: number; lng: number; address: string }) => {
@@ -97,15 +123,19 @@ export default function LocationSearch({
 
   return (
     <div ref={ref} className="relative">
-      <label className={cn('text-sm font-semibold mb-1.5 flex items-center gap-1.5', dk ? 'text-white/70' : 'text-gray-700')}>
-        <MapPin size={14} className="text-brand" /> {label}
-      </label>
+      {!hideLabel && (
+        <label className={cn('text-sm font-semibold mb-1.5 flex items-center gap-1.5', dk ? 'text-white/70' : 'text-gray-700')}>
+          <MapPin size={14} className="text-brand" /> {label}
+        </label>
+      )}
       <div className="relative">
         <Search size={16} className={cn('absolute left-3 top-1/2 -translate-y-1/2 z-[1]', dk ? 'text-white/30' : 'text-gray-400')} />
         <input
           type="text" id={`location-${label.toLowerCase().replace(/\s+/g, '-')}`} aria-label={label} value={query}
           onChange={e => handleSearch(e.target.value)}
           onFocus={handleFocus}
+          onKeyDown={handleKeyDown}
+          enterKeyHint="search"
           placeholder={placeholder || 'Search location...'}
           className={cn('w-full pl-10 py-3 rounded-xl text-sm border transition', prClass,
             dk ? 'bg-surface-dark-3 border-white/10 text-white placeholder:text-white/30'
@@ -193,7 +223,7 @@ export default function LocationSearch({
           )}
           {showResults && !loading && results.map(r => (
             <button key={r.id}
-              onClick={() => handleSelect({ lat: r.lat, lng: r.lng, address: r.name + (r.address !== r.name ? ', ' + r.address.replace(r.name + ', ', '') : '') })}
+              onClick={() => handleSelect(toSelection(r))}
               className={cn('w-full px-4 py-3 flex items-start gap-3 text-left transition border-b last:border-0',
                 dk ? 'hover:bg-white/5 border-white/5' : 'hover:bg-gray-50 border-gray-100')}>
               <Navigation size={16} className="text-brand mt-0.5 shrink-0" />

@@ -113,6 +113,13 @@ export default function Navbar() {
                   Rider Dashboard
                 </Link>
               )}
+              {user && user.role === 'rider' && (
+                <Link to="/terms/rider" onClick={() => setOpen(false)}
+                  className={cn('block px-3 py-2.5 rounded-full text-sm font-semibold transition',
+                    location.pathname === '/terms/rider' ? 'text-brand bg-brand/8' : dk ? 'text-white/55 hover:bg-white/5' : 'text-gray-500 hover:bg-gray-50')}>
+                  Rider Terms & Conditions
+                </Link>
+              )}
               {user && user.role === 'manager' && (
                 <Link to="/manager" onClick={() => setOpen(false)}
                   className={cn('block px-3 py-2.5 rounded-full text-sm font-semibold transition',

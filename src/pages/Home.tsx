@@ -1,7 +1,7 @@
 import { Link, Navigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Package, UtensilsCrossed, ShoppingCart, FileText, Building2, Zap, Bike, ArrowRight, Shield, Clock, MapPin, TrendingUp, TrendingDown, Minus, Star, ChevronRight, Power, PowerOff, DollarSign, CheckCircle2, Wallet } from 'lucide-react';
+import { Bike, ArrowRight, Shield, Clock, MapPin, TrendingUp, TrendingDown, Minus, Star, ChevronRight, Power, PowerOff, CheckCircle2, Wallet } from 'lucide-react';
 import { useThemeStore } from '../stores/themeStore';
 import { useContentStore } from '../stores/contentStore';
 import { useAuthStore } from '../stores/authStore';
@@ -9,17 +9,8 @@ import { useOrderStore } from '../stores/orderStore';
 import { cn, formatCurrency } from '../lib/utils';
 import { riderEarningsForOrder } from '../lib/pricing';
 import { RiderProfile } from '../lib/types';
-import CommissionCard from '../components/CommissionCard';
+import { services } from '../lib/services';
 
-const services = [
-  { icon: Package, name: 'Parcel Delivery', desc: 'Send and receive parcels of all sizes safely and securely.', features: ['Delivery options', 'Careful handling', 'Real-time tracking', 'Delivery updates'], img: '/images/parcel-delivery.jpg' },
-  { icon: UtensilsCrossed, name: 'Food Delivery', desc: 'Hot meals delivered fresh from your favorite restaurants.', features: ['Temperature-controlled', 'Fast pickup', 'Multiple restaurants', 'Contactless delivery'], img: '/images/food-delivery.jpg' },
-  { icon: ShoppingCart, name: 'Grocery Delivery', desc: 'Fresh groceries delivered right to your doorstep.', features: ['Market shopping', 'Scheduled deliveries', 'Order updates', 'Bulk discounts'], img: '/images/grocery-delivery.jpg' },
-  { icon: FileText, name: 'Document Delivery', desc: 'Confidential document courier services.', features: ['Confidential handling', 'Proof of delivery', 'Express options', 'Corporate accounts'], img: '/images/document-delivery.jpg' },
-  { icon: Building2, name: 'Corporate Deliveries', desc: 'Tailored delivery solutions for businesses.', features: ['Dedicated manager', 'Volume discounts', 'Monthly invoicing', 'Custom SLA'], img: '/images/corporate-delivery.jpg' },
-  { icon: Zap, name: 'Express / Same-Day', desc: 'Fast delivery options when available.', features: ['Estimated delivery window', 'Priority handling', 'Live GPS tracking', 'Status updates'], img: '/images/express-delivery.jpg' },
-  { icon: Bike, name: 'On-Demand Delivery', desc: 'Request a rider anytime for immediate pickups.', features: ['Instant dispatch', '7 days a week', 'Flexible scheduling', 'Pay per delivery'], img: '/images/ondemand-delivery.jpg' },
-];
 
 
 
@@ -46,15 +37,10 @@ function RiderHomePage() {
   const rider = user as RiderProfile;
 
   // ── Real stats from the rider's profile + order history ─────────
-  const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
-  const todayStart = startOfToday.getTime();
   const weekAgo = Date.now() - 7 * 86400000;
   const prevWeekStart = Date.now() - 14 * 86400000;
 
   const myDelivered = orders.filter(o => o.riderId === rider.id && o.status === 'delivered');
-  const todayDelivered = myDelivered.filter(o => (o.deliveredAt ?? 0) >= todayStart);
-  const todayEarnings = todayDelivered.reduce((s, o) => s + riderEarningsForOrder(o), 0);
   const weekEarnings = myDelivered.filter(o => (o.deliveredAt ?? 0) >= weekAgo).reduce((s, o) => s + riderEarningsForOrder(o), 0);
   const prevWeekEarnings = myDelivered
     .filter(o => (o.deliveredAt ?? 0) >= prevWeekStart && (o.deliveredAt ?? 0) < weekAgo)
@@ -105,28 +91,12 @@ function RiderHomePage() {
                 {rider.availability === 'online' ? <><Power size={22} /> Online — Tap to Go Offline</> : <><PowerOff size={22} /> Go Online</>}
               </button>
               <Link to="/rider/dashboard"
-                className={cn('inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-bold text-lg border-2 transition group',
-                  dk ? 'border-white/15 text-white hover:border-brand hover:text-brand' : 'border-gray-200 text-gray-700 hover:border-brand hover:text-brand')}>
+                className={cn('liquid-glass-btn inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-bold text-lg group',
+                  dk ? 'text-white hover:text-brand' : 'text-gray-800 hover:text-brand')}>
                 Go to Dashboard <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
               </Link>
             </div>
 
-            {/* Quick stats — today */}
-            <div className="grid grid-cols-3 gap-3 max-w-xl">
-              <div className={card}>
-                <Package size={18} className="text-brand mb-2" />
-                <p className={cn('text-2xl font-extrabold', dk ? 'text-white' : 'text-gray-900')}>{todayDelivered.length}</p>
-                <p className={cn('text-xs', dk ? 'text-white/40' : 'text-gray-500')}>Deliveries today</p>
-              </div>
-              <div className={card}>
-                <DollarSign size={18} className="text-success mb-2" />
-                <p className={cn('text-2xl font-extrabold', dk ? 'text-white' : 'text-gray-900')}>{formatCurrency(todayEarnings)}</p>
-                <p className={cn('text-xs', dk ? 'text-white/40' : 'text-gray-500')}>Earned today</p>
-              </div>
-              <div className="col-span-3">
-                <CommissionCard rider={rider} orders={orders} dk={dk} />
-              </div>
-            </div>
           </motion.div>
         </div>
       </section>
@@ -149,7 +119,7 @@ function RiderHomePage() {
                 </span>
               </div>
               <p className="text-white/55 text-sm mt-2">
-                {myDelivered.length} completed deliver{myDelivered.length === 1 ? 'y' : 'ies'} all-time · you keep 75% of every fare
+                {myDelivered.length} completed deliver{myDelivered.length === 1 ? 'y' : 'ies'} all-time · commission is calculated on each ride
               </p>
             </div>
             <Link to="/rider/dashboard"
@@ -224,19 +194,6 @@ function CustomerHomePage() {
   const { getContent } = useContentStore();
   const { user } = useAuthStore();
   const [legacyHeroOpacity, setLegacyHeroOpacity] = useState(1);
-  const [typedTagline, setTypedTagline] = useState('');
-  useEffect(() => {
-    if (user?.role === 'customer') return;
-    const tagline = 'We go the extra mile for you';
-    let index = 0;
-    const timer = window.setInterval(() => {
-      index += 1;
-      setTypedTagline(tagline.slice(0, index));
-      if (index >= tagline.length) window.clearInterval(timer);
-    }, 58);
-    return () => window.clearInterval(timer);
-  }, [user?.role]);
-
   useEffect(() => {
     const updateFade = () => {
       const distance = Math.max(window.innerHeight * 0.7, 1);
@@ -272,37 +229,54 @@ function CustomerHomePage() {
           <div className="grid lg:grid-cols-2 gap-16 items-center">
             {/* Left - Text */}
             <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8 }}>
+              {user?.role === 'customer' ? (
+<>
+              {/* Customer: the layout from the approved mockup */}
+              <p className={cn('text-2xl sm:text-3xl font-semibold mb-1', dk ? 'text-white/90' : 'text-gray-900')}>Welcome back,</p>
+              <h1 className={cn('text-5xl sm:text-6xl md:text-7xl font-black leading-[1.02] tracking-tight', dk ? 'text-white' : 'text-gray-900')}>
+                {user.name.split(' ')[0]}
+              </h1>
+              <p className={cn('mt-3 text-lg font-medium', dk ? 'text-white/60' : 'text-gray-600')}>Fast. Safe. Reliable.</p>
+              <div className="mt-3 mb-8 h-1 w-14 rounded-full bg-brand" />
+
+              {/* Primary CTAs */}
+              <div className="flex flex-col sm:flex-row gap-3 mb-6">
+                <Link to="/book"
+                  className="inline-flex items-center justify-start gap-3 bg-brand text-white pl-8 pr-6 py-4 rounded-full font-bold text-lg hover:bg-brand-dark transition shadow-xl shadow-brand/25 group">
+                  <BookCalendarIcon size={24} />
+                  {getContent('home.cta.primary', 'Book a Delivery')}
+                  <ArrowRight size={20} className="ml-auto group-hover:translate-x-1 transition-transform" />
+                </Link>
+                <Link to="/my-orders"
+                  className={cn('liquid-glass-btn inline-flex items-center justify-start gap-3 pl-8 pr-8 py-4 rounded-2xl font-bold text-lg group',
+                    dk ? 'text-white hover:text-brand' : 'text-gray-800 hover:text-brand')}>
+                  <MapPin size={24} className="shrink-0" />
+                  Track Orders
+                </Link>
+              </div>
+</>
+              ) : (
+<>
               <h1 className={cn('text-5xl sm:text-6xl md:text-7xl font-black leading-[1.05] tracking-tight mb-3', dk ? 'text-white' : 'text-gray-900')}>
-                {user?.role === 'customer' ? (
-                  `Welcome back, ${user.name.split(' ')[0]}`
-                ) : (
-                  <><span className="hero-typewriter">{typedTagline}</span><span className="hero-typewriter-cursor" aria-hidden="true" /></>
-                )}
+                We go the extra mile for you
               </h1>
               {/* Primary CTAs */}
               <div className="flex flex-col sm:flex-row gap-3 mb-6">
-                <Link to={user ? '/book' : '/auth/signup'}
+                <Link to={user ? '/book' : '/auth/login?role=customer'}
                   className="inline-flex items-center justify-center gap-2 bg-brand text-white px-8 py-4 rounded-full font-bold text-lg hover:bg-brand-dark transition shadow-xl shadow-brand/25 group">
-                  <Package size={22} />
+                  <BookCalendarIcon size={22} />
                   {user ? getContent('home.cta.primary', 'Book a Delivery') : 'Get Started'}
                   <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
                 </Link>
-                {user?.role === 'customer' ? (
-                  <Link to="/my-orders"
-                    className={cn('inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-bold text-lg border-2 transition group',
-                      dk ? 'border-white/15 text-white hover:border-brand hover:text-brand' : 'border-gray-200 text-gray-700 hover:border-brand hover:text-brand')}>
-                    <Package size={22} />
-                    Track Orders
-                  </Link>
-                ) : (
-                  <Link to="/auth/signup?role=rider"
-                    className={cn('inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-bold text-lg border-2 transition group',
-                      dk ? 'border-white/15 text-white hover:border-brand hover:text-brand' : 'border-gray-200 text-gray-700 hover:border-brand hover:text-brand')}>
-                    <Bike size={22} />
-                    {getContent('home.cta.secondary', 'Become a Rider')}
-                  </Link>
-                )}
+                <Link to="/auth/signup?role=rider"
+                  className={cn('liquid-glass-btn inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-bold text-lg group',
+                    dk ? 'text-white hover:text-brand' : 'text-gray-800 hover:text-brand')}>
+                  <Bike size={22} />
+                  {getContent('home.cta.secondary', 'Become a Rider')}
+                </Link>
               </div>
+</>
+              )}
 
             </motion.div>
 
@@ -361,14 +335,11 @@ function CustomerHomePage() {
               </div>
               <div>
                 <h3 className={cn('text-3xl font-extrabold mb-4', dk ? 'text-white' : 'text-gray-900')}>{s.name}</h3>
-                <p className={cn('mb-6', dk ? 'text-white/60' : 'text-gray-600')}>{s.desc}</p>
-                <ul className="space-y-2 mb-6">
-                  {s.features.map(f => (
-                    <li key={f} className={cn('flex items-center gap-2 text-sm', dk ? 'text-white/70' : 'text-gray-600')}>
-                      <span className="w-1.5 h-1.5 rounded-full bg-brand" /> {f}
-                    </li>
+                <div className="space-y-3 mb-6">
+                  {s.paragraphs.map((p, j) => (
+                    <p key={j} className={cn(dk ? 'text-white/60' : 'text-gray-600')}>{p}</p>
                   ))}
-                </ul>
+                </div>
                 <Link to={user ? '/book' : '/auth/login?role=customer'} className="inline-flex items-center gap-2 bg-brand text-white px-6 py-3 rounded-full font-bold text-sm hover:bg-brand-dark transition">
                   Book This Service <ArrowRight size={16} />
                 </Link>
@@ -411,7 +382,7 @@ function CustomerHomePage() {
       {/* ===== WHY CHOOSE US ===== */}
       <section className={cn('py-28', dk ? 'bg-surface-dark' : 'bg-white')}>
         <div className="max-w-7xl mx-auto px-6">
-          <div className="grid lg:grid-cols-2 gap-16 items-center">
+          <div className="max-w-3xl">
             <div>
               <span className="inline-block px-4 py-1.5 rounded-full bg-brand/8 text-brand text-sm font-semibold mb-4">Why Choose Us</span>
               <h2 className={cn('text-4xl font-black tracking-tight mb-8', dk ? 'text-white' : 'text-gray-900')}>We Go The Extra Mile</h2>
@@ -436,12 +407,6 @@ function CustomerHomePage() {
                 ))}
               </div>
             </div>
-            <motion.div initial={{ opacity: 0, x: 40 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}>
-              <div className="relative">
-                <div className="absolute -inset-6 bg-brand/5 rounded-3xl blur-2xl" />
-                <img src="/images/img2.jpeg" alt="Delivery Boys Flyer" className="relative rounded-3xl shadow-2xl w-full max-w-md mx-auto" />
-              </div>
-            </motion.div>
           </div>
         </div>
       </section>
@@ -457,12 +422,12 @@ function CustomerHomePage() {
               <h2 className="text-4xl md:text-5xl font-black text-white mb-4 tracking-tight">Ready to Send a Delivery?</h2>
               <p className="text-white/75 text-lg mb-10 max-w-xl mx-auto">Book now and get matched with a verified rider in seconds. Available 7 days a week.</p>
               <div className="flex flex-wrap justify-center gap-4">
-                <Link to={user ? '/book' : '/auth/signup'} className="inline-flex items-center gap-2 bg-white text-brand px-8 py-4 rounded-2xl font-bold text-lg hover:bg-white/90 transition shadow-xl group">
+                <Link to={user ? '/book' : '/auth/login?role=customer'} className="inline-flex items-center gap-2 bg-white text-brand px-8 py-4 rounded-2xl font-bold text-lg hover:bg-white/90 transition shadow-xl group">
                   {user ? 'Book Now' : 'Get Started'} <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
                 </Link>
                 {user?.role === 'customer' ? (
                   <Link to="/my-orders" className="inline-flex items-center gap-2 border-2 border-white/25 text-white px-8 py-4 rounded-2xl font-bold text-lg hover:bg-white/10 transition">
-                    <Package size={20} /> Track Orders
+                    <MapPin size={20} /> Track Orders
                   </Link>
                 ) : (
                   <Link to="/auth/signup?role=rider" className="inline-flex items-center gap-2 border-2 border-white/25 text-white px-8 py-4 rounded-2xl font-bold text-lg hover:bg-white/10 transition">
@@ -480,6 +445,23 @@ function CustomerHomePage() {
 
 // ── Role switch: riders get the rider home; everyone else keeps the
 //    customer/visitor page completely unchanged. ─────────────────────
+/** The calendar-plus icon, drawn as an SVG with the same 24px grid and
+ *  2px stroke as the other icons, so it lines up with the map pin. */
+function BookCalendarIcon({ size = 24 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0">
+      <path d="M21 13V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h7" />
+      <path d="M3 10h18" />
+      <path d="M8 3v3" />
+      <path d="M16 3v3" />
+      <circle cx="17" cy="17" r="4" />
+      <path d="M17 15v4" />
+      <path d="M15 17h4" />
+    </svg>
+  );
+}
+
 export default function Home() {
   const { user } = useAuthStore();
   if (user?.role === 'rider') return <RiderHomePage />;

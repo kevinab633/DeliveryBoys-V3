@@ -6,6 +6,8 @@ import { formatDate, generateOrderCode } from '../lib/utils';
 import { syncService } from '../lib/syncService';
 import { calculatePrice, calculateDistance, riderEarningsForOrder } from '../lib/pricing';
 import { useFuelPriceStore } from './fuelPriceStore';
+import { useDiscountStore } from './discountStore';
+import { discountPercentFor } from '../lib/discounts';
 import { useContentStore } from './contentStore';
 import { useAuthStore } from './authStore';
 import { useNotificationStore } from './notificationStore';
@@ -19,11 +21,22 @@ const SCHEDULED_DISPATCH_WINDOW_MS = 30 * 60 * 1000;
 // Scheduled orders still pending this long AFTER scheduledFor are cancelled.
 const SCHEDULED_GRACE_MS = 15 * 60 * 1000;
 
+// Set when this page loads. Auto-cancel and dispatch alerts only fire for events
+// that happen while the page is open. Without this, every fresh load (for example
+// after a deploy) re-runs the sweep over old orders and sends a burst of alerts.
+const SESSION_STARTED_AT = Date.now();
+
 // ── Notification helpers (single source of truth for lifecycle events) ──
 // Fires an in-app notification (bell/dropdown) AND, if the target user has
 // a saved push subscription, a real system push notification that arrives
 // even with the site fully closed. Push failures are non-fatal — the
 // in-app notification above always lands regardless.
+/** Bell entry for a user; OS-level alert only when that user is the one signed in on this device. */
+function alertUser(userId: string, title: string, message: string) {
+  pushNotify(userId, title, message);
+  if (useAuthStore.getState().user?.id === userId) fireBrowserNotification(title, message);
+}
+
 function pushNotify(userId: string, title: string, message: string) {
   useNotificationStore.getState().addNotification({ userId, title, message, type: 'order' });
   void pushToDevice(userId, title, message);
@@ -79,6 +92,8 @@ interface OrderStore {
   createOrder: (data: {
     customerId: string;
     customerName: string;
+    /** Discount shown on the booking screen; falls back to a local count when absent. */
+    discountPct?: number;
     customerPhone: string;
     pickup: Location;
     dropoff: Location;
@@ -179,7 +194,10 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
     // Same inputs as the booking screen, so the stored price matches what the customer saw.
     const content = useContentStore.getState();
     const fuels = useFuelPriceStore.getState();
-    const { price } = calculatePrice(distance, data.vehicleType, content.priceRules, content.manualOverrides, content.pricingMode, { petrol: fuels.pricePerLitre, diesel: fuels.dieselPricePerLitre });
+    // Discount depends on how many bookings this customer has made, cancelled ones included.
+    const bookingCount = get().orders.filter(o => o.customerId === data.customerId).length;
+    const discountPct = data.discountPct ?? discountPercentFor(bookingCount, useDiscountStore.getState().settings);
+    const { price, breakdown } = calculatePrice(distance, data.vehicleType, content.priceRules, content.manualOverrides, content.pricingMode, { petrol: fuels.pricePerLitre, diesel: fuels.dieselPricePerLitre }, discountPct);
     const orderType: OrderType = data.orderType || 'instant';
     const baseOrder: Order = {
       // NOTE: the Supabase `orders.id` column is a real `uuid` — a
@@ -195,6 +213,8 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
       packageDescription: data.packageDescription,
       distance,
       price,
+      commission: breakdown.companyFee,
+      discountPct: breakdown.discountPct,
       status: 'pending',
       orderType,
       scheduledFor: orderType === 'scheduled' ? data.scheduledFor : undefined,
@@ -530,7 +550,7 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
   sweepExpiredOrders: () => {
     const now = Date.now();
     const ordersNow = get().orders;
-    const toCancel: { id: string; displayCode: string; customerId: string; reason: string; scheduled: boolean }[] = [];
+    const toCancel: { id: string; displayCode: string; customerId: string; reason: string; scheduled: boolean; notify: boolean }[] = [];
 
     for (const o of ordersNow) {
       if (o.status !== 'pending') continue;
@@ -538,7 +558,7 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
 
       if (!scheduled) {
         if (now - o.createdAt > AUTO_CANCEL_MS) {
-          toCancel.push({ id: o.id, displayCode: o.displayCode, customerId: o.customerId, reason: 'no_riders_available', scheduled: false });
+          toCancel.push({ id: o.id, displayCode: o.displayCode, customerId: o.customerId, reason: 'no_riders_available', scheduled: false, notify: o.createdAt + AUTO_CANCEL_MS >= SESSION_STARTED_AT });
         }
         continue;
       }
@@ -560,16 +580,17 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
           const onlineRiders = useAuthStore.getState().allUsers.filter(
             u => u.role === 'rider' && (u as { availability?: string }).availability === 'online',
           );
-          onlineRiders.forEach(r => {
-            pushNotify(r.id, 'Scheduled Delivery Coming Up', `Order ${o.displayCode} is due at ${formatDate(when)} — ${o.pickup.address} → ${o.dropoff.address}.`);
-          });
-          fireBrowserNotification('Scheduled Delivery Coming Up', `Order ${o.displayCode} is due at ${formatDate(when)}.`);
+          if (when - SCHEDULED_DISPATCH_WINDOW_MS >= SESSION_STARTED_AT) {
+            onlineRiders.forEach(r => {
+              alertUser(r.id, 'Scheduled Delivery Coming Up', `Order ${o.displayCode} is due at ${formatDate(when)} — ${o.pickup.address} → ${o.dropoff.address}.`);
+            });
+          }
         }
       }
 
       // 3) Missed the scheduled window entirely
       if (now > when + SCHEDULED_GRACE_MS) {
-        toCancel.push({ id: o.id, displayCode: o.displayCode, customerId: o.customerId, reason: 'no_riders_available_scheduled', scheduled: true });
+        toCancel.push({ id: o.id, displayCode: o.displayCode, customerId: o.customerId, reason: 'no_riders_available_scheduled', scheduled: true, notify: when + SCHEDULED_GRACE_MS >= SESSION_STARTED_AT });
       }
     }
 
@@ -590,8 +611,8 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
       const msg = c.scheduled
         ? `We couldn't find a rider for your scheduled delivery ${c.displayCode} — please rebook or try again.`
         : `No riders were available for order ${c.displayCode}. Please try again shortly.`;
-      pushNotify(c.customerId, title, msg);
-      fireBrowserNotification(title, msg);
+      if (!c.notify) return;
+      alertUser(c.customerId, title, msg);
     });
   },
 

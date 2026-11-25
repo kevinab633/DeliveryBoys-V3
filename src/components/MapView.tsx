@@ -70,6 +70,13 @@ export interface MapViewProps {
    *  resumed, so the parent can show/hide its Re-centre button only
    *  while it's actually needed. */
   onFollowPausedChange?: (paused: boolean) => void;
+  /** Fly the camera to a place the user picked (search result, Enter key or
+   *  GPS). Change `key` for every new pick. `bottomPadding` (px) keeps the
+   *  place above a bottom sheet. */
+  focusTarget?: { lat: number; lng: number; key: number; bottomPadding?: number };
+  /** Pixels covered at the bottom by a sheet. The route fit keeps the whole
+   *  route above it, so it is visible when the sheet is collapsed. */
+  fitBottomPadding?: number;
 }
 
 // ── Mapbox style + token ───────────────────────────────────────────────
@@ -419,7 +426,7 @@ async function fetchDirectionsRoute(
 }
 
 // ── Fit camera to points helper ────────────────────────────────────────
-function fitToMapLibre(map: MLMap, pts: [number, number][]) {
+function fitToMapLibre(map: MLMap, pts: [number, number][], bottomPad = 0) {
   if (!pts || pts.length < 2) return;
   let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
   pts.forEach(([lat, lng]) => {
@@ -433,7 +440,7 @@ function fitToMapLibre(map: MLMap, pts: [number, number][]) {
   if (Number.isFinite(minLng) && Number.isFinite(maxLng)) {
     try {
       map.fitBounds([[minLng, minLat], [maxLng, maxLat]], {
-        padding: 60, maxZoom: 16, duration: 800,
+        padding: { top: 60, bottom: 60 + bottomPad, left: 60, right: 60 }, maxZoom: 16, duration: 800,
       });
     } catch {
       void 0;
@@ -463,17 +470,6 @@ function markerSpec(
         </div>
       </div>`,
       w: 44, h: 44, anchor: 'center',
-    };
-  }
-  if (type === 'bike') {
-    return {
-      html: `<div style="position:relative;width:34px;height:34px;display:flex;align-items:center;justify-content:center">
-        <div style="position:absolute;inset:-5px;border-radius:50%;background:${color}30;animation:pulse-ring 2.4s ease-out infinite"></div>
-        <div style="width:24px;height:24px;background:${color};border:2.5px solid white;border-radius:50%;box-shadow:0 3px 12px rgba(0,0,0,0.35);position:relative;z-index:2;display:flex;align-items:center;justify-content:center">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="18.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/></svg>
-        </div>
-      </div>`,
-      w: 34, h: 34, anchor: 'center',
     };
   }
   if (type === 'pickup') {
@@ -534,9 +530,13 @@ export default function MapView({
   onEngineChange,
   congestionRoute,
   recenterSignal,
+  focusTarget,
+  fitBottomPadding = 0,
   onFollowPausedChange,
 }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const fitBottomRef = useRef(fitBottomPadding);
+  fitBottomRef.current = fitBottomPadding;
   const [engine, setEngine] = useState<'maplibre' | 'leaflet'>(() =>
     isWebGL2Supported() ? 'maplibre' : 'leaflet',
   );
@@ -819,7 +819,10 @@ export default function MapView({
     const onMoveEnd = () => {
       if (pinDropActiveRef.current && onClickRef.current && map) {
         try {
-          const c = map.getCenter();
+          // The point under the screen centre (where the drop pin is drawn).
+          // getCenter() can differ from it when the camera has padding.
+          const el = containerRef.current;
+          const c = map.unproject([(el?.clientWidth ?? 0) / 2, (el?.clientHeight ?? 0) / 2]);
           onClickRef.current(c.lat, c.lng);
         } catch {
           void 0;
@@ -1035,7 +1038,7 @@ export default function MapView({
           ...validMarkers.map((m) => [m.lat, m.lng] as [number, number]),
           ...pts,
         ];
-        fitToMapLibre(mapRef.current, all);
+        fitToMapLibre(mapRef.current, all, fitBottomRef.current);
       }
     })();
 
@@ -1179,7 +1182,8 @@ export default function MapView({
 
         const onMoveEnd = () => {
           if (pinDropActiveRef.current && onClickRef.current && mapInstance) {
-            const c = mapInstance.getCenter();
+            const size = mapInstance.getSize();
+            const c = mapInstance.containerPointToLatLng([size.x / 2, size.y / 2]);
             onClickRef.current(c.lat, c.lng);
           }
         };
@@ -1298,7 +1302,7 @@ export default function MapView({
         ];
         if (allPts.length >= 2) {
           try {
-            map.fitBounds(L.latLngBounds(allPts), { padding: [50, 50], maxZoom: 16 });
+            map.fitBounds(L.latLngBounds(allPts), { paddingTopLeft: [50, 50], paddingBottomRight: [50, 50 + fitBottomRef.current], maxZoom: 16 });
           } catch {
             void 0;
           }
@@ -1400,6 +1404,33 @@ export default function MapView({
     );
   }, [engine, ml]);
 
+  // ── Picked-place focus: fly to the chosen place, clear of the bottom sheet.
+  useEffect(() => {
+    if (!focusTarget) return;
+    const { lat, lng, bottomPadding = 0 } = focusTarget;
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    if (engine === 'maplibre') {
+      const map = mapRef.current;
+      if (!map || !styleReady) return;
+      try {
+        map.flyTo({
+          center: [lng, lat], zoom: 16, duration: 900,
+          padding: { top: 60, bottom: bottomPadding, left: 0, right: 0 },
+        });
+      } catch { void 0; }
+    } else {
+      const map = leafletMapRef.current;
+      if (!map) return;
+      try {
+        // Shift the camera so the place sits in the visible area above the sheet.
+        const centre = map.project([lat, lng], 16).add([0, bottomPadding / 2]);
+        map.flyTo(map.unproject(centre, 16), 16);
+      } catch { void 0; }
+    }
+    // Only a new pick (key change) should move the camera.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusTarget?.key]);
+
   const hasPosition = /\b(absolute|fixed|relative|sticky)\b/.test(className);
 
   return (
@@ -1492,8 +1523,9 @@ export default function MapView({
 
       {/* Center pin when pin-drop mode is active */}
       {pinDropActive && (
-        <div className="absolute inset-0 pointer-events-none z-[500] flex items-center justify-center">
-          <div className="db-drop-pin relative flex flex-col items-center" style={{ marginTop: '-20px' }}>
+        <div className="absolute inset-0 pointer-events-none z-[500]">
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-full">
+          <div className="db-drop-pin relative flex flex-col items-center">
             <div
               style={{
                 width: 32,
@@ -1521,6 +1553,7 @@ export default function MapView({
                 marginTop: 2,
               }}
             />
+          </div>
           </div>
         </div>
       )}
