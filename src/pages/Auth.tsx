@@ -37,7 +37,7 @@ export function LoginPage() {
       }
       await supabase.auth.signOut();
       setNoAccount(true);
-      setError(`No ${role} account uses ${email}.`);
+      setError('This account does not exist.');
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -69,7 +69,7 @@ export function LoginPage() {
     const found = await loginDirect(contact, role);
     if (!found) {
       setNoAccount(true);
-      setError(`No ${role} account uses ${contact}.`);
+      setError('This account does not exist.');
       return;
     }
     navigate(role === 'rider' ? '/rider/dashboard' : '/');
@@ -288,7 +288,7 @@ export function ManagerLoginPage() {
     setError('');
     const found = await loginDirect(contact, 'manager');
     if (!found) {
-      setError('No manager account uses this email or phone.');
+      setError('This account does not exist.');
       return;
     }
     navigate('/manager');
