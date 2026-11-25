@@ -591,6 +591,12 @@ export default function Book() {
           <p className={cn('text-xl font-extrabold', dk ? 'text-white' : 'text-text-light')}>
             {pricing ? formatCurrency(pricing.breakdown.total) : 'Choose pickup and drop-off'}
           </p>
+          {pricing && pricing.breakdown.discountPct ? (
+            <p className="text-xs font-semibold text-success">
+              <span className="line-through opacity-60">{formatCurrency(pricing.breakdown.total + (pricing.breakdown.discountAmount ?? 0))}</span>
+              {' '}· {pricing.breakdown.discountPct}% discount applied
+            </p>
+          ) : null}
         </div>
         {pricing && (
           <button type="button" onClick={() => setShowBreakdown(v => !v)} aria-expanded={showBreakdown}

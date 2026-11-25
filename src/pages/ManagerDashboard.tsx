@@ -18,6 +18,8 @@ type Tab = 'overview' | 'orders' | 'riders' | 'map' | 'pricing' | 'content';
 export default function ManagerDashboard() {
   const dk = useThemeStore(s => s.theme === 'dark');
   const { user, getRiders, getCustomers, approveRider, rejectRider, suspendRider } = useAuthStore();
+  // Hooks must all run before the early return below (signing out makes user null).
+  const confirmCommissionPayment = useAuthStore(st => st.confirmCommissionPayment);
   const { orders, getTotalRevenue } = useOrderStore();
   const { content, updateContent, pricingMode, setPricingMode, manualOverrides, setManualOverride, removeManualOverride } = useContentStore();
   const fuelPrice = useFuelPriceStore(st => st.pricePerLitre);
@@ -97,7 +99,6 @@ export default function ManagerDashboard() {
   const pendingRiders = riders.filter(r => r.status === 'pending');
   const onlineRiders = riders.filter(r => r.availability === 'online' && r.status === 'approved');
   const pendingCommission = riders.filter(r => r.commissionPaymentRequest);
-  const confirmCommissionPayment = useAuthStore(st => st.confirmCommissionPayment);
 
   const card = cn('app-card p-6', dk ? '' : 'bg-white');
   const inp = cn('w-full px-4 py-2.5 rounded-xl text-sm border transition', dk ? 'bg-surface-dark-3 border-white/10 text-white placeholder:text-white/30' : 'bg-gray-50 border-gray-200 text-gray-900');
