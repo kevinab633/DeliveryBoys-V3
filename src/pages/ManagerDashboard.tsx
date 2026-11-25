@@ -300,7 +300,7 @@ export default function ManagerDashboard() {
               <div className={card}>
                 <h3 className={cn('font-bold mb-1', dk ? 'text-white' : 'text-gray-900')}>Discounts</h3>
                 <p className={cn('text-xs mb-4', dk ? 'text-white/40' : 'text-gray-500')}>
-                  The percentage comes off the whole fare: the customer pays less, and the commission and the rider's share (fuel included) each give up the same percentage.
+                  The percentage comes off the whole fare: the customer pays less, and the commission and the rider's share (fuel included) each give up the same percentage. Sign-up offer counts every booking, cancelled ones included.
                 </p>
                 <div className="space-y-4">
                   <div className={cn('p-4 rounded-xl border', dk ? 'border-white/5' : 'border-gray-100')}>
@@ -319,7 +319,7 @@ export default function ManagerDashboard() {
                           onChange={e => setDiscountDraft({ ...discountDraft, signup: { ...discountDraft.signup, pct: Number(e.target.value) } })}
                           className={cn(inp, 'mt-1')} />
                       </label>
-                      <label className={cn('text-xs font-semibold', dk ? 'text-white/60' : 'text-gray-600')}>For the first (deliveries)
+                      <label className={cn('text-xs font-semibold', dk ? 'text-white/60' : 'text-gray-600')}>For the first (bookings)
                         <input type="number" min={0} max={100} step="1" value={discountDraft.signup.deliveries}
                           onChange={e => setDiscountDraft({ ...discountDraft, signup: { ...discountDraft.signup, deliveries: Number(e.target.value) } })}
                           className={cn(inp, 'mt-1')} />

@@ -4,7 +4,8 @@
 // less, and the commission and the rider's share (fuel included) each give up
 // that percentage, so the split stays fair for both.
 //
-// - First sign-up offer: the first N completed deliveries of a customer.
+// - First sign-up offer: the customer's first N bookings. Every booking counts,
+//   including cancelled ones, so cancelling cannot be used to reset the offer.
 // - Seasonal discount: applies to every customer whose sign-up offer is used up.
 // - When both apply, a new customer gets the larger of the two.
 
@@ -23,9 +24,9 @@ function clampPct(n: number): number {
   return Math.min(100, Math.max(0, n));
 }
 
-/** Discount percentage for a customer with this many completed deliveries. */
-export function discountPercentFor(completedDeliveries: number, s: DiscountSettings): number {
-  const signupPct = s.signup.active && completedDeliveries < s.signup.deliveries ? clampPct(s.signup.pct) : 0;
+/** Discount percentage for a customer who has made this many bookings (all statuses). */
+export function discountPercentFor(bookingCount: number, s: DiscountSettings): number {
+  const signupPct = s.signup.active && bookingCount < s.signup.deliveries ? clampPct(s.signup.pct) : 0;
   const seasonalPct = s.seasonal.active ? clampPct(s.seasonal.pct) : 0;
   return Math.max(signupPct, seasonalPct);
 }
@@ -35,7 +36,7 @@ export function validateDiscounts(s: DiscountSettings): string | null {
   const validPct = (n: number) => Number.isFinite(n) && n >= 0 && n <= 100;
   if (!validPct(s.signup.pct) || !validPct(s.seasonal.pct)) return 'Discount must be between 0 and 100%.';
   if (!Number.isInteger(s.signup.deliveries) || s.signup.deliveries < 0 || s.signup.deliveries > 100) {
-    return 'Number of deliveries must be a whole number from 0 to 100.';
+    return 'Number of bookings must be a whole number from 0 to 100.';
   }
   return null;
 }

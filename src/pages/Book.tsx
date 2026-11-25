@@ -10,6 +10,7 @@ import { calculateDistance, calculatePrice, estimateFuelCost, fuelPriceFor } fro
 import { discountPercentFor } from '../lib/discounts';
 import { useDiscountStore } from '../stores/discountStore';
 import { useFuelPriceStore } from '../stores/fuelPriceStore';
+import { syncService } from '../lib/syncService';
 import { cn, formatCurrency, formatDistance, formatDate } from '../lib/utils';
 import { showToast } from '../components/Toast';
 import { VehicleType, OrderType } from '../lib/types';
@@ -211,11 +212,19 @@ export default function Book() {
   const fuelPrice = useFuelPriceStore(s => s.pricePerLitre);
   const dieselPrice = useFuelPriceStore(s => s.dieselPricePerLitre);
   const fuelPrices = { petrol: fuelPrice, diesel: dieselPrice };
-  // Discount from the manager's settings, using this customer's completed deliveries.
+  // Discount from the manager's settings. Counts every booking this customer has made
+  // (cancelled ones too). The server count is used when it loads; the local list is the fallback.
   const discountSettings = useDiscountStore(s => s.settings);
-  const discountPct = user
-    ? discountPercentFor(orders.filter(o => o.customerId === user.id && o.status === 'delivered').length, discountSettings)
-    : 0;
+  const [serverBookingCount, setServerBookingCount] = useState<number | null>(null);
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    syncService.countCustomerBookings(user.id).then(n => { if (!cancelled) setServerBookingCount(n); });
+    return () => { cancelled = true; };
+  }, [user?.id]);
+  const localBookingCount = user ? orders.filter(o => o.customerId === user.id).length : 0;
+  const bookingCount = Math.max(serverBookingCount ?? 0, localBookingCount);
+  const discountPct = user ? discountPercentFor(bookingCount, discountSettings) : 0;
   const pricing = distance > 0 ? calculatePrice(distance, vehicle, priceRules, manualOverrides, pricingMode, fuelPrices, discountPct) : null;
   const fuelEst = distance > 0 ? estimateFuelCost(distance, vehicle, fuelPriceFor(vehicle, fuelPrices)) : 0;
 
@@ -271,7 +280,7 @@ export default function Book() {
     const order = createOrder({
       customerId: user.id, customerName: user.name, customerPhone: phone || user.phone || '',
       pickup, dropoff, vehicleType: vehicle, packageDescription: itemDescription,
-      orderType, scheduledFor,
+      orderType, scheduledFor, discountPct,
     });
     setOrderId(order.id);
 

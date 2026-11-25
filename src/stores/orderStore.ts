@@ -81,6 +81,8 @@ interface OrderStore {
   createOrder: (data: {
     customerId: string;
     customerName: string;
+    /** Discount shown on the booking screen; falls back to a local count when absent. */
+    discountPct?: number;
     customerPhone: string;
     pickup: Location;
     dropoff: Location;
@@ -181,9 +183,9 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
     // Same inputs as the booking screen, so the stored price matches what the customer saw.
     const content = useContentStore.getState();
     const fuels = useFuelPriceStore.getState();
-    // Discount depends on how many deliveries this customer has completed.
-    const completed = get().orders.filter(o => o.customerId === data.customerId && o.status === 'delivered').length;
-    const discountPct = discountPercentFor(completed, useDiscountStore.getState().settings);
+    // Discount depends on how many bookings this customer has made, cancelled ones included.
+    const bookingCount = get().orders.filter(o => o.customerId === data.customerId).length;
+    const discountPct = data.discountPct ?? discountPercentFor(bookingCount, useDiscountStore.getState().settings);
     const { price, breakdown } = calculatePrice(distance, data.vehicleType, content.priceRules, content.manualOverrides, content.pricingMode, { petrol: fuels.pricePerLitre, diesel: fuels.dieselPricePerLitre }, discountPct);
     const orderType: OrderType = data.orderType || 'instant';
     const baseOrder: Order = {

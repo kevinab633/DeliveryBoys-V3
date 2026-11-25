@@ -470,6 +470,29 @@ export const syncService = {
   },
 
   /**
+   * Count every booking a customer has ever made (any status, cancelled
+   * included) straight from Supabase. The local order list only holds the
+   * most recent orders across all customers, so it can miss some.
+   * Returns null when the count can't be read.
+   */
+  async countCustomerBookings(customerId: string): Promise<number | null> {
+    try {
+      const { count, error } = await supabase
+        .from('orders')
+        .select('id', { count: 'exact', head: true })
+        .eq('customer_id', customerId);
+      if (error) {
+        console.warn('[SyncService] countCustomerBookings error:', error.message);
+        return null;
+      }
+      return typeof count === 'number' ? count : null;
+    } catch (err) {
+      console.warn('[SyncService] countCustomerBookings failed:', err);
+      return null;
+    }
+  },
+
+  /**
    * Fetch historical and active orders from Supabase on startup.
    */
   async fetchRemoteOrders(): Promise<Order[]> {
