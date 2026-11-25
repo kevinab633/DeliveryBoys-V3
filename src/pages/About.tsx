@@ -18,7 +18,7 @@ export default function About() {
       </section>
       <section className={cn('py-16', dk ? 'bg-surface-dark-2' : 'bg-gray-50')}>
         <div className="max-w-7xl mx-auto px-6">
-          <div className="grid lg:grid-cols-2 gap-16 items-center">
+          <div className="max-w-3xl">
             <motion.div initial={{ opacity: 0, x: -30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}>
               <h2 className={cn('text-3xl font-extrabold mb-6', dk ? 'text-white' : 'text-gray-900')}>Our Story</h2>
               <div className={cn('space-y-4 leading-relaxed', dk ? 'text-white/60' : 'text-gray-600')}>
@@ -26,9 +26,6 @@ export default function About() {
                 <p>Today, we continue to grow with riders and customers across Ghana.</p>
                 <p>Our motto: <strong className="text-brand">"We go the extra mile for you!"</strong></p>
               </div>
-            </motion.div>
-            <motion.div initial={{ opacity: 0, x: 30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}>
-              <img src="/images/img3.jpeg" alt="Delivery Boys service team" className="rounded-2xl shadow-2xl" />
             </motion.div>
           </div>
         </div>

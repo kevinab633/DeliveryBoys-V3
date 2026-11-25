@@ -119,7 +119,7 @@ function RiderHomePage() {
                 </span>
               </div>
               <p className="text-white/55 text-sm mt-2">
-                {myDelivered.length} completed deliver{myDelivered.length === 1 ? 'y' : 'ies'} all-time · you keep 75% of every fare
+                {myDelivered.length} completed deliver{myDelivered.length === 1 ? 'y' : 'ies'} all-time · commission is calculated on each ride
               </p>
             </div>
             <Link to="/rider/dashboard"
@@ -192,7 +192,7 @@ function RiderHomePage() {
 function CustomerHomePage() {
   const dk = useThemeStore(s => s.theme === 'dark');
   const { getContent } = useContentStore();
-  const { user, hasAccount } = useAuthStore();
+  const { user } = useAuthStore();
   const [legacyHeroOpacity, setLegacyHeroOpacity] = useState(1);
   useEffect(() => {
     const updateFade = () => {
@@ -262,7 +262,7 @@ function CustomerHomePage() {
               </h1>
               {/* Primary CTAs */}
               <div className="flex flex-col sm:flex-row gap-3 mb-6">
-                <Link to={user ? '/book' : hasAccount ? '/auth/login?role=customer' : '/auth/signup'}
+                <Link to={user ? '/book' : '/auth/login?role=customer'}
                   className="inline-flex items-center justify-center gap-2 bg-brand text-white px-8 py-4 rounded-full font-bold text-lg hover:bg-brand-dark transition shadow-xl shadow-brand/25 group">
                   <BookCalendarIcon size={22} />
                   {user ? getContent('home.cta.primary', 'Book a Delivery') : 'Get Started'}
@@ -422,7 +422,7 @@ function CustomerHomePage() {
               <h2 className="text-4xl md:text-5xl font-black text-white mb-4 tracking-tight">Ready to Send a Delivery?</h2>
               <p className="text-white/75 text-lg mb-10 max-w-xl mx-auto">Book now and get matched with a verified rider in seconds. Available 7 days a week.</p>
               <div className="flex flex-wrap justify-center gap-4">
-                <Link to={user ? '/book' : hasAccount ? '/auth/login?role=customer' : '/auth/signup'} className="inline-flex items-center gap-2 bg-white text-brand px-8 py-4 rounded-2xl font-bold text-lg hover:bg-white/90 transition shadow-xl group">
+                <Link to={user ? '/book' : '/auth/login?role=customer'} className="inline-flex items-center gap-2 bg-white text-brand px-8 py-4 rounded-2xl font-bold text-lg hover:bg-white/90 transition shadow-xl group">
                   {user ? 'Book Now' : 'Get Started'} <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
                 </Link>
                 {user?.role === 'customer' ? (

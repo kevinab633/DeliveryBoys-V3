@@ -60,7 +60,7 @@ export default function Footer() {
       <div className={cn('border-t py-5', dk ? 'border-white/5' : 'border-gray-200')}>
         <div className="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row justify-between items-center gap-2">
           <p className={cn('text-xs', dk ? 'text-white/20' : 'text-gray-400')}>&copy; {new Date().getFullYear()} Delivery Boys. All rights reserved.</p>
-          <Link to="/manager/login" className={cn('text-xs transition', dk ? 'text-white/10 hover:text-white/30' : 'text-gray-300 hover:text-gray-400')}>Manager Access</Link>
+          {!user && <Link to="/manager/login" className={cn('text-xs transition', dk ? 'text-white/10 hover:text-white/30' : 'text-gray-300 hover:text-gray-400')}>Manager Access</Link>}
         </div>
       </div>
     </footer>

@@ -17,6 +17,44 @@ export function LoginPage() {
   const [role, setRole] = useState<'customer' | 'rider'>(roleParam || 'customer');
   const [contact, setContact] = useState('');
   const [error, setError] = useState('');
+  const [noAccount, setNoAccount] = useState(false);
+
+  // Back from Google: sign in with that email if an account exists for this role.
+  useEffect(() => {
+    if (sessionStorage.getItem('db-oauth-login') !== '1') return;
+    sessionStorage.removeItem('db-oauth-login');
+    void (async () => {
+      const { data } = await supabase.auth.getSession();
+      const email = data.session?.user.email;
+      if (!email) {
+        setError('Google sign-in did not complete. Please try again.');
+        return;
+      }
+      const found = await loginDirect(email, role);
+      if (found) {
+        navigate(role === 'rider' ? '/rider/dashboard' : '/');
+        return;
+      }
+      await supabase.auth.signOut();
+      setNoAccount(true);
+      setError(`No ${role} account uses ${email}.`);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const continueWithGoogle = async () => {
+    setError('');
+    setNoAccount(false);
+    sessionStorage.setItem('db-oauth-login', '1');
+    const { error: oauthError } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: `${window.location.origin}/auth/login?role=${role}` },
+    });
+    if (oauthError) {
+      sessionStorage.removeItem('db-oauth-login');
+      setError(`Google sign-in is unavailable: ${oauthError.message}`);
+    }
+  };
 
   // NOTE: OTP verification removed for now — will be re-added later.
   // Sign-in is direct: enter email/phone and continue.
@@ -26,7 +64,14 @@ export function LoginPage() {
       setError('Please enter your email or phone number.');
       return;
     }
-    await loginDirect(contact, role);
+    setError('');
+    setNoAccount(false);
+    const found = await loginDirect(contact, role);
+    if (!found) {
+      setNoAccount(true);
+      setError(`No ${role} account uses ${contact}.`);
+      return;
+    }
     navigate(role === 'rider' ? '/rider/dashboard' : '/');
   };
 
@@ -62,8 +107,23 @@ export function LoginPage() {
               placeholder="Email or phone number" className={inp} />
           </div>
           {error && <p className="text-red-400 text-sm text-center">{error}</p>}
+          {noAccount && (
+            <Link to={`/auth/signup?role=${role}`} className="block w-full text-center bg-brand text-white py-3 rounded-full font-bold hover:bg-brand-dark transition">
+              Sign Up to create an account
+            </Link>
+          )}
           <button type="submit" className="w-full bg-brand text-white py-3.5 rounded-full font-bold hover:bg-brand-dark transition flex items-center justify-center gap-2">
             Sign In <ArrowRight size={18} />
+          </button>
+          <div className="flex items-center gap-3">
+            <div className={cn('flex-1 h-px', dk ? 'bg-white/10' : 'bg-gray-200')} />
+            <span className={cn('text-xs', dk ? 'text-white/40' : 'text-gray-400')}>or</span>
+            <div className={cn('flex-1 h-px', dk ? 'bg-white/10' : 'bg-gray-200')} />
+          </div>
+          <button type="button" onClick={continueWithGoogle}
+            className={cn('w-full py-3.5 rounded-full font-bold border transition flex items-center justify-center gap-2',
+              dk ? 'border-white/10 text-white hover:bg-white/5' : 'border-gray-200 text-gray-800 hover:bg-gray-50')}>
+            <span className="text-base font-black">G</span> Continue with Google
           </button>
           <p className={cn('text-center text-sm', dk ? 'text-white/40' : 'text-gray-500')}>
             Don&apos;t have an account? <Link to={`/auth/signup?role=${role}`} className="text-brand font-semibold">Sign Up</Link>
@@ -93,7 +153,11 @@ export function SignupPage() {
     void supabase.auth.getSession().then(({ data }) => {
       const email = data.session?.user.email;
       if (email) {
-        setForm(current => ({ ...current, email }));
+        // Google sends the person's name with the account; prefill it.
+        const meta = (data.session?.user.user_metadata ?? {}) as Record<string, unknown>;
+        const googleName = typeof meta.full_name === 'string' ? meta.full_name
+          : typeof meta.name === 'string' ? meta.name : '';
+        setForm(current => ({ ...current, email, name: current.name || googleName }));
         setStep('details');
       }
     });
@@ -221,7 +285,12 @@ export function ManagerLoginPage() {
       setError('Please enter your manager email or phone.');
       return;
     }
-    await loginDirect(contact, 'manager');
+    setError('');
+    const found = await loginDirect(contact, 'manager');
+    if (!found) {
+      setError('No manager account uses this email or phone.');
+      return;
+    }
     navigate('/manager');
   };
 

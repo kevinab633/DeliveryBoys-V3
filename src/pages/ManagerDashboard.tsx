@@ -17,7 +17,7 @@ export default function ManagerDashboard() {
   const dk = useThemeStore(s => s.theme === 'dark');
   const { user, getRiders, getCustomers, approveRider, rejectRider, suspendRider } = useAuthStore();
   const { orders, getTotalRevenue } = useOrderStore();
-  const { content, updateContent, priceRules, updatePriceRule, pricingMode, setPricingMode, manualOverrides, setManualOverride, removeManualOverride } = useContentStore();
+  const { content, updateContent, pricingMode, setPricingMode, manualOverrides, setManualOverride, removeManualOverride } = useContentStore();
   const fuelPrice = useFuelPriceStore(st => st.pricePerLitre);
   const dieselPrice = useFuelPriceStore(st => st.dieselPricePerLitre);
   const fuelUpdatedAt = useFuelPriceStore(st => st.updatedAt);
@@ -293,29 +293,6 @@ export default function ManagerDashboard() {
                 <p className={cn('text-xs mt-2', dk ? 'text-white/30' : 'text-gray-400')}>
                   Auto: algorithm-based · Manual: fixed prices by distance · Hybrid: auto with manual overrides
                 </p>
-              </div>
-
-              <div className={card}>
-                <h3 className={cn('font-bold mb-4', dk ? 'text-white' : 'text-gray-900')}>Price Rules</h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead><tr className={dk ? 'text-white/40' : 'text-gray-500'}>
-                      <th className="text-left p-2">Vehicle</th><th className="p-2">Range (km)</th><th className="p-2">Base</th><th className="p-2">/km Rate</th><th className="p-2">Fuel</th><th className="p-2">Margin</th>
-                    </tr></thead>
-                    <tbody>
-                      {priceRules.map(r => (
-                        <tr key={r.id} className={cn('border-t', dk ? 'border-white/5' : 'border-gray-100')}>
-                          <td className={cn('p-2 capitalize font-medium', dk ? 'text-white' : 'text-gray-900')}>{r.vehicleType}</td>
-                          <td className={cn('p-2 text-center', dk ? 'text-white/60' : 'text-gray-600')}>{r.minDistance}-{r.maxDistance}</td>
-                          <td className="p-2 text-center"><input type="number" step="0.5" value={r.baseFare} onChange={e => updatePriceRule(r.id, { baseFare: +e.target.value })} className={cn('w-16 text-center rounded-lg py-1 border', dk ? 'bg-surface-dark-3 border-white/10 text-white' : 'bg-gray-50 border-gray-200')} /></td>
-                          <td className="p-2 text-center"><input type="number" step="0.1" value={r.perKmRate} onChange={e => updatePriceRule(r.id, { perKmRate: +e.target.value })} className={cn('w-16 text-center rounded-lg py-1 border', dk ? 'bg-surface-dark-3 border-white/10 text-white' : 'bg-gray-50 border-gray-200')} /></td>
-                          <td className="p-2 text-center"><input type="number" step="0.1" value={r.fuelSurcharge} onChange={e => updatePriceRule(r.id, { fuelSurcharge: +e.target.value })} className={cn('w-16 text-center rounded-lg py-1 border', dk ? 'bg-surface-dark-3 border-white/10 text-white' : 'bg-gray-50 border-gray-200')} /></td>
-                          <td className="p-2 text-center"><input type="number" step="0.05" value={r.companyMargin} onChange={e => updatePriceRule(r.id, { companyMargin: +e.target.value })} className={cn('w-16 text-center rounded-lg py-1 border', dk ? 'bg-surface-dark-3 border-white/10 text-white' : 'bg-gray-50 border-gray-200')} /></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
               </div>
 
               {(pricingMode === 'manual' || pricingMode === 'hybrid') && (

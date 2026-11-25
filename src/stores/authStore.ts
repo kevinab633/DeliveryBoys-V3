@@ -3,15 +3,13 @@ import { persist } from 'zustand/middleware';
 import { User, RiderProfile, UserRole, RiderStatus, VehicleType } from '../lib/types';
 import { generateId, generateOTP, nameFromEmail } from '../lib/utils';
 import { usersApi } from '../lib/usersApi';
+import supabase from '../lib/supabase';
 import { useThemeStore } from './themeStore';
 
 interface AuthStore {
   user: User | RiderProfile | null;
   allUsers: (User | RiderProfile)[];
   usersLoaded: boolean;
-  /** Set once anyone has signed in or signed up on this device, so a
-   *  signed-out returning user is sent to sign-in, not sign-up. */
-  hasAccount: boolean;
   otpPending: { contact: string; otp: string; role: UserRole; method: 'email' | 'phone' } | null;
   /** Fetches every account from Supabase and merges it into allUsers —
    *  call this once on app startup, same pattern as orderStore's init(). */
@@ -22,7 +20,8 @@ interface AuthStore {
   signupRider: (data: { name: string; email?: string; phone?: string; vehicleType: VehicleType; vehiclePlate: string; nationalIdUrl: string; photoUrl: string }) => string;
   // ── Direct auth (OTP removed for now — will be re-added later) ──────
   // These sign the user in immediately with no verification step.
-  loginDirect: (emailOrPhone: string, role: UserRole) => Promise<void>;
+  /** Returns false when no account matches; nothing is created then. */
+  loginDirect: (emailOrPhone: string, role: UserRole) => Promise<boolean>;
   signupDirect: (data: { name: string; email?: string; phone?: string; role: UserRole }) => Promise<void>;
   signupRiderDirect: (data: { name: string; email?: string; phone?: string; vehicleType: VehicleType; vehiclePlate: string; nationalIdUrl: string; photoUrl: string }) => Promise<void>;
   logout: () => void;
@@ -71,7 +70,6 @@ export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
   user: null,
   allUsers: [DEFAULT_MANAGER, ...DEMO_RIDERS],
   usersLoaded: false,
-  hasAccount: false,
   otpPending: null,
 
   // Merges real Supabase accounts into local state on startup. The demo
@@ -138,11 +136,8 @@ export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
   // has it — same shape as before, just DB-backed now.
   loginDirect: async (emailOrPhone, role) => {
     const method = emailOrPhone.includes('@') ? 'email' : 'phone';
-    // Check Supabase FIRST, not local allUsers — local state may still be
-    // the hardcoded demo seed if loadUsers() hasn't finished yet (it's
-    // async and runs on a timer, not guaranteed to complete before a
-    // fast login attempt), which was causing a real account on another
-    // device to look "not found" and get duplicated.
+    // Check Supabase FIRST, not local allUsers: local state may still be the
+    // demo seed if loadUsers() has not finished yet.
     let user = await usersApi.findByContact(emailOrPhone, method, role) || undefined;
     if (!user) {
       user = get().allUsers.find(u => {
@@ -150,20 +145,12 @@ export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
         return u.phone === emailOrPhone && u.role === role;
       });
     }
-    if (!user) {
-      user = {
-        id: generateId(),
-        name: nameFromEmail(method === 'email' ? emailOrPhone : '') || 'User',
-        [method]: emailOrPhone,
-        role,
-        createdAt: Date.now(),
-        verified: true,
-      } as User;
+    // No account: nothing is created here. The sign-in page tells the person
+    // there is no account and offers Sign Up.
+    if (!user) return false;
+
+    if (!get().allUsers.some(u => u.id === user!.id)) {
       set(s => ({ allUsers: [...s.allUsers, user!] }));
-      await usersApi.upsert(user);
-    } else {
-      // Found (remotely or locally) but not yet merged into local allUsers.
-      set(s => (s.allUsers.some(u => u.id === user!.id) ? s : { allUsers: [...s.allUsers, user!] }));
     }
     // Name comes from the email until the user edits it: a blank name or the
     // raw email prefix is replaced with a readable name. Typed names are kept.
@@ -174,7 +161,8 @@ export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
         void usersApi.upsert(user);
       }
     }
-    set({ user, otpPending: null, hasAccount: true });
+    set({ user, otpPending: null });
+    return true;
   },
 
   signupDirect: async (data) => {
@@ -187,7 +175,7 @@ export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
       createdAt: Date.now(),
       verified: true,
     };
-    set(s => ({ allUsers: [...s.allUsers, newUser], user: newUser, otpPending: null, hasAccount: true }));
+    set(s => ({ allUsers: [...s.allUsers, newUser], user: newUser, otpPending: null }));
     await usersApi.upsert(newUser);
   },
 
@@ -210,7 +198,7 @@ export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
       nationalIdUrl: data.nationalIdUrl,
       photoUrl: data.photoUrl,
     };
-    set(s => ({ allUsers: [...s.allUsers, newRider], user: newRider, otpPending: null, hasAccount: true }));
+    set(s => ({ allUsers: [...s.allUsers, newRider], user: newRider, otpPending: null }));
     // Riders are typically outdoors in daylight, where light mode is far
     // easier to read than dark — so default new rider accounts to light
     // the moment they sign up. This only happens once, here, at account
@@ -275,7 +263,11 @@ export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
     return otp;
   },
 
-  logout: () => set({ user: null, otpPending: null }),
+  logout: () => {
+    // Also end the Google session, so the next visit does not sign straight back in.
+    void supabase.auth.signOut();
+    set({ user: null, otpPending: null });
+  },
 
   updateProfile: (data) => set(s => {
     if (!s.user) return s;
