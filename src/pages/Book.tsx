@@ -96,19 +96,28 @@ export default function Book() {
   }, []);
 
   // ── Back button intercept ────────────────────────────────────────
-  const sheetOpenRef = useRef(sheetOpen);
-  sheetOpenRef.current = sheetOpen;
-
+  // One history entry per open sheet. Device back (Android, and the iPhone edge
+  // swipe) first closes the sheet; the next back leaves the page. Closing the sheet
+  // with its own button removes that entry, so back never does nothing.
+  const sheetEntryRef = useRef(false);
+  const pendingBackRef = useRef(0);
   useEffect(() => {
-    if (sheetOpen) {
+    if (sheetOpen && !sheetEntryRef.current) {
       window.history.pushState({ sheetOpen: true }, '');
+      sheetEntryRef.current = true;
+    } else if (!sheetOpen && sheetEntryRef.current) {
+      sheetEntryRef.current = false;
+      pendingBackRef.current += 1;
+      window.history.back();
     }
   }, [sheetOpen]);
 
   useEffect(() => {
     const handler = () => {
-      if (sheetOpenRef.current) {
-        // Collapse the sheet instead of navigating back
+      if (pendingBackRef.current > 0) { pendingBackRef.current -= 1; return; }
+      if (sheetEntryRef.current) {
+        // Device back used up the sheet's entry: collapse the sheet, stay on the page.
+        sheetEntryRef.current = false;
         setSheetOpen(false);
       }
     };

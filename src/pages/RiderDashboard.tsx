@@ -923,6 +923,12 @@ function OrderDetailOverlay({ order, dk, onClose, onAccept, onDecline }: {
 
   return (
     <div className="fixed inset-0 z-40" style={{ paddingTop: '4rem' }}>
+      {/* The page header sits under this overlay, so give the overlay its own back button. */}
+      <button type="button" onClick={onClose} aria-label="Back"
+        className="absolute left-3 z-[45] w-11 h-11 rounded-full bg-white shadow-lg flex items-center justify-center text-text-light-2"
+        style={{ top: 'calc(env(safe-area-inset-top, 0px) + 0.5rem)' }}>
+        <ArrowLeft size={20} />
+      </button>
       {/* Full-screen map with the trip route */}
       <MapView
         markers={[
