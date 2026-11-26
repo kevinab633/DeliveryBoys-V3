@@ -13,8 +13,9 @@ Status: **not implemented**. The current commission card records a rider-reporte
 - Delete payment proof after approval. If rejected, keep it until a replacement is successfully submitted, then delete the old image.
 - Apply the same retention rule to rider verification images: delete them on approval; keep rejected images until a successful resubmission, then delete the old images. Do not delete profile pictures.
 
-## Decisions needed before rollout
+## Rollout prerequisites and decisions
 
+- Create and verify a backup before any live migration. The Supabase test-branch request was denied because branching requires a Pro plan.
 - Decide the exact cutover time for the GHS 0 reset and how to handle any existing manual payment requests.
 - Confirm whether a report submitted before the deadline but not yet confirmed should still trigger the halt; the agreed rule above requires confirmation.
 - Confirm the company's payment instructions and what transaction details the rider must supply alongside the screenshot.
@@ -26,7 +27,7 @@ The existing email/phone `loginDirect` in `src/stores/authStore.ts` looks up a c
 
 Before enabling this feature:
 
-1. Establish verified identity, link it reliably to the app user, and enforce manager/rider roles server-side. The owner chose Google plus email/password, with email OTP verification at sign-up; remove phone-number account sign-in. Plan migration of existing email accounts and phone-only test accounts, and provision manager access through a trusted administrative process. Review all existing Supabase policies and service-role API endpoints; don't trust client-supplied user IDs or roles.
+1. Establish verified identity, link it reliably to the app user, and enforce manager/rider roles server-side. The owner chose Google-only sign-in for all accounts, with manager access limited to the owner-controlled support.deliveryboysgh@gmail.com Google identity. Customers request rider access; managers approve it. Roles must be assigned server-side, never supplied by the client. Plan migration of existing email and phone-only test accounts without deleting data. Review all existing Supabase policies and service-role API endpoints; don't trust client-supplied user IDs or roles.
 2. Add durable, auditable weekly statements, immutable deadline snapshots, payment submissions and approval events. Calculate and settle them transactionally on the server from authoritative order data; account for existing debts, late corrections, concurrent submissions and retries.
 3. Enforce the overdue/approval gate server-side at every order-assignment and acceptance path, while preserving access to active deliveries. A UI-only check is insufficient.
 4. Store proof and verification images in private storage with narrowly scoped access. Delete the actual storage objects (not just their URLs), retry failed deletions, and retain only necessary audit metadata. On resubmission, save the replacement successfully before deleting the old object. Never delete the profile image.

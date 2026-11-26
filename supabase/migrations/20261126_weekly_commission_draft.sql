@@ -49,8 +49,9 @@ revoke all on all tables in schema deliveryboys_private from public, anon, authe
 create function deliveryboys_private.has_role(p_role text, p_app_user_id text default null)
 returns boolean language sql stable security definer set search_path = pg_catalog as $$
   select exists(select 1 from deliveryboys_private.account_identity_links l
-    where l.auth_user_id = auth.uid() and l.app_role = p_role
-      and (p_app_user_id is null or l.app_user_id = p_app_user_id));
+    where l.auth_user_id = auth.uid() and deliveryboys_private.is_google_session() and l.app_role = p_role
+      and (p_app_user_id is null or l.app_user_id = p_app_user_id)
+      and (p_role <> 'manager' or exists(select 1 from auth.users u where u.id = auth.uid() and lower(u.email) = 'support.deliveryboysgh@gmail.com')));
 $$;
 revoke all on function deliveryboys_private.has_role(text, text) from public, anon, authenticated;
 
@@ -61,7 +62,7 @@ returns boolean language plpgsql stable security definer set search_path = pg_ca
 declare v_rider_id text;
 begin
   select l.app_user_id into v_rider_id from deliveryboys_private.account_identity_links l
-    where l.auth_user_id = auth.uid() and l.app_role = 'rider';
+    where l.auth_user_id = auth.uid() and deliveryboys_private.is_google_session() and l.app_role = 'rider';
   if v_rider_id is null then raise exception 'Rider identity required' using errcode = '42501'; end if;
   return not exists(select 1 from deliveryboys_private.commission_holds h
                     where h.rider_id = v_rider_id and h.requires_reapproval)
@@ -166,7 +167,7 @@ language plpgsql stable security definer set search_path = pg_catalog as $$
 declare v_rider text;
 begin
   select l.app_user_id into v_rider from deliveryboys_private.account_identity_links l
-    where l.auth_user_id = auth.uid() and l.app_role = 'rider';
+    where l.auth_user_id = auth.uid() and deliveryboys_private.is_google_session() and l.app_role = 'rider';
   if v_rider is null then raise exception 'Rider identity required' using errcode = '42501'; end if;
   return query select c.id, c.week_start, c.week_end, c.deadline, c.amount_pesewas, c.state, c.proof_path
     from deliveryboys_private.commission_cycles c where c.rider_id = v_rider order by c.week_start desc;

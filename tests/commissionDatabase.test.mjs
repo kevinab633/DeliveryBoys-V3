@@ -16,10 +16,13 @@ test('only managers can approve; overdue approval queues proof and requires reap
       create table storage.objects (bucket_id text, name text, owner_id text);
       create table storage.buckets (id text primary key, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]);
       create table auth.users (id uuid primary key, email text, email_confirmed_at timestamptz);
+      create table auth.identities (user_id uuid, provider text);
+      create function auth.jwt() returns jsonb language sql stable as $$ select coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::jsonb $$;
       create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
       create table public.users (id text primary key, role text, name text, email text, phone text, verified boolean, vehicle_type text, vehicle_plate text, status text, availability text);
       create table public.orders (rider_id text, status text, pickup jsonb, price numeric, updated_at timestamptz);
-      insert into auth.users(id) values ('${rider}'), ('${manager}');
+      insert into auth.users(id,email,email_confirmed_at) values ('${rider}', 'rider@example.test', now()), ('${manager}', 'support.deliveryboysgh@gmail.com', now());
+      insert into auth.identities values ('${rider}', 'google'), ('${manager}', 'google');
       insert into public.users(id) values ('rider'), ('manager');`);
     await db.exec(identitySql);
     await db.exec(commissionSql);
@@ -42,7 +45,7 @@ test('only managers can approve; overdue approval queues proof and requires reap
       insert into deliveryboys_private.commission_cycles(id,rider_id,week_start,week_end,deadline,amount_pesewas,state,proof_path)
       values ('${cycle}','rider',now()-interval '10 days',now()-interval '3 days',now()-interval '2 days',500,'unpaid',null);
       insert into storage.objects values ('commission-proofs','rider/proof-old.jpg','${rider}'), ('commission-proofs','rider/proof.jpg','${rider}'), ('commission-proofs','foreign.jpg','${manager}');
-      set role authenticated; set "request.jwt.claim.sub" = '${rider}';`);
+      set role authenticated; set "request.jwt.claim.sub" = '${rider}'; set "request.jwt.claims" = '{"app_metadata":{"provider":"google"},"amr":[{"method":"oauth"}]}';`);
     assert.equal((await db.query('select public.commission_can_accept_orders() as allowed')).rows[0].allowed, false);
     assert.equal((await db.query(`select public.may_access_commission_proof('${rider}/proof.jpg', true) as allowed`)).rows[0].allowed, true);
     assert.equal((await db.query(`select public.may_access_commission_proof('${manager}/proof.jpg', true) as allowed`)).rows[0].allowed, false);
