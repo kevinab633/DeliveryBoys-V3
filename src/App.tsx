@@ -22,6 +22,11 @@ import Track from './pages/Track';
 import About from './pages/About';
 import Contact from './pages/Contact';
 import { LoginPage, SignupPage, ManagerLoginPage } from './pages/Auth';
+import { VerifiedLoginPage, VerifiedSignupPage } from './pages/VerifiedAuth';
+
+// Preview only. Do not enable on the deployed app until session restoration,
+// server authorization, existing-account migration and RLS are complete.
+const VERIFIED_AUTH_PREVIEW = import.meta.env.DEV && import.meta.env.VITE_VERIFIED_AUTH_PREVIEW === 'true';
 import RiderDashboard from './pages/RiderDashboard';
 import ManagerDashboard from './pages/ManagerDashboard';
 import Profile from './pages/Profile';
@@ -176,9 +181,9 @@ function AppContent() {
           <Route path="/track" element={<CustomerOnly><Track /></CustomerOnly>} />
           <Route path="/about" element={<About />} />
           <Route path="/contact" element={<Contact />} />
-          <Route path="/auth/login" element={<LoginPage />} />
-          <Route path="/auth/signup" element={<SignupPage />} />
-          <Route path="/manager/login" element={<ManagerLoginPage />} />
+          <Route path="/auth/login" element={VERIFIED_AUTH_PREVIEW ? <VerifiedLoginPage /> : <LoginPage />} />
+          <Route path="/auth/signup" element={VERIFIED_AUTH_PREVIEW ? <VerifiedSignupPage /> : <SignupPage />} />
+          <Route path="/manager/login" element={VERIFIED_AUTH_PREVIEW ? <VerifiedLoginPage manager /> : <ManagerLoginPage />} />
           <Route path="/rider/dashboard" element={<RiderDashboard />} />
           <Route path="/manager" element={<ManagerDashboard />} />
           <Route path="/profile" element={<Profile />} />

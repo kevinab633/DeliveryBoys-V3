@@ -87,6 +87,13 @@ export const usersApi = {
     }
   },
 
+  /** Fetch one linked app profile. Used by the verified sign-in flow. */
+  async fetchById(userId: string): Promise<User | RiderProfile | null> {
+    const { data, error } = await supabase.from('users').select('*').eq('id', userId).maybeSingle();
+    if (error) throw error;
+    return data ? rowToUser(data) : null;
+  },
+
   /** Partial update by id — for small, frequent changes (availability,
    *  location, delivery stats) where sending the whole row is wasteful. */
   async update(userId: string, patch: Record<string, any>): Promise<void> {
