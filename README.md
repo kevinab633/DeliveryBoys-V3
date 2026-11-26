@@ -1,4 +1,8 @@
-# React + TypeScript + Vite
+# DeliveryBoys
+
+See the [project status](docs/project-status.md) for completed work and open items, and the [native build guide](docs/native-build.md) for Android and iOS preparation.
+
+## React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
