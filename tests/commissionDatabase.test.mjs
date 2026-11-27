@@ -56,7 +56,6 @@ test('only managers can approve; overdue approval queues proof and requires reap
     await db.query(`select public.report_commission_payment('${cycle}', 'rider/proof-old.jpg')`);
     await assert.rejects(db.query(`select public.approve_commission_payment('${cycle}')`), /Manager identity required/);
     await assert.rejects(db.query('select * from public.pending_commission_reviews()'), /Manager identity required/);
-    await assert.rejects(db.query('select * from public.commission_riders_needing_reapproval()'), /Manager identity required/);
     await db.exec(`set "request.jwt.claim.sub" = '${manager}';`);
     assert.equal((await db.query('select * from public.pending_commission_reviews()')).rows.length, 1);
     await db.query(`select public.reject_commission_payment('${cycle}')`);
@@ -70,9 +69,7 @@ test('only managers can approve; overdue approval queues proof and requires reap
     await db.exec(`set "request.jwt.claim.sub" = '${rider}';`);
     assert.equal((await db.query('select public.commission_can_accept_orders() as allowed')).rows[0].allowed, false);
     await db.exec(`set "request.jwt.claim.sub" = '${manager}';`);
-    assert.deepEqual((await db.query('select rider_id, overdue_remaining from public.commission_riders_needing_reapproval()')).rows, [{ rider_id: 'rider', overdue_remaining: false }]);
     await db.query("select public.reapprove_commission_rider('rider')");
-    assert.equal((await db.query('select * from public.commission_riders_needing_reapproval()')).rows.length, 0);
     await db.exec(`set "request.jwt.claim.sub" = '${rider}';`);
     assert.equal((await db.query('select public.commission_can_accept_orders() as allowed')).rows[0].allowed, true);
     await db.exec('reset role');

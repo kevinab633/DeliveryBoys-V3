@@ -268,7 +268,6 @@ function CustomerHomePage() {
                   {user ? getContent('home.cta.primary', 'Book a Delivery') : 'Get Started'}
                   <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
                 </Link>
-                {import.meta.env.VITE_RIDER_TEST_PREVIEW === 'true' && import.meta.env.VITE_SUPABASE_URL === 'https://uodasrleaobmeqijiyts.supabase.co' && <Link to="/rider/apply" className="inline-flex items-center justify-center rounded-2xl border px-8 py-4 font-bold">Apply as a rider (test)</Link>}
                 <Link to="/auth/signup?role=rider"
                   className={cn('liquid-glass-btn inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-bold text-lg group',
                     dk ? 'text-white hover:text-brand' : 'text-gray-800 hover:text-brand')}>

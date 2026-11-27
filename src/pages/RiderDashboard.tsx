@@ -11,7 +11,6 @@ import { calculateDistance, riderEarningsForOrder } from '../lib/pricing';
 import { RiderProfile, Order } from '../lib/types';
 import MapView from '../components/MapView';
 import CommissionCard from '../components/CommissionCard';
-import { WeeklyCommissionRider } from '../components/WeeklyCommission';
 import { fetchTurnByTurnRoute, DirectionStep, CongestionSegment } from '../components/MapView';
 import { showToast } from '../components/Toast';
 

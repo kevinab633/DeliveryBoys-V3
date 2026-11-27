@@ -12,8 +12,6 @@ import { DiscountSettings } from '../lib/discounts';
 import { cn, formatCurrency, formatDate, timeAgo } from '../lib/utils';
 import { RiderProfile, PriceRule } from '../lib/types';
 import MapView from '../components/MapView';
-import { WeeklyCommissionManager } from '../components/WeeklyCommission';
-import { RiderReviewPreview } from './RiderRequestsPreview';
 
 type Tab = 'overview' | 'orders' | 'riders' | 'map' | 'pricing' | 'content';
 
@@ -217,7 +215,6 @@ export default function ManagerDashboard() {
             );
           })()}
 
-          {tab === 'riders' && import.meta.env.VITE_RIDER_TEST_PREVIEW === 'true' && import.meta.env.VITE_SUPABASE_URL === 'https://uodasrleaobmeqijiyts.supabase.co' && <RiderReviewPreview />}
           {tab === 'riders' && (() => {
             const selectedRider = selectedRiderId ? riders.find(r => r.id === selectedRiderId) : undefined;
             if (selectedRider) return (
