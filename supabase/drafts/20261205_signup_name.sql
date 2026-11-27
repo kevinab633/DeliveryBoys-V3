@@ -1,4 +1,4 @@
--- Draft only: not applied to LIVE. Save a name only for the caller's linked,
+-- Applied to LIVE. Save a name only for the caller's linked,
 -- verified customer or pending rider profile. Never accept a user ID or role.
 create or replace function public.save_signup_name(p_name text)
 returns void language plpgsql security definer set search_path = pg_catalog as $$

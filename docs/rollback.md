@@ -141,3 +141,14 @@ begin
 end;
 $function$
 ```
+
+## Signup name function rollback (LIVE pre-apply state)
+
+Before applying `supabase/drafts/20261205_signup_name.sql`, a read-only LIVE
+catalog check found no `public.save_signup_name` function. If rollback is
+approved, remove only the new function. This does not undo names already saved
+and does not drop any column, table, or policy.
+
+```sql
+drop function if exists public.save_signup_name(text);
+```
