@@ -10,11 +10,11 @@ test('email auth does not accept or send an application role', async () => {
     resetPasswordForEmail: async (email, options) => { calls.push(['reset', email, options]); return { data: {}, error: null }; },
   } });
   const generatedValue = crypto.randomUUID();
-  await auth.signUp(' Customer@Example.test ', generatedValue, 'https://example.test/auth/login');
+  await auth.signUp(' Customer@Example.test ', generatedValue, 'https://example.test/auth/login', 'Typed Name');
   await auth.signIn(' Customer@Example.test ', generatedValue);
   await auth.resetPassword(' Customer@Example.test ', 'https://example.test/auth/reset');
   assert.deepEqual(calls, [
-    ['signup', { email: 'customer@example.test', password: generatedValue, options: { emailRedirectTo: 'https://example.test/auth/login' } }],
+    ['signup', { email: 'customer@example.test', password: generatedValue, options: { emailRedirectTo: 'https://example.test/auth/login', data: { full_name: 'Typed Name' } } }],
     ['signin', { email: 'customer@example.test', password: generatedValue }],
     ['reset', 'customer@example.test', { redirectTo: 'https://example.test/auth/reset' }],
   ]);
@@ -23,7 +23,7 @@ test('email auth does not accept or send an application role', async () => {
 test('manager email is not accepted by client email/password flows', async () => {
   const auth = createEmailPasswordAuth({ auth: {} });
   const generatedValue = crypto.randomUUID();
-  await assert.rejects(auth.signUp('SUPPORT.DELIVERYBOYSGH@GMAIL.COM', generatedValue, 'https://example.test'), /Google/);
+  await assert.rejects(auth.signUp('SUPPORT.DELIVERYBOYSGH@GMAIL.COM', generatedValue, 'https://example.test', 'Name'), /Google/);
   await assert.rejects(auth.signIn('support.deliveryboysgh@gmail.com', generatedValue), /Google/);
   await assert.rejects(auth.resetPassword('support.deliveryboysgh@gmail.com', 'https://example.test'), /Google/);
 });

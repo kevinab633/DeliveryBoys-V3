@@ -12,9 +12,9 @@ function customerEmail(email: string): string {
 
 export function createEmailPasswordAuth(client: SupabaseClient) {
   return {
-    async signUp(email: string, password: string, redirectTo: string) {
+    async signUp(email: string, password: string, redirectTo: string, name: string) {
       const { data, error } = await client.auth.signUp({
-        email: customerEmail(email), password, options: { emailRedirectTo: redirectTo },
+        email: customerEmail(email), password, options: { emailRedirectTo: redirectTo, data: { full_name: name.trim() } },
       });
       if (error) throw error;
       return data;

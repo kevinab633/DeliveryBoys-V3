@@ -50,6 +50,7 @@ export function LoginPage() {
         const profile = await linkedSignIn();
         navigate(profile.role === 'manager' ? '/manager' : profile.role === 'rider' ? '/rider/dashboard' : '/');
       } catch (err) {
+        await supabase.auth.signOut();
         setError(errorText(err));
       }
     })();
@@ -195,6 +196,10 @@ export function SignupPage() {
       setError('Please enter your full name.');
       return;
     }
+    if (!form.name.trim() || form.name.trim().length > 120) {
+      setError('Please enter your full name (up to 120 characters).');
+      return;
+    }
     if (!agreed) {
       setError('Please accept the Terms & Conditions and Privacy Policy to continue.');
       return;
@@ -204,13 +209,15 @@ export function SignupPage() {
       if (sessionError) throw sessionError;
       if (session.session && session.session.user.email?.toLowerCase() !== form.email.trim().toLowerCase()) throw new Error('Sign out before creating an account with a different email.');
       if (!session.session) {
-        const redirectPath = riderApplication ? '/auth/signup?role=rider' : '/auth/login';
-        const result = await emailAuth.signUp(form.email, password, `${window.location.origin}${redirectPath}`);
-        if (!result.session) { setMessage('Check your email to confirm your account, then sign in.'); return; }
+        const redirectPath = riderApplication ? '/auth/signup?role=rider' : '/auth/signup';
+        const result = await emailAuth.signUp(form.email, password, `${window.location.origin}${redirectPath}`, form.name);
+        if (!result.session) { setMessage('Check your email to confirm your account, then return to finish signup.'); return; }
       }
+      const profile = await linkAccount();
+      if (profile.role !== 'customer' && !(riderApplication && profile.role === 'rider' && 'status' in profile && profile.status === 'pending')) throw new Error('This account cannot complete this signup.');
+      const { error: nameError } = await supabase.rpc('save_signup_name', { p_name: form.name.trim() });
+      if (nameError) throw nameError;
       if (riderApplication) {
-        const profile = await linkAccount();
-        if (profile.role !== 'customer' && !(profile.role === 'rider' && 'status' in profile && profile.status === 'pending')) throw new Error('This account cannot submit a rider application.');
         const { data, error: applicationError } = await supabase.rpc('submit_step2_rider_application', { p_vehicle_type: form.vehicleType, p_vehicle_plate: form.vehiclePlate });
         if (applicationError) throw applicationError;
         if (data !== 'pending') throw new Error('Your rider application is not pending. Please contact support.');
@@ -219,8 +226,7 @@ export function SignupPage() {
         useAuthStore.setState(s => ({ user: rider, allUsers: [...s.allUsers.filter(u => u.id !== rider.id), rider], otpPending: null }));
         navigate('/rider/verification');
       } else {
-        const profile = await linkedSignIn();
-        if (profile.role !== 'customer') throw new Error('A customer profile is required to book.');
+        await linkedSignIn();
         navigate('/book');
       }
     } catch (err) { setError(errorText(err)); }
