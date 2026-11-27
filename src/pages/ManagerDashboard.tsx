@@ -13,6 +13,7 @@ import { cn, formatCurrency, formatDate, timeAgo } from '../lib/utils';
 import { RiderProfile, PriceRule } from '../lib/types';
 import MapView from '../components/MapView';
 import { WeeklyCommissionManager } from '../components/WeeklyCommission';
+import { RiderReviewPreview } from './RiderRequestsPreview';
 
 type Tab = 'overview' | 'orders' | 'riders' | 'map' | 'pricing' | 'content';
 
@@ -216,6 +217,7 @@ export default function ManagerDashboard() {
             );
           })()}
 
+          {tab === 'riders' && import.meta.env.VITE_RIDER_TEST_PREVIEW === 'true' && import.meta.env.VITE_SUPABASE_URL === 'https://uodasrleaobmeqijiyts.supabase.co' && <RiderReviewPreview />}
           {tab === 'riders' && (() => {
             const selectedRider = selectedRiderId ? riders.find(r => r.id === selectedRiderId) : undefined;
             if (selectedRider) return (
@@ -232,7 +234,7 @@ export default function ManagerDashboard() {
               </div>
             );
             const renderRider = (r: RiderProfile) => <button type="button" key={r.id} onClick={() => openRider(r.id)} className={cn('flex w-full flex-wrap items-center gap-4 rounded-2xl border p-5 text-left transition hover:-translate-y-0.5 hover:border-brand/40', dk ? 'border-white/5 bg-surface-dark-3' : 'border-gray-200 bg-white')}><div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand text-lg font-bold text-white">{r.name[0]}</div><div className="min-w-[200px] flex-1"><p className={cn('font-bold', dk ? 'text-white' : 'text-gray-900')}>{r.name}</p><p className="text-xs text-gray-500">{r.email || r.phone} · {r.vehicleType} · {r.vehiclePlate}</p><span className={cn('mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-bold capitalize', r.status === 'approved' ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning')}>{r.status}</span></div><span className="text-sm font-semibold capitalize text-gray-500">{r.availability}</span><ChevronDown className="-rotate-90 text-gray-400" size={18} /></button>;
-            return <div className="space-y-7">{import.meta.env.DEV && import.meta.env.VITE_VERIFIED_AUTH_PREVIEW === 'true' && <WeeklyCommissionManager />}{!(import.meta.env.DEV && import.meta.env.VITE_VERIFIED_AUTH_PREVIEW === 'true') && pendingCommission.length > 0 && (
+            return <div className="space-y-7">{pendingCommission.length > 0 && (
               <section className={card}>
                 <h3 className={cn('font-bold mb-3', dk ? 'text-white' : 'text-gray-900')}>Commission payments to confirm ({pendingCommission.length})</h3>
                 <div className="space-y-3">
