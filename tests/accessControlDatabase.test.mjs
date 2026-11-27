@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 
-const sql = name => readFile(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8');
+const sql = name => readFile(new URL(`../supabase/drafts/${name}`, import.meta.url), 'utf8');
 const files = await Promise.all(['20261125_account_identity_foundation.sql','20261126_weekly_commission_draft.sql','20261129_access_control_draft.sql'].map(sql));
 const customer = '11111111-1111-4111-8111-111111111111';
 const rider = '22222222-2222-4222-8222-222222222222';

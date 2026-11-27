@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 
-const sql = name => readFile(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8');
+const sql = name => readFile(new URL(`../supabase/drafts/${name}`, import.meta.url), 'utf8');
 const [identitySql, commissionSql, acceptanceSql] = await Promise.all([
   sql('20261125_account_identity_foundation.sql'), sql('20261126_weekly_commission_draft.sql'), sql('20261128_order_acceptance_draft.sql'),
 ]);

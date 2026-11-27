@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 
-const identitySql = await readFile(new URL('../supabase/migrations/20261125_account_identity_foundation.sql', import.meta.url), 'utf8');
-const commissionSql = await readFile(new URL('../supabase/migrations/20261126_weekly_commission_draft.sql', import.meta.url), 'utf8');
-const verificationSql = await readFile(new URL('../supabase/migrations/20261127_rider_verification_draft.sql', import.meta.url), 'utf8');
+const identitySql = await readFile(new URL('../supabase/drafts/20261125_account_identity_foundation.sql', import.meta.url), 'utf8');
+const commissionSql = await readFile(new URL('../supabase/drafts/20261126_weekly_commission_draft.sql', import.meta.url), 'utf8');
+const verificationSql = await readFile(new URL('../supabase/drafts/20261127_rider_verification_draft.sql', import.meta.url), 'utf8');
 const rider = '11111111-1111-4111-8111-111111111111';
 const manager = '22222222-2222-4222-8222-222222222222';
 const cycle = '33333333-3333-4333-8333-333333333333';
