@@ -1001,7 +1001,7 @@ function OrderDetailOverlay({ order, dk, onClose, onAccept, onDecline }: {
 export default function RiderDashboard() {
   const dk = useThemeStore(s => s.theme === 'dark');
   const { user, setRiderAvailability, updateRiderLocation, persistRiderLocation } = useAuthStore();
-  const { orders, acceptOrder, updateOrderStatus, getPendingOrders, getOrdersByRider, fetchOrders } = useOrderStore();
+  const { orders, acceptOrder, acceptOrderSecure, updateOrderStatus, getPendingOrders, getOrdersByRider, fetchOrders } = useOrderStore();
   const [tab, setTab] = useState<'available' | 'my'>('available');
 
   // Ringing modal + full-screen detail state
@@ -1227,8 +1227,18 @@ export default function RiderDashboard() {
 
   // ── Accept (first-come-first-served via orderStore guard) ───────
   // Lifecycle notifications (customer + rider) fire inside acceptOrder.
-  const handleAccept = (order: Order) => {
-    const ok = acceptOrder(order.id, rider.id, rider.name);
+  const handleAccept = async (order: Order) => {
+    let ok: boolean;
+    try {
+      // Never enable this preview on the deployed app until server policies,
+      // identity migration and the statement scheduler are complete.
+      ok = import.meta.env.DEV && import.meta.env.VITE_VERIFIED_AUTH_PREVIEW === 'true'
+        ? await acceptOrderSecure(order.id)
+        : acceptOrder(order.id, rider.id, rider.name);
+    } catch (err) {
+      showToast({ title: 'Unable to accept order', message: err instanceof Error ? err.message : 'Please try again.', type: 'error' });
+      return;
+    }
     if (!ok) {
       // Another rider already accepted it (or it was cancelled)
       showToast({ title: 'Already taken', message: 'Another rider accepted this order first.', type: 'error' });

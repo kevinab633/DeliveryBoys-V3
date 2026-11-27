@@ -3,7 +3,9 @@ import { persist } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
 import { Order, OrderStatus, OrderType, VehicleType, Location, RiderProfile } from '../lib/types';
 import { formatDate, generateOrderCode } from '../lib/utils';
-import { syncService } from '../lib/syncService';
+import { syncService, rowToOrder } from '../lib/syncService';
+import supabase from '../lib/supabase';
+import { requestSecureOrderAcceptance } from '../lib/secureOrderAcceptance';
 import { calculatePrice, calculateDistance, riderEarningsForOrder } from '../lib/pricing';
 import { useFuelPriceStore } from './fuelPriceStore';
 import { useDiscountStore } from './discountStore';
@@ -103,6 +105,8 @@ interface OrderStore {
     scheduledFor?: number;
   }) => Order;
   acceptOrder: (orderId: string, riderId: string, riderName: string) => boolean;
+  /** Development preview only: commit with verified server RPC before updating UI. */
+  acceptOrderSecure: (orderId: string) => Promise<boolean>;
   cancelOrder: (orderId: string) => void;
   updateOrderStatus: (orderId: string, status: OrderStatus) => void;
   updateRiderLocation: (orderId: string, lat: number, lng: number) => void;
@@ -294,6 +298,20 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
     pushNotify(order.customerId, 'Rider Assigned!', `A rider is on the way to pickup — ${riderName} accepted your order ${order.displayCode}.${phone}`);
     pushNotify(riderId, 'Order Accepted', `You accepted order ${order.displayCode}. Head to the pickup point.`);
     fireBrowserNotification('Rider Assigned', `${riderName} accepted order ${order.displayCode} — on the way to pickup.`);
+    return true;
+  },
+
+  // Preview only until the verified identity, RLS and migration are ready.
+  // Do not optimistically announce an assignment the database might reject.
+  acceptOrderSecure: async (orderId) => {
+    const current = useAuthStore.getState().user;
+    if (!current || current.role !== 'rider') throw new Error('Sign in as a verified rider.');
+    const row = await requestSecureOrderAcceptance(supabase, orderId, current.id);
+    const accepted = rowToOrder(row);
+    get().__applyServerOrder(accepted);
+    syncService.broadcastOrderAccepted(orderId, current.id, accepted.riderName || current.name, current.phone, accepted.acceptedAt, false);
+    pushNotify(accepted.customerId, 'Rider Assigned!', `A rider is on the way to pickup — ${accepted.riderName || current.name} accepted order ${accepted.displayCode}.`);
+    pushNotify(current.id, 'Order Accepted', `You accepted order ${accepted.displayCode}. Head to the pickup point.`);
     return true;
   },
 

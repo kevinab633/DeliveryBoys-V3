@@ -322,6 +322,7 @@ export const syncService = {
     riderName: string,
     riderPhone?: string,
     acceptedAt = Date.now(),
+    persist = true,
   ) {
     emitSyncEvent({
       type: 'ORDER_ACCEPTED',
@@ -332,8 +333,8 @@ export const syncService = {
       riderPhone,
       acceptedAt,
     });
-    // Update Supabase database in background
-    void syncService.updateOrderInDatabase(orderId, {
+    // The verified flow already committed the assignment atomically via RPC.
+    if (persist) void syncService.updateOrderInDatabase(orderId, {
       status: 'accepted',
       riderId,
       riderName,
