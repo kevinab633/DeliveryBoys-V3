@@ -34,12 +34,12 @@ test('invalid proof never uploads or reports', async () => {
 test('review and settings use the draft database function signatures', async () => {
   const { client, calls } = mockClient();
   const api = createWeeklyCommissionApi(client);
-  await api.cycles(); await api.reviews();
+  await api.cycles(); await api.reviews(); await api.holds();
   await api.review('cycle-id', true); await api.review('cycle-id', false);
   await api.reapprove('rider-id'); await api.setDeadlineDays(2);
   assert.equal(await api.proofUrl('rider-auth-id/proof.png'), 'signed-url');
   assert.deepEqual(calls, [
-    ['rpc', 'my_commission_cycles', undefined], ['rpc', 'pending_commission_reviews', undefined],
+    ['rpc', 'my_commission_cycles', undefined], ['rpc', 'pending_commission_reviews', undefined], ['rpc', 'commission_riders_needing_reapproval', undefined],
     ['rpc', 'approve_commission_payment', { p_cycle_id: 'cycle-id' }],
     ['rpc', 'reject_commission_payment', { p_cycle_id: 'cycle-id' }],
     ['rpc', 'reapprove_commission_rider', { p_rider_id: 'rider-id' }],

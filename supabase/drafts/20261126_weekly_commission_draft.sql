@@ -115,6 +115,21 @@ $$;
 revoke all on function public.reapprove_commission_rider(text) from public, anon;
 grant execute on function public.reapprove_commission_rider(text) to authenticated;
 
+-- Managers need to discover holds without exposing the private hold table.
+create function public.commission_riders_needing_reapproval()
+returns table(rider_id text, rider_name text, overdue_remaining boolean)
+language plpgsql stable security definer set search_path = pg_catalog as $$
+begin
+  if not deliveryboys_private.has_role('manager') then raise exception 'Manager identity required' using errcode = '42501'; end if;
+  return query select h.rider_id, u.name,
+    exists(select 1 from deliveryboys_private.commission_cycles c where c.rider_id=h.rider_id and c.state <> 'paid' and c.deadline < now())
+    from deliveryboys_private.commission_holds h join public.users u on u.id=h.rider_id
+    where h.requires_reapproval order by u.name, h.rider_id;
+end;
+$$;
+revoke all on function public.commission_riders_needing_reapproval() from public, anon;
+grant execute on function public.commission_riders_needing_reapproval() to authenticated;
+
 -- Caller must first upload to the private bucket with authenticated ownership.
 -- The complete rollout must create that bucket and restrictive storage policies.
 create function public.report_commission_payment(p_cycle_id uuid, p_proof_path text)

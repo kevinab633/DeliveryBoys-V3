@@ -11,6 +11,7 @@ import { calculateDistance, riderEarningsForOrder } from '../lib/pricing';
 import { RiderProfile, Order } from '../lib/types';
 import MapView from '../components/MapView';
 import CommissionCard from '../components/CommissionCard';
+import { WeeklyCommissionRider } from '../components/WeeklyCommission';
 import { fetchTurnByTurnRoute, DirectionStep, CongestionSegment } from '../components/MapView';
 import { showToast } from '../components/Toast';
 
@@ -1299,7 +1300,9 @@ export default function RiderDashboard() {
             </button>
           </div>
 
-          <CommissionCard rider={rider} orders={orders} dk={dk} className="mt-6" />
+          {import.meta.env.DEV && import.meta.env.VITE_VERIFIED_AUTH_PREVIEW === 'true'
+            ? <WeeklyCommissionRider />
+            : <CommissionCard rider={rider} orders={orders} dk={dk} className="mt-6" />}
 
           {/* Stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">

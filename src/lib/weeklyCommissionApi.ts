@@ -12,6 +12,7 @@ export interface CommissionCycle {
   proof_path: string | null;
 }
 export interface CommissionReview extends Omit<CommissionCycle, 'state'> { rider_id: string; }
+export interface CommissionHold { rider_id: string; rider_name: string; overdue_remaining: boolean; }
 const bucket = 'commission-proofs';
 const allowed = new Map([['image/jpeg', 'jpg'], ['image/png', 'png'], ['image/webp', 'webp']]);
 
@@ -28,6 +29,12 @@ export function createWeeklyCommissionApi(client: SupabaseClient) {
       if (error) throw error;
       if (!Array.isArray(data)) throw new Error('Could not load payment reviews.');
       return data as CommissionReview[];
+    },
+    async holds(): Promise<CommissionHold[]> {
+      const { data, error } = await client.rpc('commission_riders_needing_reapproval');
+      if (error) throw error;
+      if (!Array.isArray(data)) throw new Error('Could not load rider holds.');
+      return data as CommissionHold[];
     },
     async report(cycleId: string, file: File) {
       const ext = allowed.get(file.type);
