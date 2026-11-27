@@ -24,11 +24,9 @@ import Contact from './pages/Contact';
 import { LoginPage, SignupPage, ManagerLoginPage } from './pages/Auth';
 import { VerifiedLoginPage, VerifiedSignupPage } from './pages/VerifiedAuth';
 
-// Keep the unfinished auth flow out of production. The Vercel preview is
-// enabled only when its build explicitly targets the isolated test project.
-const VERIFIED_AUTH_PREVIEW =
-  (import.meta.env.DEV && import.meta.env.VITE_VERIFIED_AUTH_PREVIEW === 'true') ||
-  (import.meta.env.PROD && import.meta.env.VITE_SUPABASE_URL === 'https://uodasrleaobmeqijiyts.supabase.co');
+// Preview only. Do not enable on the deployed app until session restoration,
+// server authorization, existing-account migration and RLS are complete.
+const VERIFIED_AUTH_PREVIEW = import.meta.env.DEV && import.meta.env.VITE_VERIFIED_AUTH_PREVIEW === 'true';
 import RiderDashboard from './pages/RiderDashboard';
 import ManagerDashboard from './pages/ManagerDashboard';
 import Profile from './pages/Profile';
