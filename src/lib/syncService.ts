@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import supabase from './supabase';
 import { Order, OrderStatus, RiderProfile } from './types';
+import { isApprovedRider } from './riderAccess';
 import { calculateDistance } from './pricing';
 import { useOrderStore } from '../stores/orderStore';
 import { useAuthStore } from '../stores/authStore';
@@ -426,6 +427,7 @@ export const syncService = {
    * Broadcast online rider presence (so customers see live moving bikes on the map).
    */
   broadcastRiderPresence(rider: RiderProfile) {
+    if (!isApprovedRider(rider) || rider.availability !== 'online') return;
     emitSyncEvent({
       type: 'RIDER_PRESENCE',
       senderId: CLIENT_ID,
@@ -583,12 +585,8 @@ export const syncService = {
 
     // 4. Also broadcast rider presence if current user is an online rider
     const currentUser = useAuthStore.getState().user;
-    if (
-      currentUser &&
-      currentUser.role === 'rider' &&
-      (currentUser as RiderProfile).availability === 'online'
-    ) {
-      syncService.broadcastRiderPresence(currentUser as RiderProfile);
+    if (isApprovedRider(currentUser) && currentUser.availability === 'online') {
+      syncService.broadcastRiderPresence(currentUser);
     }
   },
 

@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence, MotionConfig } from 'framer-motion';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useThemeStore } from './stores/themeStore';
 import { useOrderStore } from './stores/orderStore';
 import { useAuthStore } from './stores/authStore';
@@ -42,7 +42,7 @@ function ScrollToTop() {
 
 // Routes where the map is full-screen — hide Footer & WhatsApp FAB
 const FULL_SCREEN_ROUTES = ['/book', '/track', '/rider/dashboard'];
-const MINIMAL_ROUTES = ['/auth/login', '/auth/signup', '/manager/login', '/manager', '/rider/verification'];
+const MINIMAL_ROUTES = ['/auth/login', '/auth/signup', '/manager/login', '/manager', '/rider/signup', '/rider/verification'];
 
 function CustomerOnly({ children }: { children: React.ReactNode }) {
   const user = useAuthStore(s => s.user);
@@ -56,30 +56,44 @@ function AppContent() {
   const isFullScreen = FULL_SCREEN_ROUTES.includes(pathname);
   const user = useAuthStore(s => s.user);
   const usersLoaded = useAuthStore(s => s.usersLoaded);
+  const [sessionReady, setSessionReady] = useState(false);
 
   // ── Browser Notification permission: requested once, the first time
   //    a user is logged in. Graceful no-op if denied/unsupported. ────
   useEffect(() => {
-    if (user) requestNotifyPermission();
+    if (sessionReady && user) requestNotifyPermission();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
+  }, [sessionReady, user?.id]);
 
   // ── Web Push subscription: so order alerts arrive even with the site
   //    fully closed, not just while a tab is open (which is all the
   //    effect above covers). Additive — doesn't replace anything. ────
   useEffect(() => {
-    if (user) void subscribeToPush(user.id);
+    if (sessionReady && user) void subscribeToPush(user.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
+  }, [sessionReady, user?.id]);
 
-  // ── Load real accounts from Supabase on startup, merging over the local
-  //    demo/cached data — this is what makes rider signups, availability,
-  //    and delivery stats visible across devices instead of being stuck
-  //    in whichever browser created them. ─────────────────────────────
+  // Revalidate a persisted session before rendering role-specific views. A
+  // cached/demo customer (including the support address) is not proof that a
+  // customer row still exists. Other cached data remains available as before.
   useEffect(() => {
-    void useAuthStore.getState().loadUsers();
+    let active = true;
+    void (async () => {
+      await useAuthStore.getState().loadUsers();
+      const current = useAuthStore.getState().user;
+      if (current) {
+        try {
+          await useAuthStore.getState().refreshCurrentUser();
+        } catch (err) {
+          console.warn('[App] Could not refresh the saved account:', err);
+          if (useAuthStore.getState().user?.id === current.id) useAuthStore.setState({ user: null });
+        }
+      }
+      if (active) setSessionReady(true);
+    })();
     void useFuelPriceStore.getState().load();
     void useDiscountStore.getState().load();
+    return () => { active = false; };
   }, []);
 
   // ── Re-sync on resume: Android suspends/kills the Realtime WebSocket
@@ -136,18 +150,18 @@ function AppContent() {
   // repeatedly tearing the socket down was what made the old subscription
   // flap between SUBSCRIBED and CLOSED.
   useEffect(() => {
-    syncService.init();
-  }, []);
+    if (sessionReady) syncService.init();
+  }, [sessionReady]);
 
   // Re-announce presence / re-pull orders whenever the signed-in user
   // changes, so a rider who just logged in is visible to customers.
   useEffect(() => {
-    if (!user?.id) return;
+    if (!sessionReady || !user?.id) return;
     void useOrderStore.getState().fetchOrders();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
+  }, [sessionReady, user?.id]);
 
-  if (!usersLoaded) {
+  if (!usersLoaded || !sessionReady) {
     return (
       <div className={theme === 'dark' ? 'theme-dark' : 'theme-light'}>
         <PageSkeleton />
@@ -183,6 +197,7 @@ function AppContent() {
           <Route path="/contact" element={<Contact />} />
           <Route path="/auth/login" element={VERIFIED_AUTH_PREVIEW ? <VerifiedLoginPage /> : <LoginPage />} />
           <Route path="/auth/signup" element={VERIFIED_AUTH_PREVIEW ? <VerifiedSignupPage /> : <SignupPage />} />
+          <Route path="/rider/signup" element={<Navigate to="/auth/signup?role=rider" replace />} />
           <Route path="/manager/login" element={VERIFIED_AUTH_PREVIEW ? <VerifiedLoginPage manager /> : <ManagerLoginPage />} />
           <Route path="/rider/dashboard" element={<RiderDashboard />} />
           <Route path="/manager" element={<ManagerDashboard />} />

@@ -6,6 +6,7 @@ import { formatDate, generateOrderCode } from '../lib/utils';
 import { syncService, rowToOrder } from '../lib/syncService';
 import supabase from '../lib/supabase';
 import { requestSecureOrderAcceptance } from '../lib/secureOrderAcceptance';
+import { isApprovedRider } from '../lib/riderAccess';
 import { calculatePrice, calculateDistance, riderEarningsForOrder } from '../lib/pricing';
 import { useFuelPriceStore } from './fuelPriceStore';
 import { useDiscountStore } from './discountStore';
@@ -273,6 +274,8 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
   // order. If the order is no longer 'pending' (another rider won the race,
   // or it was cancelled), this is a no-op and returns false.
   acceptOrder: (orderId, riderId, riderName) => {
+    const current = useAuthStore.getState().user;
+    if (!isApprovedRider(current) || current.id !== riderId) return false;
     const order = get().orders.find(o => o.id === orderId);
     if (!order || order.status !== 'pending') return false;
     const acceptedAt = Date.now();
@@ -305,7 +308,7 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
   // Do not optimistically announce an assignment the database might reject.
   acceptOrderSecure: async (orderId) => {
     const current = useAuthStore.getState().user;
-    if (!current || current.role !== 'rider') throw new Error('Sign in as a verified rider.');
+    if (!isApprovedRider(current)) throw new Error('Rider approval is required to accept rides.');
     const row = await requestSecureOrderAcceptance(supabase, orderId, current.id);
     const accepted = rowToOrder(row);
     get().__applyServerOrder(accepted);
@@ -511,7 +514,7 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
       (u): u is RiderProfile => u.role === 'rider',
     );
     return riders
-      .filter(r => r.availability === 'online' && r.location)
+      .filter(r => isApprovedRider(r) && r.availability === 'online' && r.location)
       .map(r => ({
         rider: r,
         dist: calculateDistance(r.location!.lat, r.location!.lng, order.pickup.lat, order.pickup.lng),
@@ -596,7 +599,7 @@ export const useOrderStore = create<OrderStore>()(persist((set, get) => ({
           }));
           // Notify online riders that a scheduled delivery is coming up
           const onlineRiders = useAuthStore.getState().allUsers.filter(
-            u => u.role === 'rider' && (u as { availability?: string }).availability === 'online',
+            u => isApprovedRider(u) && u.availability === 'online',
           );
           if (when - SCHEDULED_DISPATCH_WINDOW_MS >= SESSION_STARTED_AT) {
             onlineRiders.forEach(r => {

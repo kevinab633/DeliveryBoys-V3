@@ -1,5 +1,7 @@
 import supabase from './supabase';
 import { User, RiderProfile, RiderStatus, RiderAvailability, VehicleType } from './types';
+import { findContactRow } from './contactLookup';
+import { requestCustomerSignup, requestRiderSignup } from './directSignup';
 
 /** Row shape as stored in Supabase (snake_case), mirrors the orders table's
  *  own convention in syncService.ts. */
@@ -14,13 +16,16 @@ function rowToUser(row: any): User | RiderProfile {
     verified: row.verified ?? true,
   };
   if (row.role !== 'rider') return base;
+  const status = (row.status as RiderStatus) || 'pending';
   return {
     ...base,
     role: 'rider',
     vehicleType: (row.vehicle_type as VehicleType) || 'motorcycle',
     vehiclePlate: row.vehicle_plate || '',
-    status: (row.status as RiderStatus) || 'pending',
-    availability: (row.availability as RiderAvailability) || 'offline',
+    status,
+    // A stale online value must not make a pending/rejected/suspended rider
+    // appear available. The authoritative server guard is still a draft.
+    availability: status === 'approved' ? ((row.availability as RiderAvailability) || 'offline') : 'offline',
     location: row.location || undefined,
     totalDeliveries: Number(row.total_deliveries) || 0,
     rating: Number(row.rating) || 0,
@@ -108,21 +113,32 @@ export const usersApi = {
     }
   },
 
-  /** Look up one account by email or phone + role — used by login/signup
-   *  find-or-create flows, matching the old in-memory .find() behavior. */
+  /** Existing accounts only. Errors are distinct from a genuine no-match. */
   async findByContact(contact: string, method: 'email' | 'phone', role: string): Promise<User | RiderProfile | null> {
-    try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq(method, contact)
-        .eq('role', role)
-        .maybeSingle();
-      if (error || !data) return null;
-      return rowToUser(data);
-    } catch (err) {
-      console.warn('[usersApi] findByContact failed:', err);
-      return null;
-    }
+    const row = await findContactRow(supabase, contact, method, role);
+    return row ? rowToUser(row) : null;
+  },
+
+  /** These server functions are review-only drafts until explicitly deployed.
+   * Never substitute a client-created row when an RPC is unavailable. */
+  async registerCustomer(data: { name: string; email?: string; phone?: string }): Promise<User> {
+    return rowToUser(await requestCustomerSignup(supabase, data)) as User;
+  },
+
+  async registerRider(data: { name: string; email?: string; phone?: string; vehicleType: VehicleType; vehiclePlate: string; nationalIdUrl: string; photoUrl: string }): Promise<RiderProfile> {
+    return rowToUser(await requestRiderSignup(supabase, data)) as RiderProfile;
+  },
+
+  /** Only an approved row can be changed to online/busy, even if approval
+   * changed after the preceding refresh. Errors are not hidden from callers. */
+  async setRiderAvailability(userId: string, availability: RiderAvailability): Promise<RiderProfile | null> {
+    let query = supabase.from('users')
+      .update({ availability, updated_at: new Date().toISOString() })
+      .eq('id', userId)
+      .eq('role', 'rider');
+    if (availability !== 'offline') query = query.eq('status', 'approved');
+    const { data, error } = await query.select('*').maybeSingle();
+    if (error) throw error;
+    return data ? rowToUser(data) as RiderProfile : null;
   },
 };

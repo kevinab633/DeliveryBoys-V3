@@ -9,6 +9,8 @@ import { useOrderStore } from '../stores/orderStore';
 import { cn, formatCurrency } from '../lib/utils';
 import { riderEarningsForOrder } from '../lib/pricing';
 import { RiderProfile } from '../lib/types';
+import { isApprovedRider } from '../lib/riderAccess';
+import { showToast } from '../components/Toast';
 import { services } from '../lib/services';
 
 
@@ -35,6 +37,9 @@ function RiderHomePage() {
   const { user, setRiderAvailability } = useAuthStore();
   const { orders } = useOrderStore();
   const rider = user as RiderProfile;
+  const approved = isApprovedRider(rider);
+  const online = approved && rider.availability === 'online';
+  const [savingAvailability, setSavingAvailability] = useState(false);
 
   // ── Real stats from the rider's profile + order history ─────────
   const weekAgo = Date.now() - 7 * 86400000;
@@ -76,19 +81,23 @@ function RiderHomePage() {
               Welcome back, {rider.name.split(' ')[0]}
             </h1>
             <p className={cn('text-base md:text-lg mb-8 max-w-lg leading-relaxed', dk ? 'text-white/55' : 'text-gray-600')}>
-              {rider.availability === 'online'
-                ? 'You\'re live on the map. New orders nearby will ring your dashboard.'
+              {!approved ? 'Your rider account needs manager approval before you can go online or accept rides.'
+                : online ? 'You\'re live on the map. New orders nearby will ring your dashboard.'
                 : 'Go online to start receiving delivery orders near you.'}
             </p>
 
             {/* Online/Offline toggle — same store action as the dashboard */}
             <div className="flex flex-col sm:flex-row gap-3 mb-10">
-              <button onClick={() => setRiderAvailability(rider.availability === 'online' ? 'offline' : 'online')}
-                className={cn('inline-flex items-center justify-center gap-2 px-8 py-4 rounded-full font-bold text-lg transition shadow-xl',
-                  rider.availability === 'online'
-                    ? 'bg-success text-white hover:brightness-110 shadow-success/25'
+              <button disabled={!approved || savingAvailability} onClick={async () => {
+                setSavingAvailability(true);
+                const saved = await setRiderAvailability(online ? 'offline' : 'online');
+                setSavingAvailability(false);
+                if (!saved) showToast({ title: 'Availability not saved', message: 'Check your approval status and connection, then try again.', type: 'warning' });
+              }}
+                className={cn('inline-flex items-center justify-center gap-2 px-8 py-4 rounded-full font-bold text-lg transition shadow-xl disabled:opacity-60',
+                  online ? 'bg-success text-white hover:brightness-110 shadow-success/25'
                     : 'bg-brand text-white hover:bg-brand-dark shadow-brand/25')}>
-                {rider.availability === 'online' ? <><Power size={22} /> Online — Tap to Go Offline</> : <><PowerOff size={22} /> Go Online</>}
+                {savingAvailability ? 'Updating…' : !approved ? 'Awaiting approval' : online ? <><Power size={22} /> Online — Tap to Go Offline</> : <><PowerOff size={22} /> Go Online</>}
               </button>
               <Link to="/rider/dashboard"
                 className={cn('liquid-glass-btn inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-bold text-lg group',
@@ -170,8 +179,8 @@ function RiderHomePage() {
             <div className="relative">
               <h2 className="text-4xl md:text-5xl font-black text-white mb-4 tracking-tight">Ready to earn more today?</h2>
               <p className="text-white/75 text-lg mb-10 max-w-xl mx-auto">
-                {rider.availability === 'online'
-                  ? 'You\'re online — keep an eye on your dashboard for incoming orders.'
+                {!approved ? 'Visit your dashboard to check your application status.'
+                  : online ? 'You\'re online — keep an eye on your dashboard for incoming orders.'
                   : 'Go online and start accepting deliveries near you.'}
               </p>
               <Link to="/rider/dashboard"
