@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import { User, RiderProfile, UserRole, RiderStatus, VehicleType } from '../lib/types';
 import { generateId, generateOTP, nameFromEmail } from '../lib/utils';
 import { usersApi } from '../lib/usersApi';
+import { isApprovedRider } from '../lib/riderAccess';
 import supabase from '../lib/supabase';
 import { useThemeStore } from './themeStore';
 
@@ -14,6 +15,8 @@ interface AuthStore {
   /** Fetches every account from Supabase and merges it into allUsers —
    *  call this once on app startup, same pattern as orderStore's init(). */
   loadUsers: () => Promise<void>;
+  /** Re-read the signed-in row; a missing or role-changed row ends that session. */
+  refreshCurrentUser: () => Promise<User | RiderProfile | null>;
   login: (emailOrPhone: string, role: UserRole) => string; // returns OTP
   verifyOTP: (code: string) => boolean;
   signup: (data: { name: string; email?: string; phone?: string; role: UserRole }) => string;
@@ -36,7 +39,7 @@ interface AuthStore {
   getCustomers: () => User[];
   updateRiderLocation: (lat: number, lng: number) => void;
   persistRiderLocation: (lat: number, lng: number) => void;
-  setRiderAvailability: (status: 'online' | 'offline' | 'busy') => void;
+  setRiderAvailability: (status: 'online' | 'offline' | 'busy') => Promise<boolean>;
   recordDelivery: (riderId: string, earnedAmount: number) => void;
   /** Rider reports they have paid the commission shown. */
   requestCommissionPayment: (amount: number) => void;
@@ -66,6 +69,9 @@ const DEMO_RIDERS: RiderProfile[] = [
   { id: 'rider-004', name: 'Yaa Asantewaa', email: 'yaa@test.com', role: 'rider', vehicleType: 'van', vehiclePlate: 'GT-5678-23', status: 'pending', availability: 'offline', totalDeliveries: 0, rating: 0, earnings: 0, createdAt: Date.now() - 86400000, verified: true, nationalIdUrl: '/images/logo.jpeg', photoUrl: '/images/logo.jpeg' },
 ];
 
+// Prevent an older async sign-in/refresh from reviving a replaced session.
+let authGeneration = 0;
+
 export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
   user: null,
   allUsers: [DEFAULT_MANAGER, ...DEMO_RIDERS],
@@ -91,10 +97,28 @@ export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
       const refreshedSelf = s.user ? remoteUsers.find(u => u.id === s.user!.id) : undefined;
       return {
         allUsers: mergedUsers,
-        user: refreshedSelf || s.user,
+        user: refreshedSelf ? (refreshedSelf.role === s.user?.role ? refreshedSelf : null) : s.user,
         usersLoaded: true,
       };
     });
+  },
+
+  refreshCurrentUser: async () => {
+    const current = get().user;
+    const generation = authGeneration;
+    if (!current) return null;
+    const profile = await usersApi.fetchById(current.id);
+    // Do not resurrect a logged-out/replaced session after an async request.
+    if (authGeneration !== generation || get().user?.id !== current.id) return null;
+    if (!profile || profile.role !== current.role) {
+      set({ user: null, otpPending: null });
+      return null;
+    }
+    set(s => ({
+      user: profile,
+      allUsers: [...s.allUsers.filter(u => u.id !== profile.id), profile],
+    }));
+    return profile;
   },
 
   login: (emailOrPhone, role) => {
@@ -130,86 +154,60 @@ export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
   },
 
   // ── Direct auth (OTP removed for now — will be re-added later) ──────
-  // Find-or-create by contact and sign in immediately, no code step.
-  // Checks Supabase first (so an account created on another device is
-  // found), falling back to local allUsers, then creates fresh if neither
-  // has it — same shape as before, just DB-backed now.
+  // Contact lookup is not proof of ownership. Only a matching remote row for
+  // the requested role is used; local/demo data never creates a session.
   loginDirect: async (emailOrPhone, role) => {
-    const method = emailOrPhone.includes('@') ? 'email' : 'phone';
-    // Check Supabase FIRST, not local allUsers: local state may still be the
-    // demo seed if loadUsers() has not finished yet.
-    let user = await usersApi.findByContact(emailOrPhone, method, role) || undefined;
-    if (!user) {
-      user = get().allUsers.find(u => {
-        if (method === 'email') return u.email === emailOrPhone && u.role === role;
-        return u.phone === emailOrPhone && u.role === role;
-      });
-    }
-    // No account: nothing is created here. The sign-in page tells the person
-    // there is no account and offers Sign Up.
-    if (!user) return false;
+    const generation = ++authGeneration;
+    set({ user: null, otpPending: null });
+    const contact = emailOrPhone.trim();
+    const method = contact.includes('@') ? 'email' : 'phone';
+    let user = await usersApi.findByContact(contact, method, role);
+    if (generation !== authGeneration || !user || user.role !== role) return false;
 
-    if (!get().allUsers.some(u => u.id === user!.id)) {
-      set(s => ({ allUsers: [...s.allUsers, user!] }));
+    // Re-read the customer profile before navigating so both the current user
+    // and the cached list reflect the latest row, not a stale local profile.
+    if (role === 'customer') {
+      user = await usersApi.fetchById(user.id);
+      if (!user || user.role !== 'customer') return false;
     }
-    // Name comes from the email until the user edits it: a blank name or the
-    // raw email prefix is replaced with a readable name. Typed names are kept.
+    if (generation !== authGeneration) return false;
+    const storedContact = user[method];
+    if (!storedContact || (method === 'email'
+      ? storedContact.toLowerCase() !== contact.toLowerCase()
+      : storedContact !== contact)) return false;
+    // Keep the existing readable-name behavior, but UPDATE rather than upsert:
+    // signing in must never insert an account if the row disappears.
     if (user.email && (!user.name || user.name.toLowerCase() === user.email.split('@')[0].toLowerCase())) {
       const derived = nameFromEmail(user.email);
       if (derived) {
         user = { ...user, name: derived };
-        void usersApi.upsert(user);
+        void usersApi.update(user.id, { name: derived });
       }
     }
-    set({ user, otpPending: null });
+    const profile = user;
+    set(s => ({
+      user: profile,
+      allUsers: [...s.allUsers.filter(u => u.id !== profile.id), profile],
+      otpPending: null,
+    }));
     return true;
   },
 
   signupDirect: async (data) => {
-    const newUser: User = {
-      id: generateId(),
-      name: data.name,
-      email: data.email,
-      phone: data.phone,
-      role: data.role,
-      createdAt: Date.now(),
-      verified: true,
-    };
-    set(s => ({ allUsers: [...s.allUsers, newUser], user: newUser, otpPending: null }));
-    await usersApi.upsert(newUser);
+    if (data.role !== 'customer') throw new Error('Use the appropriate sign-up flow for this account.');
+    const generation = ++authGeneration;
+    const newUser = await usersApi.registerCustomer({ name: data.name, email: data.email, phone: data.phone });
+    if (generation !== authGeneration) throw new Error('Your session changed. Please sign in to your new account.');
+    set(s => ({ allUsers: [...s.allUsers.filter(u => u.id !== newUser.id), newUser], user: newUser, otpPending: null }));
   },
 
   signupRiderDirect: async (data) => {
-    const newRider: RiderProfile = {
-      id: generateId(),
-      name: data.name,
-      email: data.email,
-      phone: data.phone,
-      role: 'rider',
-      vehicleType: data.vehicleType,
-      vehiclePlate: data.vehiclePlate,
-      status: 'pending',
-      availability: 'offline',
-      totalDeliveries: 0,
-      rating: 0,
-      earnings: 0,
-      createdAt: Date.now(),
-      verified: true,
-      nationalIdUrl: data.nationalIdUrl,
-      photoUrl: data.photoUrl,
-    };
-    set(s => ({ allUsers: [...s.allUsers, newRider], user: newRider, otpPending: null }));
-    // Riders are typically outdoors in daylight, where light mode is far
-    // easier to read than dark — so default new rider accounts to light
-    // the moment they sign up. This only happens once, here, at account
-    // creation; it doesn't override a rider's own later choice to switch
-    // to dark, and it never touches customer/manager accounts.
+    const generation = ++authGeneration;
+    const newRider = await usersApi.registerRider(data);
+    if (generation !== authGeneration) throw new Error('Your session changed. Please sign in to your new account.');
+    set(s => ({ allUsers: [...s.allUsers.filter(u => u.id !== newRider.id), newRider], user: newRider, otpPending: null }));
+    // Preserve the rider's daylight-friendly default after confirmed signup.
     useThemeStore.getState().setTheme('light');
-    // Awaited (not fire-and-forget) — a rider signing up needs their
-    // account to actually exist in Supabase before they might log in
-    // again from a different phone; a silent background failure here
-    // was creating duplicate accounts per-device instead of one shared one.
-    await usersApi.upsert(newRider);
   },
 
   signup: (data) => {
@@ -264,6 +262,7 @@ export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
   },
 
   logout: () => {
+    authGeneration++;
     // Also end the Google session, so the next visit does not sign straight back in.
     void supabase.auth.signOut();
     set({ user: null, otpPending: null });
@@ -271,8 +270,16 @@ export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
 
   updateProfile: (data) => set(s => {
     if (!s.user) return s;
-    const updated = { ...s.user, ...data };
-    void usersApi.upsert(updated);
+    // Profile editing must not change identity, role, verification or rider
+    // approval. The server draft must enforce this independently of the UI.
+    const editable: Partial<User> = {};
+    const patch: Record<string, unknown> = {};
+    if ('name' in data) { editable.name = data.name; patch.name = data.name; }
+    if ('email' in data) { editable.email = data.email; patch.email = data.email || null; }
+    if ('phone' in data) { editable.phone = data.phone; patch.phone = data.phone || null; }
+    if ('avatar' in data) editable.avatar = data.avatar;
+    const updated = { ...s.user, ...editable };
+    if (Object.keys(patch).length) void usersApi.update(updated.id, patch);
     return {
       user: updated,
       allUsers: s.allUsers.map(u => u.id === updated.id ? updated : u),
@@ -296,7 +303,7 @@ export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
   addContact: (type, value) => set(s => {
     if (!s.user) return s;
     const updated = { ...s.user, [type]: value };
-    void usersApi.upsert(updated);
+    void usersApi.update(updated.id, { [type]: value });
     return {
       user: updated,
       allUsers: s.allUsers.map(u => u.id === updated.id ? updated : u),
@@ -384,18 +391,36 @@ export const useAuthStore = create<AuthStore>()(persist((set, get) => ({
     void usersApi.update(s.user.id, { location: { lat, lng } });
   },
 
-  setRiderAvailability: (status) => {
-    const s = get();
-    if (!s.user || s.user.role !== 'rider') return;
-    void usersApi.update(s.user.id, { availability: status });
-    set(s2 => {
-      if (!s2.user || s2.user.role !== 'rider') return s2;
-      const updated = { ...s2.user, availability: status } as RiderProfile;
-      return {
-        user: updated,
-        allUsers: s2.allUsers.map(u => u.id === updated.id ? updated : u),
-      };
-    });
+  setRiderAvailability: async (status) => {
+    const current = get().user;
+    if (!current || current.role !== 'rider') return false;
+
+    // Going offline is always allowed locally, even during an outage.
+    if (status === 'offline') {
+      set(s => {
+        if (s.user?.id !== current.id || s.user.role !== 'rider') return s;
+        const updated = { ...s.user, availability: 'offline' as const } as RiderProfile;
+        return { user: updated, allUsers: s.allUsers.map(u => u.id === updated.id ? updated : u) };
+      });
+    }
+    try {
+      if (status !== 'offline') {
+        const fresh = await get().refreshCurrentUser();
+        if (!fresh || fresh.id !== current.id || !isApprovedRider(fresh) || get().user?.id !== current.id) return false;
+      }
+      const saved = await usersApi.setRiderAvailability(current.id, status);
+      if (!saved || (status !== 'offline' && !isApprovedRider(saved))) {
+        if (get().user?.id === current.id) await get().refreshCurrentUser();
+        return false;
+      }
+      set(s => s.user?.id === current.id && s.user.role === 'rider'
+        ? { user: saved, allUsers: [...s.allUsers.filter(u => u.id !== saved.id), saved] }
+        : s);
+      return get().user?.id === current.id;
+    } catch (err) {
+      console.warn('[authStore] Could not save rider availability:', err);
+      return false;
+    }
   },
 
   // Records a completed delivery against a rider BY ID rather than the

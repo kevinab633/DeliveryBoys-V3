@@ -9,6 +9,7 @@ import { syncService } from '../lib/syncService';
 import { cn, formatCurrency, formatDistance, formatDate, timeAgo } from '../lib/utils';
 import { calculateDistance, riderEarningsForOrder } from '../lib/pricing';
 import { RiderProfile, Order } from '../lib/types';
+import { isApprovedRider } from '../lib/riderAccess';
 import MapView from '../components/MapView';
 import CommissionCard from '../components/CommissionCard';
 import { fetchTurnByTurnRoute, DirectionStep, CongestionSegment } from '../components/MapView';
@@ -856,9 +857,10 @@ function ActiveDeliveryView({
 }
 
 
-function OrderDetailOverlay({ order, dk, onClose, onAccept, onDecline }: {
+function OrderDetailOverlay({ order, dk, canAccept, onClose, onAccept, onDecline }: {
   order: Order;
   dk: boolean;
+  canAccept: boolean;
   onClose: () => void;
   onAccept: () => void;
   onDecline: () => void;
@@ -914,8 +916,8 @@ function OrderDetailOverlay({ order, dk, onClose, onAccept, onDecline }: {
           dk ? 'border-white/10 text-white/60 hover:bg-white/5' : 'border-surface-light-3 text-text-light-2 hover:bg-surface-light-2')}>
         Decline
       </button>
-      <button onClick={onAccept}
-        className="py-4 rounded-full font-bold bg-brand text-white hover:bg-brand-dark transition shadow-lg shadow-brand/25">
+      <button onClick={onAccept} disabled={!canAccept}
+        className="py-4 rounded-full font-bold bg-brand text-white hover:bg-brand-dark transition shadow-lg shadow-brand/25 disabled:cursor-not-allowed disabled:opacity-50">
         Accept Order
       </button>
     </div>
@@ -1000,9 +1002,11 @@ function OrderDetailOverlay({ order, dk, onClose, onAccept, onDecline }: {
 // ── Main dashboard ─────────────────────────────────────────────────
 export default function RiderDashboard() {
   const dk = useThemeStore(s => s.theme === 'dark');
-  const { user, setRiderAvailability, updateRiderLocation, persistRiderLocation } = useAuthStore();
+  const { user, setRiderAvailability, updateRiderLocation, persistRiderLocation, refreshCurrentUser } = useAuthStore();
   const { orders, acceptOrder, acceptOrderSecure, updateOrderStatus, getPendingOrders, getOrdersByRider, fetchOrders } = useOrderStore();
   const [tab, setTab] = useState<'available' | 'my'>('available');
+  const [checkingStatus, setCheckingStatus] = useState(false);
+  const [savingAvailability, setSavingAvailability] = useState(false);
 
   // Ringing modal + full-screen detail state
   const [ringingOrder, setRingingOrder] = useState<Order | null>(null);
@@ -1045,10 +1049,12 @@ export default function RiderDashboard() {
   // ── Catch-up fetch on mount: pull open + own orders so this device sees
   //    what other devices created/updated (merges via __applyServerOrder).
   useEffect(() => {
-    void fetchOrders({ status: 'pending' });
-    if (rider?.id) void fetchOrders({ riderId: rider.id });
+    if (!rider || rider.role !== 'rider') return;
+    if (isApprovedRider(rider)) void fetchOrders({ status: 'pending' });
+    // An unapproved rider can still see and finish previously assigned work.
+    void fetchOrders({ riderId: rider.id });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rider?.id]);
+  }, [rider?.id, rider?.status]);
 
   // ── Real GPS tracking, replacing the old fake jittered-position
   //    simulation. Watches the device's actual location continuously
@@ -1057,7 +1063,7 @@ export default function RiderDashboard() {
   //    the moment the rider goes offline, so it never runs in the
   //    background unnecessarily or drains battery for no reason. ──────
   useEffect(() => {
-    if (!rider || rider.role !== 'rider' || rider.availability !== 'online') return;
+    if (!isApprovedRider(rider) || rider.availability !== 'online') return;
     if (!('geolocation' in navigator)) {
       console.warn('[RiderDashboard] Geolocation not supported on this device/browser.');
       return;
@@ -1138,14 +1144,14 @@ export default function RiderDashboard() {
 
     return () => navigator.geolocation.clearWatch(watchId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rider?.availability, activeOrder?.id]);
+  }, [rider?.availability, rider?.status, activeOrder?.id]);
 
   // ── Ringing trigger: online rider + INSTANT pending order that has
   //    this rider inside its active dispatch window (dispatchedTo).
   //    Legacy orders (dispatchedTo === undefined) ring for everyone.
   //    Scheduled orders never ring — they just appear in the list.
   useEffect(() => {
-    if (!rider || rider.role !== 'rider') return;
+    if (!isApprovedRider(rider)) return;
     if (rider.availability !== 'online' || ringingOrder) return;
     const candidate = pending.find(o =>
       (o.orderType || 'instant') !== 'scheduled' &&
@@ -1162,14 +1168,14 @@ export default function RiderDashboard() {
       syncService.broadcastRiderResponding(candidate.id, rider.id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orders, pending.length, rider?.availability, ringingOrder, declinedIds]);
+  }, [orders, pending.length, rider?.availability, rider?.status, ringingOrder, declinedIds]);
 
   // ── Keep staged dispatch moving even if the customer's tab closed:
   //    every 15 s widen every still-pending order's dispatch window —
   //    instant orders always, scheduled orders once the sweep has
   //    started their dispatch (idempotent store action). ───────────
   useEffect(() => {
-    if (!rider || rider.role !== 'rider' || rider.availability !== 'online') return;
+    if (!isApprovedRider(rider) || rider.availability !== 'online') return;
     const iv = setInterval(() => {
       const state = useOrderStore.getState();
       state.orders
@@ -1180,40 +1186,41 @@ export default function RiderDashboard() {
     }, 15000);
     return () => clearInterval(iv);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rider?.availability]);
+  }, [rider?.availability, rider?.status]);
 
   // Keep ringing while the modal is open (incoming-call style)
   useEffect(() => {
-    if (!ringingOrder || ringingTaken) return;
+    if (!isApprovedRider(rider) || !ringingOrder || ringingTaken) return;
     const iv = setInterval(playChime, 3000);
     return () => clearInterval(iv);
-  }, [ringingOrder?.id, ringingTaken]);
+  }, [ringingOrder?.id, ringingTaken, rider?.status]);
 
   // Broadcast "responding" whenever the rider opens the full order detail
   // view directly (tapping an available order card) — covers reviewing
   // an order outside the ringing popup, e.g. browsing the Available tab.
   useEffect(() => {
-    if (!rider) return;
+    if (!isApprovedRider(rider)) return;
     if (detailOrder) {
       syncService.broadcastRiderResponding(detailOrder.id, rider.id);
       return () => syncService.broadcastRiderResponding(detailOrder.id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [detailOrder?.id]);
+  }, [detailOrder?.id, rider?.status]);
 
-  // Going offline dismisses any ringing modal
+  // Going offline or losing approval dismisses any ringing modal.
   useEffect(() => {
-    if (rider?.availability !== 'online') {
+    if (!isApprovedRider(rider) || rider.availability !== 'online') {
       if (ringingOrder) syncService.broadcastRiderResponding(ringingOrder.id);
       setRingingOrder(null);
+      if (!isApprovedRider(rider)) setDetailOrder(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rider?.availability]);
+  }, [rider?.availability, rider?.status]);
 
   // Toast for new SCHEDULED orders (instant ones ring instead)
   const prevPendingCount = useRef(pending.length);
   useEffect(() => {
-    if (pending.length > prevPendingCount.current && rider?.availability === 'online') {
+    if (pending.length > prevPendingCount.current && isApprovedRider(rider) && rider.availability === 'online') {
       const newest = pending[0];
       if (newest && (newest.orderType || 'instant') === 'scheduled') {
         showToast({ title: '📅 New Scheduled Order', message: `${newest.pickup.address} → ${newest.dropoff.address}`, type: 'info' });
@@ -1225,16 +1232,26 @@ export default function RiderDashboard() {
 
   if (!rider || rider.role !== 'rider') return <div className="pt-20 min-h-screen flex items-center justify-center"><p className={dk ? 'text-white/50' : 'text-text-light-2'}>Please sign in as a rider.</p></div>;
 
+  const approved = isApprovedRider(rider);
+  const reviewHeading = rider.status === 'pending' ? 'Application under review'
+    : rider.status === 'rejected' ? 'Application needs attention'
+    : rider.status === 'suspended' ? 'Rider account suspended' : 'Approval required';
+
   // ── Accept (first-come-first-served via orderStore guard) ───────
   // Lifecycle notifications (customer + rider) fire inside acceptOrder.
   const handleAccept = async (order: Order) => {
     let ok: boolean;
     try {
+      const fresh = await refreshCurrentUser();
+      if (!fresh || fresh.id !== rider.id || !isApprovedRider(fresh) || useAuthStore.getState().user?.id !== rider.id) {
+        showToast({ title: 'Approval required', message: 'Only approved riders can accept rides.', type: 'warning' });
+        return;
+      }
       // Never enable this preview on the deployed app until server policies,
       // identity migration and the statement scheduler are complete.
       ok = import.meta.env.DEV && import.meta.env.VITE_VERIFIED_AUTH_PREVIEW === 'true'
         ? await acceptOrderSecure(order.id)
-        : acceptOrder(order.id, rider.id, rider.name);
+        : acceptOrder(order.id, fresh.id, fresh.name);
     } catch (err) {
       showToast({ title: 'Unable to accept order', message: err instanceof Error ? err.message : 'Please try again.', type: 'error' });
       return;
@@ -1290,14 +1307,40 @@ export default function RiderDashboard() {
             <div>
               <h1 className={cn('text-2xl font-extrabold', dk ? 'text-white' : 'text-text-light')}>Rider Dashboard</h1>
               <p className={cn('text-sm', dk ? 'text-white/50' : 'text-text-light-2')}>Welcome, {rider.name}</p>
-              {rider.status === 'pending' && <span className="inline-block mt-2 px-3 py-1 rounded-full bg-warning/10 text-warning text-xs font-bold">Pending Approval</span>}
+              <span className={cn('inline-block mt-2 px-3 py-1 rounded-full text-xs font-bold', approved ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning')}>
+                {approved ? 'Approved' : rider.status === 'pending' ? 'Pending Approval' : rider.status}
+              </span>
             </div>
-            <button onClick={() => setRiderAvailability(rider.availability === 'online' ? 'offline' : 'online')}
-              className={cn('flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition',
-                rider.availability === 'online' ? 'bg-success text-white' : dk ? 'bg-surface-dark-3 text-white/50' : 'bg-surface-light-3 text-text-light-2')}>
-              {rider.availability === 'online' ? <><Power size={16} /> Online</> : <><PowerOff size={16} /> Go Online</>}
+            <button disabled={!approved || savingAvailability} onClick={async () => {
+              setSavingAvailability(true);
+              const saved = await setRiderAvailability(rider.availability === 'online' ? 'offline' : 'online');
+              setSavingAvailability(false);
+              if (!saved) showToast({ title: 'Availability not saved', message: 'Check your approval status and connection, then try again.', type: 'warning' });
+            }}
+              className={cn('flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition disabled:opacity-60',
+                approved && rider.availability === 'online' ? 'bg-success text-white' : dk ? 'bg-surface-dark-3 text-white/50' : 'bg-surface-light-3 text-text-light-2')}>
+              {savingAvailability ? 'Updating…' : !approved ? 'Awaiting approval' : rider.availability === 'online' ? <><Power size={16} /> Online</> : <><PowerOff size={16} /> Go Online</>}
             </button>
           </div>
+
+          {!approved && <section role="status" className={cn('mt-6 rounded-2xl border p-6', dk ? 'border-white/10 bg-surface-dark-2' : 'border-gray-200 bg-gray-50')}>
+            <h2 className="text-xl font-extrabold">{reviewHeading}</h2>
+            <p className={cn('mt-3 text-sm', dk ? 'text-white/70' : 'text-gray-600')}>
+              {rider.status === 'pending' ? 'Your application is waiting for manager review. ' : 'Please contact support about your rider account. '}
+              You can go online and accept rides once a manager approves your account.
+            </p>
+            <div className="mt-5 flex flex-wrap gap-3">
+              <button type="button" disabled={checkingStatus} onClick={async () => {
+                setCheckingStatus(true);
+                try { await refreshCurrentUser(); }
+                catch { showToast({ title: 'Unable to refresh', message: 'Check your connection and try again.', type: 'error' }); }
+                finally { setCheckingStatus(false); }
+              }} className="rounded-full bg-brand px-5 py-3 text-sm font-bold text-white disabled:opacity-60">
+                {checkingStatus ? 'Checking…' : 'Refresh status'}
+              </button>
+              {(rider.status === 'pending' || rider.status === 'rejected') && <Link to="/rider/verification" className="rounded-full border border-brand px-5 py-3 text-sm font-bold text-brand">Review verification documents</Link>}
+            </div>
+          </section>}
 
           <CommissionCard rider={rider} orders={orders} dk={dk} className="mt-6" />
 
@@ -1361,8 +1404,8 @@ export default function RiderDashboard() {
                         className={cn('px-4 py-2 rounded-lg text-sm font-semibold transition', dk ? 'bg-surface-dark-2 text-white/70 hover:bg-white/5' : 'bg-surface-light-2 text-text-light-2 hover:bg-surface-light-3')}>
                         <Eye size={14} className="inline mr-1" /> View
                       </button>
-                      <button onClick={(e) => { e.stopPropagation(); handleAccept(o); }}
-                        className="px-4 py-2 rounded-full text-sm font-bold bg-brand text-white hover:bg-brand-dark transition">Accept</button>
+                      <button disabled={!approved} onClick={(e) => { e.stopPropagation(); handleAccept(o); }}
+                        className="px-4 py-2 rounded-full text-sm font-bold bg-brand text-white hover:bg-brand-dark transition disabled:cursor-not-allowed disabled:opacity-50">Accept</button>
                     </div>
                   </motion.div>
                 );
@@ -1411,7 +1454,7 @@ export default function RiderDashboard() {
       )}
 
       {/* ── Ringing incoming-order modal ─────────────────────────── */}
-      {ringingOrder && liveRinging && (
+      {approved && ringingOrder && liveRinging && (
         <IncomingOrderModal
           order={liveRinging}
           taken={ringingTaken}
@@ -1428,6 +1471,7 @@ export default function RiderDashboard() {
         <OrderDetailOverlay
           order={liveDetail}
           dk={dk}
+          canAccept={approved}
           onClose={() => setDetailOrder(null)}
           onAccept={() => handleAccept(liveDetail)}
           onDecline={() => handleDeclineAndClose(liveDetail)}
